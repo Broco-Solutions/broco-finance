@@ -86,6 +86,7 @@ export type ScheduledPaymentRecord = {
   expectedDate: string;
   expectedAmountUsd: number;
   status: ScheduledPaymentStatus;
+  paidAt: string | null;
   actualIncomeId: string | null;
   notes: string | null;
 };

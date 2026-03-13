@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { ScheduledPaymentRecord } from "@/lib/types";
 import { formatShortDate, formatUsd } from "@/lib/utils";
+import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
@@ -73,7 +74,17 @@ export function CalendarScreen({
                         <div className="font-semibold">{payment.clientName}</div>
                         <div className="text-xs uppercase tracking-[0.16em]">{payment.projectName}</div>
                       </div>
-                      <div className="text-right font-semibold">{formatUsd(payment.expectedAmountUsd)}</div>
+                      <div className="text-right">
+                        <div className="font-semibold">{formatUsd(payment.expectedAmountUsd)}</div>
+                        <div className="mt-2">
+                          <MarkPaymentPaidButton
+                            paymentId={payment.id}
+                            paymentStatus={payment.status}
+                            demoMode={demoMode}
+                            compact
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -83,7 +94,7 @@ export function CalendarScreen({
         </div>
       </Card>
       <Card>
-        <DataTable headers={["Fecha", "Cliente", "Proyecto", "Monto", "Estado"]}>
+        <DataTable headers={["Fecha", "Cliente", "Proyecto", "Monto", "Estado", "Acción"]}>
           {visible.map((payment) => (
             <tr key={payment.id}>
               <td className="px-4 py-3">{formatShortDate(payment.expectedDate)}</td>
@@ -91,6 +102,9 @@ export function CalendarScreen({
               <td className="px-4 py-3">{payment.projectName}</td>
               <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
               <td className="px-4 py-3 uppercase">{payment.status}</td>
+              <td className="px-4 py-3">
+                <MarkPaymentPaidButton paymentId={payment.id} paymentStatus={payment.status} demoMode={demoMode} compact />
+              </td>
             </tr>
           ))}
         </DataTable>

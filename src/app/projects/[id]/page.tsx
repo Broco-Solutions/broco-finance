@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { formatShortDate, formatUsd } from "@/lib/utils";
 import { getProjectDetail } from "@/server/services/finance";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
   const detail = await getProjectDetail(params.id);
   const progress = detail.project.totalBudgetUsd

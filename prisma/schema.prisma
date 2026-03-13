@@ -120,6 +120,7 @@ model ScheduledPayment {
   expectedDate        DateTime                @map("expected_date") @db.Date
   expectedAmountUsd   Decimal                 @map("expected_amount_usd") @db.Decimal(12, 2)
   status              ScheduledPaymentStatus  @default(pending)
+  paidAt              DateTime?               @map("paid_at")
   actualIncomeId      String?                 @unique @map("actual_income_id") @db.Uuid
   notes               String?
   createdAt           DateTime                @default(now()) @map("created_at")

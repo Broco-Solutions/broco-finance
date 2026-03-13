@@ -1,10 +1,11 @@
 "use client";
 
-import { FormEvent, useState, useTransition } from "react";
+import { FormEvent, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ProjectRecord, RecurringContractRecord, ScheduledPaymentRecord } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
 import { formatShortDate, formatUsd } from "@/lib/utils";
+import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -27,6 +28,8 @@ export function RecurringScreen({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [contractError, setContractError] = useState<string | null>(null);
+  const [busyTarget, setBusyTarget] = useState<string | null>(null);
   const [form, setForm] = useState({
     projectId: projects[0]?.id ?? "",
     description: "",
@@ -36,12 +39,38 @@ export function RecurringScreen({
     endDate: "",
     notes: "",
   });
+  const [contractDrafts, setContractDrafts] = useState<Record<string, { amountUsd: string; isActive: boolean }>>(() =>
+    Object.fromEntries(
+      contracts.map((contract) => [
+        contract.id,
+        {
+          amountUsd: String(contract.amountUsd),
+          isActive: contract.isActive,
+        },
+      ]),
+    ),
+  );
+
+  useEffect(() => {
+    setContractDrafts(
+      Object.fromEntries(
+        contracts.map((contract) => [
+          contract.id,
+          {
+            amountUsd: String(contract.amountUsd),
+            isActive: contract.isActive,
+          },
+        ]),
+      ),
+    );
+  }, [contracts]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     startTransition(async () => {
       try {
         setError(null);
+        setBusyTarget("new");
         await apiFetch("/api/recurring", {
           method: "POST",
           body: JSON.stringify({
@@ -58,6 +87,41 @@ export function RecurringScreen({
         router.refresh();
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "No se pudo crear el contrato.");
+      } finally {
+        setBusyTarget(null);
+      }
+    });
+  };
+
+  const saveContract = (contract: RecurringContractRecord) => {
+    const draft = contractDrafts[contract.id];
+    if (!draft) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        setContractError(null);
+        setBusyTarget(contract.id);
+        await apiFetch(`/api/recurring/${contract.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            projectId: contract.projectId,
+            description: contract.description,
+            amountUsd: Number(draft.amountUsd),
+            frequency: contract.frequency,
+            startDate: contract.startDate,
+            endDate: contract.endDate,
+            isActive: draft.isActive,
+            notes: contract.notes,
+            updatePendingPayments: true,
+          }),
+        });
+        router.refresh();
+      } catch (submitError) {
+        setContractError(submitError instanceof Error ? submitError.message : "No se pudo actualizar el contrato.");
+      } finally {
+        setBusyTarget(null);
       }
     });
   };
@@ -104,17 +168,29 @@ export function RecurringScreen({
             <Textarea placeholder="Notas" value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} />
             {error ? <p className="text-sm text-brick">{error}</p> : null}
             <Button type="submit" disabled={isPending || demoMode}>
-              {demoMode ? "Requiere DATABASE_URL" : isPending ? "Guardando…" : "Crear contrato"}
+              {demoMode ? "Requiere DATABASE_URL" : isPending && busyTarget === "new" ? "Guardando…" : "Crear contrato"}
             </Button>
           </form>
         </Card>
 
         <div className="space-y-6">
           <Card>
-            <h2 className="font-display text-2xl text-ink">Contratos activos</h2>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-2xl text-ink">Contratos recurrentes</h2>
+                <p className="mt-1 text-sm text-ink/55">Editar el monto impacta solo en pagos pendientes con fecha de hoy en adelante.</p>
+              </div>
+              {contractError ? <p className="text-sm text-brick">{contractError}</p> : null}
+            </div>
             <div className="mt-4 space-y-4">
-              {contracts.map((contract) => (
-                <div key={contract.id} className="rounded-[1.35rem] border border-black/10 bg-white/70 p-4">
+              {contracts.map((contract) => {
+                const draft = contractDrafts[contract.id] ?? {
+                  amountUsd: String(contract.amountUsd),
+                  isActive: contract.isActive,
+                };
+
+                return (
+                  <div key={contract.id} className="rounded-[1.35rem] border border-black/10 bg-white/70 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="text-xs uppercase tracking-[0.16em] text-ink/45">{contract.clientName}</div>
@@ -122,24 +198,60 @@ export function RecurringScreen({
                       <p className="mt-2 text-sm text-ink/55">{contract.projectName}</p>
                     </div>
                     <div className="text-right">
-                      <div className="font-display text-3xl text-ink">{formatUsd(contract.amountUsd)}</div>
+                      <div className="font-display text-3xl text-ink">{formatUsd(Number(draft.amountUsd || 0))}</div>
                       <div className="text-xs uppercase tracking-[0.16em] text-ink/45">{contract.frequency}</div>
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-6 text-sm text-ink/60">
                     <span>Inicio: {formatShortDate(contract.startDate)}</span>
                     <span>Próximo: {formatShortDate(contract.nextDueDate)}</span>
-                    <span>{contract.isActive ? "Activo" : "Pausado"}</span>
+                    <span>{draft.isActive ? "Activo" : "Inactivo"}</span>
                   </div>
-                </div>
-              ))}
+                  <div className="mt-4 grid gap-3 rounded-[1.1rem] border border-black/10 bg-white/80 p-4 md:grid-cols-[minmax(0,220px),auto,auto] md:items-center">
+                    <Input
+                      type="number"
+                      min="0"
+                      placeholder="Monto USD"
+                      value={draft.amountUsd}
+                      onChange={(event) =>
+                        setContractDrafts((prev) => ({
+                          ...prev,
+                          [contract.id]: {
+                            ...draft,
+                            amountUsd: event.target.value,
+                          },
+                        }))
+                      }
+                    />
+                    <Button
+                      type="button"
+                      variant={draft.isActive ? "secondary" : "ghost"}
+                      onClick={() =>
+                        setContractDrafts((prev) => ({
+                          ...prev,
+                          [contract.id]: {
+                            ...draft,
+                            isActive: !draft.isActive,
+                          },
+                        }))
+                      }
+                    >
+                      {draft.isActive ? "Activo" : "Inactivo"}
+                    </Button>
+                    <Button type="button" disabled={isPending || demoMode} onClick={() => saveContract(contract)}>
+                      {demoMode ? "Demo" : isPending && busyTarget === contract.id ? "Actualizando…" : "Guardar cambios"}
+                    </Button>
+                  </div>
+                  </div>
+                );
+              })}
             </div>
           </Card>
 
           <Card>
             <h2 className="font-display text-2xl text-ink">Próximos cobros</h2>
             <div className="mt-4">
-              <DataTable headers={["Fecha", "Cliente", "Proyecto", "Monto", "Estado"]}>
+              <DataTable headers={["Fecha", "Cliente", "Proyecto", "Monto", "Estado", "Acción"]}>
                 {payments.map((payment) => (
                   <tr key={payment.id}>
                     <td className="px-4 py-3">{formatShortDate(payment.expectedDate)}</td>
@@ -147,6 +259,9 @@ export function RecurringScreen({
                     <td className="px-4 py-3">{payment.projectName}</td>
                     <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
                     <td className="px-4 py-3 uppercase">{payment.status}</td>
+                    <td className="px-4 py-3">
+                      <MarkPaymentPaidButton paymentId={payment.id} paymentStatus={payment.status} demoMode={demoMode} compact />
+                    </td>
                   </tr>
                 ))}
               </DataTable>

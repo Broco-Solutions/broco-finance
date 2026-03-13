@@ -1,6 +1,8 @@
 import { RecurringScreen } from "@/components/screens/recurring-screen";
 import { listProjects, listRecurring, listScheduledPayments } from "@/server/services/finance";
 
+export const dynamic = "force-dynamic";
+
 export default async function RecurringPage() {
   const [{ data: contracts, demoMode }, { data: payments }, { data: projects }] = await Promise.all([
     listRecurring(),

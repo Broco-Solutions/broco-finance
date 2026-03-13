@@ -1,4 +1,5 @@
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
+import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
@@ -6,15 +7,17 @@ import { StatCard } from "@/components/ui/stat-card";
 import { formatShortDate, formatUsd, toCurrencyNumber } from "@/lib/utils";
 import { getDashboard } from "@/server/services/finance";
 
-const MonthlyPerformanceChart = dynamic(
+export const dynamic = "force-dynamic";
+
+const MonthlyPerformanceChart = nextDynamic(
   () => import("@/components/dashboard/charts").then((module) => module.MonthlyPerformanceChart),
   { ssr: false },
 );
-const CategoryBreakdownChart = dynamic(
+const CategoryBreakdownChart = nextDynamic(
   () => import("@/components/dashboard/charts").then((module) => module.CategoryBreakdownChart),
   { ssr: false },
 );
-const CashflowChart = dynamic(
+const CashflowChart = nextDynamic(
   () => import("@/components/dashboard/charts").then((module) => module.CashflowChart),
   { ssr: false },
 );
@@ -74,7 +77,7 @@ export default async function DashboardPage() {
         <Card>
           <h2 className="font-display text-2xl text-ink">Próximos cobros</h2>
           <div className="mt-4">
-            <DataTable headers={["Fecha", "Cliente", "Proyecto", "Monto", "Estado"]}>
+            <DataTable headers={["Fecha", "Cliente", "Proyecto", "Monto", "Estado", "Acción"]}>
               {dashboard.upcomingPayments.map((payment) => (
                 <tr key={payment.id}>
                   <td className="px-4 py-3">{formatShortDate(payment.expectedDate)}</td>
@@ -82,6 +85,9 @@ export default async function DashboardPage() {
                   <td className="px-4 py-3">{payment.projectName}</td>
                   <td className="px-4 py-3">{formatUsd(toCurrencyNumber(payment.expectedAmountUsd))}</td>
                   <td className="px-4 py-3 uppercase">{payment.status}</td>
+                  <td className="px-4 py-3">
+                    <MarkPaymentPaidButton paymentId={payment.id} paymentStatus={payment.status} demoMode={demoMode} compact />
+                  </td>
                 </tr>
               ))}
             </DataTable>

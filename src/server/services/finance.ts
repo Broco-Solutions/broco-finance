@@ -50,6 +50,10 @@ type DbClient = PrismaClient | Prisma.TransactionClient;
 
 const salaryCategoryName = "Sueldos/Honorarios";
 
+function isOpenScheduledStatus(status: ScheduledPaymentStatus) {
+  return status === ScheduledPaymentStatus.pending || status === ScheduledPaymentStatus.overdue;
+}
+
 const projectStatusSchema = z.enum(["active", "finished", "cancelled"]);
 const incomeTypeSchema = z.enum(["advance", "final_payment", "recurring"]);
 const expenseTypeSchema = z.enum(["fixed", "variable"]);
@@ -123,6 +127,7 @@ export const scheduledPaymentInputSchema = z.object({
   action: scheduledActionSchema,
   expectedDate: z.string().nullable().optional(),
   expectedAmountUsd: z.coerce.number().nonnegative().nullable().optional(),
+  paidAt: z.string().nullable().optional(),
   notes: z.string().trim().nullable().optional(),
   incomeId: z.string().uuid().nullable().optional(),
   createIncome: incomeInputSchema.nullable().optional(),
@@ -291,6 +296,15 @@ async function syncOpenEndedContracts(db: DbClient) {
   }
 }
 
+async function clearPendingScheduledPayments(db: DbClient, contractId: string) {
+  await db.scheduledPayment.deleteMany({
+    where: {
+      recurringContractId: contractId,
+      status: ScheduledPaymentStatus.pending,
+    },
+  });
+}
+
 async function syncScheduledPayments(
   db: DbClient,
   contract: {
@@ -337,6 +351,9 @@ async function syncScheduledPayments(
       where: {
         recurringContractId: contract.id,
         status: ScheduledPaymentStatus.pending,
+        expectedDate: {
+          gte: startOfDay(new Date()),
+        },
       },
       data: {
         expectedAmountUsd: amountUsd,
@@ -466,7 +483,7 @@ function mapClientRecord(client: Prisma.ClientGetPayload<{ include: { projects: 
   const totalInvoicedUsd = client.projects.flatMap((project) => project.incomes).reduce((sum, income) => sum + requireNumber(income.amountUsd), 0);
   const pendingPayments = client.projects
     .flatMap((project) => project.scheduledPayments)
-    .filter((payment) => payment.status === ScheduledPaymentStatus.pending || payment.status === ScheduledPaymentStatus.overdue);
+    .filter((payment) => isOpenScheduledStatus(payment.status));
 
   return {
     id: client.id,
@@ -489,7 +506,7 @@ function mapProjectRecord(
   }>,
 ): ProjectRecord {
   const nextPayment = project.scheduledPayments
-    .filter((payment) => payment.status === ScheduledPaymentStatus.pending || payment.status === ScheduledPaymentStatus.overdue)
+    .filter((payment) => isOpenScheduledStatus(payment.status))
     .sort((a, b) => a.expectedDate.getTime() - b.expectedDate.getTime())[0];
 
   return {
@@ -593,6 +610,7 @@ function mapScheduledPaymentRecord(
     expectedDate: dateOnly(record.expectedDate),
     expectedAmountUsd: requireNumber(record.expectedAmountUsd),
     status: record.status,
+    paidAt: record.paidAt ? dateOnly(record.paidAt) : null,
     actualIncomeId: record.actualIncomeId,
     notes: record.notes,
   };
@@ -607,7 +625,7 @@ function mapRecurringRecord(
   }>,
 ): RecurringContractRecord {
   const nextDue = record.payments
-    .filter((payment) => payment.status === ScheduledPaymentStatus.pending || payment.status === ScheduledPaymentStatus.overdue)
+    .filter((payment) => isOpenScheduledStatus(payment.status))
     .sort((a, b) => a.expectedDate.getTime() - b.expectedDate.getTime())[0];
 
   return {
@@ -632,6 +650,9 @@ export async function listClients(search?: string | null) {
   if (!hasDatabaseConfig()) {
     return { data: mapDemoClients(search), demoMode: true };
   }
+
+  await syncOpenEndedContracts(prisma);
+  await syncOverduePayments(prisma);
 
   const clients = await prisma.client.findMany({
     where: search
@@ -665,6 +686,9 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
     return detail;
   }
 
+  await syncOpenEndedContracts(prisma);
+  await syncOverduePayments(prisma);
+
   const client = await prisma.client.findUnique({
     where: { id },
     include: {
@@ -694,7 +718,12 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
   });
 
   const payments = await prisma.scheduledPayment.findMany({
-    where: { project: { clientId: id } },
+    where: {
+      project: { clientId: id },
+      status: {
+        in: [ScheduledPaymentStatus.pending, ScheduledPaymentStatus.overdue],
+      },
+    },
     include: {
       project: { include: { client: true } },
     },
@@ -757,6 +786,9 @@ export async function listProjects(filters?: { clientId?: string | null; status?
     return { data: mapDemoProjects(filters), demoMode: true };
   }
 
+  await syncOpenEndedContracts(prisma);
+  await syncOverduePayments(prisma);
+
   const projects = await prisma.project.findMany({
     where: {
       clientId: filters?.clientId ?? undefined,
@@ -781,6 +813,9 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
     }
     return detail;
   }
+
+  await syncOpenEndedContracts(prisma);
+  await syncOverduePayments(prisma);
 
   const project = await prisma.project.findUnique({
     where: { id },
@@ -1218,7 +1253,10 @@ export async function createRecurring(input: z.infer<typeof recurringInputSchema
       },
     });
 
-    await syncScheduledPayments(tx, contract, true);
+    if (contract.isActive) {
+      await syncScheduledPayments(tx, contract, true);
+    }
+
     return contract;
   });
 }
@@ -1243,7 +1281,12 @@ export async function updateRecurring(id: string, input: z.infer<typeof recurrin
       },
     });
 
-    await syncScheduledPayments(tx, contract, Boolean(input.updatePendingPayments));
+    if (!contract.isActive) {
+      await clearPendingScheduledPayments(tx, contract.id);
+      return contract;
+    }
+
+    await syncScheduledPayments(tx, contract, input.updatePendingPayments ?? true);
     return contract;
   });
 }
@@ -1290,11 +1333,16 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
       throw new AppError("Pago programado no encontrado.", 404);
     }
 
+    if (payment.status === ScheduledPaymentStatus.paid && input.action !== "edit") {
+      return payment;
+    }
+
     if (input.action === "cancel") {
       return tx.scheduledPayment.update({
         where: { id },
         data: {
           status: ScheduledPaymentStatus.cancelled,
+          paidAt: null,
           notes: input.notes ?? payment.notes,
         },
       });
@@ -1315,6 +1363,7 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
     }
 
     let incomeId = input.incomeId ?? null;
+    const paidAt = input.paidAt ? parseISO(input.paidAt) : startOfDay(new Date());
 
     if (!incomeId && input.createIncome) {
       const money = normalizeMoney(input.createIncome);
@@ -1331,6 +1380,21 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
     }
 
     if (!incomeId) {
+      const createdIncome = await tx.income.create({
+        data: {
+          projectId: payment.projectId,
+          date: paidAt,
+          type: payment.recurringContractId ? IncomeType.recurring : IncomeType.final_payment,
+          notes: input.notes ?? payment.notes ?? "Cobro registrado desde pago programado.",
+          amountUsd: payment.expectedAmountUsd,
+          amountArs: null,
+          exchangeRate: null,
+        },
+      });
+      incomeId = createdIncome.id;
+    }
+
+    if (!incomeId) {
       throw new AppError("Seleccioná o creá un ingreso para marcar como cobrado.", 422);
     }
 
@@ -1338,6 +1402,7 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
       where: { id },
       data: {
         status: ScheduledPaymentStatus.paid,
+        paidAt,
         actualIncomeId: incomeId,
         notes: input.notes ?? payment.notes,
       },
@@ -1531,7 +1596,7 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
         current.incomeUsd += project.incomes.reduce((sum, income) => sum + requireNumber(income.amountUsd), 0);
         current.activeProjects += project.status === ProjectStatus.active ? 1 : 0;
         current.pendingPayments += project.scheduledPayments.filter(
-          (payment) => payment.status === ScheduledPaymentStatus.pending || payment.status === ScheduledPaymentStatus.overdue,
+          (payment) => isOpenScheduledStatus(payment.status),
         ).length;
         acc.set(project.client.name, current);
         return acc;
@@ -1556,7 +1621,7 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
         mappedExpenses.reduce((sum, item) => sum + item.amountUsd, 0),
       remanenteUsd: summary.remanenteUsd,
       receivableUsd: mappedPayments
-        .filter((payment) => payment.status === "pending" || payment.status === "overdue")
+        .filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus))
         .reduce((sum, item) => sum + item.expectedAmountUsd, 0),
       overdueUsd: mappedPayments
         .filter((payment) => payment.status === "overdue")
@@ -1569,7 +1634,7 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
       cumulativeCashflow,
       topClients: Array.from(topClients.values()).sort((a, b) => b.incomeUsd - a.incomeUsd).slice(0, 5),
     },
-    upcomingPayments: mappedPayments.slice(0, 10),
+    upcomingPayments: mappedPayments.filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus)).slice(0, 10),
     distribution: layers.map(mapDistributionRecord),
     alerts,
   };
