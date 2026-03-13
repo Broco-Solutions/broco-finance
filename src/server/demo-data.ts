@@ -102,7 +102,7 @@ export const demoIncomes: IncomeRecord[] = [
     amountArs: null,
     amountUsd: 2400,
     exchangeRate: null,
-    type: "advance",
+    status: "PAID",
     notes: "Primer adelanto",
   },
   {
@@ -114,7 +114,7 @@ export const demoIncomes: IncomeRecord[] = [
     amountArs: 2280000,
     amountUsd: 2200,
     exchangeRate: 1036,
-    type: "final_payment",
+    status: "PAID",
     notes: "Segundo hito",
   },
   {
@@ -126,7 +126,7 @@ export const demoIncomes: IncomeRecord[] = [
     amountArs: null,
     amountUsd: 1800,
     exchangeRate: null,
-    type: "advance",
+    status: "PAID",
     notes: null,
   },
   {
@@ -138,7 +138,7 @@ export const demoIncomes: IncomeRecord[] = [
     amountArs: null,
     amountUsd: 950,
     exchangeRate: null,
-    type: "recurring",
+    status: "PAID",
     notes: "Febrero pagado",
   },
   {
@@ -150,7 +150,7 @@ export const demoIncomes: IncomeRecord[] = [
     amountArs: null,
     amountUsd: 5200,
     exchangeRate: null,
-    type: "final_payment",
+    status: "PAID",
     notes: "Proyecto cerrado",
   },
 ];

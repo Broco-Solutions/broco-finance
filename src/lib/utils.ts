@@ -64,6 +64,18 @@ export function formatUsd(value: NumericLike) {
   return formatCurrency(value);
 }
 
+export function formatIncomeStatus(value: string | null | undefined) {
+  if (value === "PAID") {
+    return "Cobrado";
+  }
+
+  if (value === "PENDING") {
+    return "Pendiente";
+  }
+
+  return "—";
+}
+
 export function toFixedCurrencyInput(value: NumericLike) {
   const numericValue = toCurrencyNumber(value);
   return numericValue === null ? "" : roundCurrency(numericValue).toFixed(2);

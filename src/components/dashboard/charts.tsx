@@ -31,8 +31,8 @@ export function MonthlyPerformanceChart({
   return (
     <Card className="h-[360px]">
       <div className="mb-4">
-        <h3 className="font-display text-2xl text-ink">Ingresos vs Egresos</h3>
-        <p className="text-sm text-ink/55">Vista mensual del neto operativo.</p>
+        <h3 className="font-display text-2xl text-ink">Ingresos reales vs Egresos</h3>
+        <p className="text-sm text-ink/55">Vista mensual de caja efectivamente cobrada contra gasto.</p>
       </div>
       <ResponsiveContainer width="100%" height="88%">
         <BarChart data={data}>
@@ -86,7 +86,7 @@ export function CashflowChart({
   return (
     <Card className="h-[320px]">
       <div className="mb-4">
-        <h3 className="font-display text-2xl text-ink">Cash flow acumulado</h3>
+        <h3 className="font-display text-2xl text-ink">Caja acumulada</h3>
       </div>
       <ResponsiveContainer width="100%" height="88%">
         <AreaChart data={data}>

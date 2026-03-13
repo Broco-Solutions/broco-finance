@@ -35,12 +35,45 @@ export function DistributionScreen({
     amountUsd: "",
     notes: "",
   });
+  const [historyQuery, setHistoryQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const projectedRemanente = useMemo(() => {
     const layersUsd = layers.reduce((sum, item) => sum + (toCurrencyNumber(item.currentAmountUsd) ?? 0), 0);
     return (toCurrencyNumber(data.summary.netResultUsd) ?? 0) - layersUsd;
   }, [data.summary.netResultUsd, layers]);
+
+  const emergencyLayerUsd = useMemo(
+    () => toCurrencyNumber(layers.find((layer) => layer.layer === "emergency")?.currentAmountUsd) ?? 0,
+    [layers],
+  );
+  const growthLayerUsd = useMemo(
+    () => toCurrencyNumber(layers.find((layer) => layer.layer === "growth")?.currentAmountUsd) ?? 0,
+    [layers],
+  );
+  const realAvailableRemanente = useMemo(
+    () => (toCurrencyNumber(data.summary.netResultUsd) ?? 0) - emergencyLayerUsd - growthLayerUsd,
+    [data.summary.netResultUsd, emergencyLayerUsd, growthLayerUsd],
+  );
+  const visibleSalaries = useMemo(
+    () =>
+      data.salaries.filter((item) => {
+        const query = historyQuery.trim().toLowerCase();
+        if (!query) {
+          return true;
+        }
+
+        return (
+          item.personName.toLowerCase().includes(query) ||
+          (item.notes ?? "").toLowerCase().includes(query)
+        );
+      }),
+    [data.salaries, historyQuery],
+  );
+  const filteredSalaryTotal = useMemo(
+    () => visibleSalaries.reduce((sum, item) => sum + (toCurrencyNumber(item.amountUsd) ?? 0), 0),
+    [visibleSalaries],
+  );
 
   const saveLayers = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -104,7 +137,7 @@ export function DistributionScreen({
               {formatUsd(toCurrencyNumber(projectedRemanente))}
             </div>
             <div className="mt-6 space-y-2 text-sm text-white/88">
-              <div>Ingresos acumulados: {formatUsd(toCurrencyNumber(data.summary.totalIncomeUsd))}</div>
+              <div>Ingresos cobrados acumulados: {formatUsd(toCurrencyNumber(data.summary.totalIncomeUsd))}</div>
               <div>Egresos acumulados: {formatUsd(toCurrencyNumber(data.summary.totalExpenseUsd))}</div>
               <div>Resultado neto: {formatUsd(toCurrencyNumber(data.summary.netResultUsd))}</div>
             </div>
@@ -118,6 +151,25 @@ export function DistributionScreen({
                   <span className="font-semibold">{formatUsd(toCurrencyNumber(layer.currentAmountUsd))}</span>
                 </div>
               ))}
+            </div>
+            <div className="mt-5 rounded-[1.35rem] border border-lime-300/35 bg-lime-100/10 p-4 shadow-[0_18px_40px_rgba(190,242,100,0.12)]">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-lime-100">Remanente Real Disponible</div>
+              <div className="mt-3 font-display text-4xl text-white">{formatUsd(toCurrencyNumber(realAvailableRemanente))}</div>
+              <div className="mt-3 text-xs uppercase tracking-[0.16em] text-white/68">Resultado Neto - Capa Emergencia - Capa Growth</div>
+              <div className="mt-3 space-y-2 text-sm text-white/88">
+                <div className="flex items-center justify-between gap-4">
+                  <span>Resultado Neto</span>
+                  <span className="font-semibold">{formatUsd(toCurrencyNumber(data.summary.netResultUsd))}</span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span>Capa Emergencia</span>
+                  <span className="font-semibold">{formatUsd(toCurrencyNumber(emergencyLayerUsd))}</span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <span>Capa Growth</span>
+                  <span className="font-semibold">{formatUsd(toCurrencyNumber(growthLayerUsd))}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -181,8 +233,41 @@ export function DistributionScreen({
           </form>
 
           <div className="mt-8">
-            <DataTable headers={["Persona", "Mes", "Fecha", "USD", "Notas"]}>
-              {data.salaries.map((item) => (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-display text-xl text-ink">Historial de distribución</h3>
+                <p className="mt-1 text-sm text-ink/55">Filtrá por persona o nota para leer retiros del mes operativo visible.</p>
+              </div>
+              <Input
+                className="max-w-sm"
+                placeholder="Filtrar por persona o nota…"
+                value={historyQuery}
+                onChange={(event) => setHistoryQuery(event.target.value)}
+              />
+            </div>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] border border-cobalt/10 bg-[linear-gradient(90deg,rgba(239,246,255,0.92),rgba(248,250,252,0.96))] px-4 py-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt">Total filtrado</div>
+                <div className="mt-1 text-sm text-ink/60">{visibleSalaries.length} retiros visibles</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">USD</div>
+                <div className="mt-1 font-display text-2xl text-cobalt">{formatUsd(filteredSalaryTotal)}</div>
+              </div>
+            </div>
+            <DataTable
+              headers={["Persona", "Mes", "Fecha", "USD", "Notas"]}
+              footer={
+                <tr>
+                  <td className="px-4 py-3 font-semibold text-ink" colSpan={3}>
+                    Total filtrado
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-cobalt">{formatUsd(filteredSalaryTotal)}</td>
+                  <td className="px-4 py-3 text-xs uppercase tracking-[0.16em] text-ink/45">{visibleSalaries.length} filas</td>
+                </tr>
+              }
+            >
+              {visibleSalaries.map((item) => (
                 <tr key={item.id}>
                   <td className="px-4 py-3 font-semibold text-ink">{item.personName}</td>
                   <td className="px-4 py-3">{formatMonthLabel(item.month)}</td>

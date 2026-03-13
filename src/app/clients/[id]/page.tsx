@@ -2,7 +2,7 @@ import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-b
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatShortDate, formatUsd } from "@/lib/utils";
+import { formatIncomeStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { getClientDetail } from "@/server/services/finance";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
       />
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-emerald-950/50 bg-gradient-to-br from-emerald-950 via-emerald-900 to-lime-700 text-white">
-          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-50/80">Facturado</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-50/80">Acordado</div>
           <div className="mt-3 font-display text-4xl text-white drop-shadow-[0_4px_14px_rgba(0,0,0,0.28)]">
             {formatUsd(detail.client.totalInvoicedUsd)}
           </div>
@@ -51,15 +51,15 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
       </Card>
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
-          <h2 className="font-display text-2xl text-ink">Últimos ingresos</h2>
+          <h2 className="font-display text-2xl text-ink">Últimos cobros y pendientes</h2>
           <div className="mt-4">
-            <DataTable headers={["Fecha", "Proyecto", "USD", "Tipo"]}>
+            <DataTable headers={["Fecha", "Proyecto", "USD", "Estado"]}>
               {detail.incomes.map((income) => (
                 <tr key={income.id}>
                   <td className="px-4 py-3">{formatShortDate(income.date)}</td>
                   <td className="px-4 py-3">{income.projectName}</td>
                   <td className="px-4 py-3">{formatUsd(income.amountUsd)}</td>
-                  <td className="px-4 py-3 uppercase">{income.type}</td>
+                  <td className="px-4 py-3 uppercase">{formatIncomeStatus(income.status)}</td>
                 </tr>
               ))}
             </DataTable>

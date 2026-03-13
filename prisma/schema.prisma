@@ -13,10 +13,9 @@ enum ProjectStatus {
   cancelled
 }
 
-enum IncomeType {
-  advance
-  final_payment
-  recurring
+enum IncomeStatus {
+  PAID
+  PENDING
 }
 
 enum ContractFrequency {
@@ -78,10 +77,10 @@ model Income {
   id            String             @id @default(uuid()) @db.Uuid
   projectId     String             @map("project_id") @db.Uuid
   date          DateTime           @db.Date
+  status        IncomeStatus       @default(PAID)
   amountArs     Decimal?           @map("amount_ars") @db.Decimal(14, 2)
   amountUsd     Decimal            @map("amount_usd") @db.Decimal(12, 2)
   exchangeRate  Decimal?           @map("exchange_rate") @db.Decimal(12, 4)
-  type          IncomeType
   notes         String?
   createdAt     DateTime           @default(now()) @map("created_at")
   updatedAt     DateTime           @updatedAt @map("updated_at")
@@ -89,7 +88,7 @@ model Income {
   scheduledPayment ScheduledPayment?
 
   @@index([projectId, date])
-  @@index([type, date])
+  @@index([status, date])
   @@map("incomes")
 }
 

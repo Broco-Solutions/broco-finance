@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ClientRecord, ProjectRecord, ProjectStatus } from "@/lib/types";
@@ -9,6 +10,7 @@ import { formatShortDate, formatUsd } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
+import { EditEntityModal } from "@/components/ui/edit-entity-modal";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
@@ -29,6 +31,9 @@ export function ProjectsScreen({
   const [isPending, startTransition] = useTransition();
   const [filters, setFilters] = useState({ clientId: "", status: "" });
   const [error, setError] = useState<string | null>(null);
+  const [editingProject, setEditingProject] = useState<ProjectRecord | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
   const [form, setForm] = useState({
     clientId: clients[0]?.id ?? "",
     name: "",
@@ -70,6 +75,46 @@ export function ProjectsScreen({
         router.refresh();
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "No se pudo crear el proyecto.");
+      }
+    });
+  };
+
+  const openEditModal = (project: ProjectRecord) => {
+    setEditingProject(project);
+    setEditName(project.name);
+    setEditError(null);
+  };
+
+  const closeEditModal = () => {
+    setEditingProject(null);
+    setEditName("");
+    setEditError(null);
+  };
+
+  const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!editingProject) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        setEditError(null);
+        await apiFetch(`/api/projects/${editingProject.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            clientId: editingProject.clientId,
+            name: editName,
+            status: editingProject.status,
+            totalBudgetUsd: editingProject.totalBudgetUsd,
+            notes: editingProject.notes ?? null,
+          }),
+        });
+        closeEditModal();
+        router.refresh();
+      } catch (submitError) {
+        setEditError(submitError instanceof Error ? submitError.message : "No se pudo actualizar el proyecto.");
       }
     });
   };
@@ -145,7 +190,7 @@ export function ProjectsScreen({
               </Select>
             </div>
           </div>
-          <DataTable headers={["Proyecto", "Cliente", "Cobrado", "Presupuesto", "Próximo cobro", "Detalle"]}>
+          <DataTable headers={["Proyecto", "Cliente", "Cobrado", "Presupuesto", "Próximo cobro", "Acciones"]}>
             {visibleProjects.map((project) => (
               <tr key={project.id}>
                 <td className="px-4 py-3 font-semibold text-ink">{project.name}</td>
@@ -154,15 +199,56 @@ export function ProjectsScreen({
                 <td className="px-4 py-3">{project.totalBudgetUsd ? formatUsd(project.totalBudgetUsd) : "—"}</td>
                 <td className="px-4 py-3">{formatShortDate(project.nextPaymentDate)}</td>
                 <td className="px-4 py-3">
-                  <Link className="font-semibold text-cobalt" href={`/projects/${project.id}`}>
-                    Abrir
-                  </Link>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      aria-label={`Editar ${project.name}`}
+                      className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-black/5"
+                      onClick={() => openEditModal(project)}
+                      type="button"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Editar
+                    </button>
+                    <Link className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold text-cobalt transition hover:bg-cobalt/8" href={`/projects/${project.id}`}>
+                      Abrir
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}
           </DataTable>
         </Card>
       </div>
+
+      <EditEntityModal
+        open={Boolean(editingProject)}
+        title="Editar proyecto"
+        description="Esta edición rápida actualiza el nombre visible del proyecto y conserva cliente, estado, presupuesto y notas."
+        submitLabel="Guardar proyecto"
+        isPending={isPending}
+        disabled={demoMode}
+        error={editError}
+        onClose={closeEditModal}
+        onSubmit={handleEditSubmit}
+      >
+        <div className="space-y-4">
+          <div className="grid gap-3 rounded-[1.2rem] border border-black/10 bg-black/[0.02] p-4 sm:grid-cols-2">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Cliente</div>
+              <div className="mt-2 text-sm font-semibold text-ink">{editingProject?.clientName ?? "—"}</div>
+            </div>
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Estado</div>
+              <div className="mt-2 text-sm font-semibold uppercase text-ink">{editingProject?.status ?? "—"}</div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Nombre del proyecto</label>
+            <Input value={editName} onChange={(event) => setEditName(event.target.value)} />
+          </div>
+          {demoMode ? <p className="text-sm text-ink/55">La edición persistente requiere `DATABASE_URL`.</p> : null}
+        </div>
+      </EditEntityModal>
     </div>
   );
 }

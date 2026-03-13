@@ -1,5 +1,5 @@
 export type ProjectStatus = "active" | "finished" | "cancelled";
-export type IncomeType = "advance" | "final_payment" | "recurring";
+export type IncomeStatus = "PAID" | "PENDING";
 export type ContractFrequency = "monthly" | "quarterly" | "biannual" | "annual";
 export type ScheduledPaymentStatus = "pending" | "paid" | "overdue" | "cancelled";
 export type ExpenseType = "fixed" | "variable";
@@ -39,7 +39,7 @@ export type IncomeRecord = MonetaryFields & {
   projectName: string;
   clientName: string;
   date: string;
-  type: IncomeType;
+  status: IncomeStatus;
   notes: string | null;
 };
 

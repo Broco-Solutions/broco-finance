@@ -2,7 +2,7 @@ import {
   ContractFrequency,
   DistributionLayer,
   ExpenseType,
-  IncomeType,
+  IncomeStatus,
   Prisma,
   ProjectStatus,
   ScheduledPaymentStatus,
@@ -54,8 +54,16 @@ function isOpenScheduledStatus(status: ScheduledPaymentStatus) {
   return status === ScheduledPaymentStatus.pending || status === ScheduledPaymentStatus.overdue;
 }
 
+function isPaidIncomeStatus(status: IncomeStatus | string) {
+  return status === IncomeStatus.PAID;
+}
+
+function isPendingIncomeStatus(status: IncomeStatus | string) {
+  return status === IncomeStatus.PENDING;
+}
+
 const projectStatusSchema = z.enum(["active", "finished", "cancelled"]);
-const incomeTypeSchema = z.enum(["advance", "final_payment", "recurring"]);
+const incomeStatusSchema = z.enum(["PAID", "PENDING"]);
 const expenseTypeSchema = z.enum(["fixed", "variable"]);
 const contractFrequencySchema = z.enum(["monthly", "quarterly", "biannual", "annual"]);
 const scheduledActionSchema = z.enum(["mark_paid", "cancel", "edit"]);
@@ -95,7 +103,7 @@ export const projectInputSchema = z.object({
 export const incomeInputSchema = z.object({
   projectId: z.string().uuid("Proyecto inválido."),
   date: z.string().min(8, "Fecha inválida."),
-  type: incomeTypeSchema,
+  status: incomeStatusSchema,
   notes: z.string().trim().nullable().optional(),
 }).merge(baseMoneySchema);
 
@@ -130,7 +138,7 @@ export const scheduledPaymentInputSchema = z.object({
   paidAt: z.string().nullable().optional(),
   notes: z.string().trim().nullable().optional(),
   incomeId: z.string().uuid().nullable().optional(),
-  createIncome: incomeInputSchema.nullable().optional(),
+  createIncome: incomeInputSchema.extend({ status: incomeStatusSchema.optional() }).nullable().optional(),
 });
 
 export const distributionInputSchema = z.object({
@@ -181,7 +189,7 @@ export const scheduledFilterSchema = z.object({
 export const incomeFilterSchema = z.object({
   projectId: z.string().uuid().nullable().optional(),
   clientId: z.string().uuid().nullable().optional(),
-  type: z.enum(["advance", "final_payment", "recurring"]).nullable().optional(),
+  status: z.enum(["PAID", "PENDING"]).nullable().optional(),
   from: z.string().nullable().optional(),
   to: z.string().nullable().optional(),
 });
@@ -215,6 +223,25 @@ function toNumber(value: Prisma.Decimal | number | null | undefined) {
 
 function requireNumber(value: Prisma.Decimal | number | null | undefined) {
   return Number(value ?? 0);
+}
+
+function sumIncomeUsd<T extends { amountUsd: Prisma.Decimal | number; status: IncomeStatus | string }>(
+  incomes: T[],
+  predicate: (income: T) => boolean = () => true,
+) {
+  return incomes.reduce((sum, income) => (predicate(income) ? sum + requireNumber(income.amountUsd) : sum), 0);
+}
+
+function nextReceivableDate(
+  incomes: Array<{ date: Date; status: IncomeStatus | string }>,
+  payments: Array<{ expectedDate: Date; status: ScheduledPaymentStatus }>,
+) {
+  const candidates = [
+    ...incomes.filter((income) => isPendingIncomeStatus(income.status)).map((income) => income.date),
+    ...payments.filter((payment) => isOpenScheduledStatus(payment.status)).map((payment) => payment.expectedDate),
+  ].sort((a, b) => a.getTime() - b.getTime());
+
+  return candidates[0] ?? null;
 }
 
 function normalizeMoney(input: { amountUsd?: number; amountArs?: number | null; exchangeRate?: number | null }) {
@@ -430,7 +457,7 @@ function mapDemoIncomes(filters?: z.infer<typeof incomeFilterSchema>) {
       if (filters?.clientId && demoProjects.find((project) => project.id === income.projectId)?.clientId !== filters.clientId) {
         return false;
       }
-      if (filters?.type && income.type !== filters.type) {
+      if (filters?.status && income.status !== filters.status) {
         return false;
       }
       return true;
@@ -480,17 +507,17 @@ function mapDemoScheduledPayments(filters?: z.infer<typeof scheduledFilterSchema
 }
 
 function mapClientRecord(client: Prisma.ClientGetPayload<{ include: { projects: { include: { incomes: true; scheduledPayments: true } } } }>): ClientRecord {
-  const totalInvoicedUsd = client.projects.flatMap((project) => project.incomes).reduce((sum, income) => sum + requireNumber(income.amountUsd), 0);
-  const pendingPayments = client.projects
-    .flatMap((project) => project.scheduledPayments)
-    .filter((payment) => isOpenScheduledStatus(payment.status));
+  const allIncomes = client.projects.flatMap((project) => project.incomes);
+  const pendingPayments = client.projects.flatMap((project) => project.scheduledPayments).filter((payment) => isOpenScheduledStatus(payment.status));
 
   return {
     id: client.id,
     name: client.name,
     notes: client.notes,
-    totalInvoicedUsd,
-    totalReceivableUsd: pendingPayments.reduce((sum, payment) => sum + requireNumber(payment.expectedAmountUsd), 0),
+    totalInvoicedUsd: allIncomes.reduce((sum, income) => sum + requireNumber(income.amountUsd), 0),
+    totalReceivableUsd:
+      sumIncomeUsd(allIncomes, (income) => isPendingIncomeStatus(income.status)) +
+      pendingPayments.reduce((sum, payment) => sum + requireNumber(payment.expectedAmountUsd), 0),
     activeProjects: client.projects.filter((project) => project.status === ProjectStatus.active).length,
     totalProjects: client.projects.length,
   };
@@ -505,9 +532,7 @@ function mapProjectRecord(
     };
   }>,
 ): ProjectRecord {
-  const nextPayment = project.scheduledPayments
-    .filter((payment) => isOpenScheduledStatus(payment.status))
-    .sort((a, b) => a.expectedDate.getTime() - b.expectedDate.getTime())[0];
+  const nextPayment = nextReceivableDate(project.incomes, project.scheduledPayments);
 
   return {
     id: project.id,
@@ -517,8 +542,8 @@ function mapProjectRecord(
     status: project.status,
     totalBudgetUsd: toNumber(project.totalBudgetUsd),
     notes: project.notes,
-    totalCollectedUsd: project.incomes.reduce((sum, income) => sum + requireNumber(income.amountUsd), 0),
-    nextPaymentDate: nextPayment ? dateOnly(nextPayment.expectedDate) : null,
+    totalCollectedUsd: sumIncomeUsd(project.incomes, (income) => isPaidIncomeStatus(income.status)),
+    nextPaymentDate: nextPayment ? dateOnly(nextPayment) : null,
   };
 }
 
@@ -536,7 +561,7 @@ function mapIncomeRecord(
     amountUsd: requireNumber(income.amountUsd),
     amountArs: toNumber(income.amountArs),
     exchangeRate: toNumber(income.exchangeRate),
-    type: income.type,
+    status: income.status,
     notes: income.notes,
   };
 }
@@ -913,7 +938,7 @@ export async function listIncomes(filters?: z.infer<typeof incomeFilterSchema>) 
   const items = await prisma.income.findMany({
     where: {
       projectId: filters?.projectId ?? undefined,
-      type: (filters?.type as IncomeType | undefined) ?? undefined,
+      status: (filters?.status as IncomeStatus | undefined) ?? undefined,
       project: filters?.clientId ? { clientId: filters.clientId } : undefined,
       date: {
         gte: filters?.from ? parseISO(filters.from) : undefined,
@@ -937,7 +962,7 @@ export async function createIncome(input: z.infer<typeof incomeInputSchema>) {
     data: {
       projectId: input.projectId,
       date: parseISO(input.date),
-      type: input.type as IncomeType,
+      status: input.status as IncomeStatus,
       notes: input.notes ?? null,
       ...money,
     },
@@ -946,6 +971,14 @@ export async function createIncome(input: z.infer<typeof incomeInputSchema>) {
 
 export async function updateIncome(id: string, input: z.infer<typeof incomeInputSchema>) {
   requireDatabase();
+  const linkedPayment = await prisma.scheduledPayment.findUnique({
+    where: { actualIncomeId: id },
+  });
+
+  if (linkedPayment) {
+    throw new AppError("Editá el pago programado para ajustar un ingreso conciliado con recurrentes.", 409);
+  }
+
   const money = normalizeMoney(input);
 
   return prisma.income.update({
@@ -953,7 +986,7 @@ export async function updateIncome(id: string, input: z.infer<typeof incomeInput
     data: {
       projectId: input.projectId,
       date: parseISO(input.date),
-      type: input.type as IncomeType,
+      status: input.status as IncomeStatus,
       notes: input.notes ?? null,
       ...money,
     },
@@ -1094,7 +1127,7 @@ export async function getDistributionPage(month?: string | null): Promise<Distri
 
   const [layers, incomes, expenses, salaries] = await Promise.all([
     prisma.distributionConfig.findMany({ orderBy: { layer: "asc" } }),
-    prisma.income.findMany({ select: { amountUsd: true } }),
+    prisma.income.findMany({ where: { status: IncomeStatus.PAID }, select: { amountUsd: true } }),
     prisma.expense.findMany({ select: { amountUsd: true } }),
     prisma.salaryWithdrawal.findMany({
       where: {
@@ -1371,7 +1404,7 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
         data: {
           projectId: input.createIncome.projectId,
           date: parseISO(input.createIncome.date),
-          type: input.createIncome.type as IncomeType,
+          status: IncomeStatus.PAID,
           notes: input.createIncome.notes ?? null,
           ...money,
         },
@@ -1384,7 +1417,7 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
         data: {
           projectId: payment.projectId,
           date: paidAt,
-          type: payment.recurringContractId ? IncomeType.recurring : IncomeType.final_payment,
+          status: IncomeStatus.PAID,
           notes: input.notes ?? payment.notes ?? "Cobro registrado desde pago programado.",
           amountUsd: payment.expectedAmountUsd,
           amountArs: null,
@@ -1487,6 +1520,17 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
   await syncOverduePayments(prisma);
 
   const incomeWhere: Prisma.IncomeWhereInput = {
+    status: IncomeStatus.PAID,
+    date: {
+      gte: filters?.from ? parseISO(filters.from) : undefined,
+      lte: filters?.to ? parseISO(filters.to) : undefined,
+    },
+    projectId: filters?.projectId ?? undefined,
+    project: filters?.clientId ? { clientId: filters.clientId } : undefined,
+  };
+
+  const pendingIncomeWhere: Prisma.IncomeWhereInput = {
+    status: IncomeStatus.PENDING,
     date: {
       gte: filters?.from ? parseISO(filters.from) : undefined,
       lte: filters?.to ? parseISO(filters.to) : undefined,
@@ -1509,11 +1553,15 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
     project: filters?.clientId ? { clientId: filters.clientId } : undefined,
   };
 
-  const [incomes, expenses, payments, layers, allIncomes, allExpenses, salaries, projects] = await Promise.all([
+  const [incomes, pendingIncomes, expenses, payments, layers, allIncomes, allExpenses, salaries, projects] = await Promise.all([
     prisma.income.findMany({
       where: incomeWhere,
       include: { project: { include: { client: true } } },
       orderBy: { date: "asc" },
+    }),
+    prisma.income.findMany({
+      where: pendingIncomeWhere,
+      select: { amountUsd: true },
     }),
     prisma.expense.findMany({
       where: expenseWhere,
@@ -1526,7 +1574,7 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
       orderBy: { expectedDate: "asc" },
     }),
     prisma.distributionConfig.findMany({ orderBy: { layer: "asc" } }),
-    prisma.income.findMany({ select: { amountUsd: true } }),
+    prisma.income.findMany({ where: { status: IncomeStatus.PAID }, select: { amountUsd: true } }),
     prisma.expense.findMany({ select: { amountUsd: true } }),
     prisma.salaryWithdrawal.findMany({
       where: {
@@ -1593,11 +1641,10 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
           activeProjects: 0,
           pendingPayments: 0,
         };
-        current.incomeUsd += project.incomes.reduce((sum, income) => sum + requireNumber(income.amountUsd), 0);
+        current.incomeUsd += sumIncomeUsd(project.incomes, (income) => isPaidIncomeStatus(income.status));
         current.activeProjects += project.status === ProjectStatus.active ? 1 : 0;
-        current.pendingPayments += project.scheduledPayments.filter(
-          (payment) => isOpenScheduledStatus(payment.status),
-        ).length;
+        current.pendingPayments += project.scheduledPayments.filter((payment) => isOpenScheduledStatus(payment.status)).length;
+        current.pendingPayments += project.incomes.filter((income) => isPendingIncomeStatus(income.status)).length;
         acc.set(project.client.name, current);
         return acc;
       },
@@ -1620,9 +1667,11 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
         mappedIncomes.reduce((sum, item) => sum + item.amountUsd, 0) -
         mappedExpenses.reduce((sum, item) => sum + item.amountUsd, 0),
       remanenteUsd: summary.remanenteUsd,
-      receivableUsd: mappedPayments
-        .filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus))
-        .reduce((sum, item) => sum + item.expectedAmountUsd, 0),
+      receivableUsd:
+        mappedPayments
+          .filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus))
+          .reduce((sum, item) => sum + item.expectedAmountUsd, 0) +
+        pendingIncomes.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
       overdueUsd: mappedPayments
         .filter((payment) => payment.status === "overdue")
         .reduce((sum, item) => sum + item.expectedAmountUsd, 0),

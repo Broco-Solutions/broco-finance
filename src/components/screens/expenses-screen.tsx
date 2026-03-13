@@ -27,6 +27,7 @@ export function ExpensesScreen({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [typeFilter, setTypeFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
@@ -41,8 +42,25 @@ export function ExpensesScreen({
   });
 
   const visibleExpenses = useMemo(
-    () => (typeFilter ? expenses.filter((expense) => expense.expenseType === typeFilter) : expenses),
-    [expenses, typeFilter],
+    () =>
+      expenses.filter((expense) => {
+        if (typeFilter && expense.expenseType !== typeFilter) {
+          return false;
+        }
+        if (categoryFilter && expense.categoryId !== categoryFilter) {
+          return false;
+        }
+        return true;
+      }),
+    [expenses, typeFilter, categoryFilter],
+  );
+  const filteredTotals = useMemo(
+    () => ({
+      count: visibleExpenses.length,
+      amountUsd: visibleExpenses.reduce((sum, expense) => sum + expense.amountUsd, 0),
+      amountArs: visibleExpenses.reduce((sum, expense) => sum + (expense.amountArs ?? 0), 0),
+    }),
+    [visibleExpenses],
   );
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -144,13 +162,51 @@ export function ExpensesScreen({
               <h2 className="font-display text-2xl text-ink">Historial de gastos</h2>
               <p className="mt-1 text-sm text-ink/55">Separá fijos y variables para leer mejor el neto del período.</p>
             </div>
-            <Select className="max-w-[220px]" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-              <option value="">Todos los tipos</option>
-              <option value="fixed">fixed</option>
-              <option value="variable">variable</option>
-            </Select>
+            <div className="grid w-full gap-3 sm:max-w-2xl sm:grid-cols-2">
+              <Select className="max-w-[220px] sm:max-w-none" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                <option value="">Todos los tipos</option>
+                <option value="fixed">fixed</option>
+                <option value="variable">variable</option>
+              </Select>
+              <Select className="max-w-[220px] sm:max-w-none" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                <option value="">Todas las categorías</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
-          <DataTable headers={["Fecha", "Categoría", "Descripción", "Proyecto", "ARS", "USD", "Tipo"]}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] border border-rose-900/10 bg-[linear-gradient(90deg,rgba(255,241,242,0.92),rgba(248,250,252,0.96))] px-4 py-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-950/70">Total filtrado</div>
+              <div className="mt-1 text-sm text-ink/60">{filteredTotals.count} gastos visibles</div>
+            </div>
+            <div className="flex flex-wrap gap-6 text-right">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">ARS</div>
+                <div className="mt-1 font-semibold text-ink">{formatArs(filteredTotals.amountArs)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">USD</div>
+                <div className="mt-1 font-display text-2xl text-rose-950">{formatUsd(filteredTotals.amountUsd)}</div>
+              </div>
+            </div>
+          </div>
+          <DataTable
+            headers={["Fecha", "Categoría", "Descripción", "Proyecto", "ARS", "USD", "Tipo"]}
+            footer={
+              <tr>
+                <td className="px-4 py-3 font-semibold text-ink" colSpan={4}>
+                  Total filtrado
+                </td>
+                <td className="px-4 py-3 font-semibold text-ink">{formatArs(filteredTotals.amountArs)}</td>
+                <td className="px-4 py-3 font-semibold text-rose-950">{formatUsd(filteredTotals.amountUsd)}</td>
+                <td className="px-4 py-3 text-xs uppercase tracking-[0.16em] text-ink/45">{filteredTotals.count} filas</td>
+              </tr>
+            }
+          >
             {visibleExpenses.map((expense) => (
               <tr key={expense.id}>
                 <td className="px-4 py-3">{formatShortDate(expense.date)}</td>

@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatShortDate, formatUsd } from "@/lib/utils";
+import { formatIncomeStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { getProjectDetail } from "@/server/services/finance";
 
 export const dynamic = "force-dynamic";
@@ -41,12 +41,12 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         <Card>
           <h2 className="font-display text-2xl text-ink">Ingresos</h2>
           <div className="mt-4">
-            <DataTable headers={["Fecha", "USD", "Tipo", "Notas"]}>
+            <DataTable headers={["Fecha", "USD", "Estado", "Notas"]}>
               {detail.incomes.map((income) => (
                 <tr key={income.id}>
                   <td className="px-4 py-3">{formatShortDate(income.date)}</td>
                   <td className="px-4 py-3">{formatUsd(income.amountUsd)}</td>
-                  <td className="px-4 py-3 uppercase">{income.type}</td>
+                  <td className="px-4 py-3 uppercase">{formatIncomeStatus(income.status)}</td>
                   <td className="px-4 py-3">{income.notes ?? "—"}</td>
                 </tr>
               ))}

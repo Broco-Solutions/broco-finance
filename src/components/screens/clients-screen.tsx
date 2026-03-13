@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { FormEvent, useDeferredValue, useMemo, useState, useTransition } from "react";
 import type { ClientRecord } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
@@ -8,6 +9,7 @@ import { formatUsd } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
+import { EditEntityModal } from "@/components/ui/edit-entity-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
@@ -27,6 +29,9 @@ export function ClientsScreen({
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState({ name: "", notes: "" });
   const [error, setError] = useState<string | null>(null);
+  const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", notes: "" });
+  const [editError, setEditError] = useState<string | null>(null);
 
   const filtered = useMemo(
     () =>
@@ -51,12 +56,52 @@ export function ClientsScreen({
     });
   };
 
+  const openEditModal = (client: ClientRecord) => {
+    setEditingClient(client);
+    setEditForm({
+      name: client.name,
+      notes: client.notes ?? "",
+    });
+    setEditError(null);
+  };
+
+  const closeEditModal = () => {
+    setEditingClient(null);
+    setEditForm({ name: "", notes: "" });
+    setEditError(null);
+  };
+
+  const handleEditSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!editingClient) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        setEditError(null);
+        await apiFetch(`/api/clients/${editingClient.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            name: editForm.name,
+            notes: editForm.notes || null,
+          }),
+        });
+        closeEditModal();
+        router.refresh();
+      } catch (submitError) {
+        setEditError(submitError instanceof Error ? submitError.message : "No se pudo actualizar el cliente.");
+      }
+    });
+  };
+
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Clientes"
         title="Relación comercial y cuentas por cobrar"
-        description="Cada cliente agrupa proyectos, facturación efectiva y deuda pendiente. El filtro es local para mantener la interfaz rápida."
+        description="Cada cliente agrupa proyectos, monto acordado y deuda pendiente. El filtro es local para mantener la interfaz rápida."
         demoMode={demoMode}
       />
 
@@ -95,7 +140,7 @@ export function ClientsScreen({
           {filtered.length === 0 ? (
             <EmptyState title="Sin clientes" description="Cuando cargues clientes, vas a ver facturación, cuentas por cobrar y proyectos activos." />
           ) : (
-            <DataTable headers={["Cliente", "Facturado", "Por cobrar", "Proyectos", "Detalle"]}>
+            <DataTable headers={["Cliente", "Acordado", "Por cobrar", "Proyectos", "Acciones"]}>
               {filtered.map((client) => (
                 <tr key={client.id}>
                   <td className="px-4 py-3">
@@ -106,9 +151,20 @@ export function ClientsScreen({
                   <td className="px-4 py-3">{formatUsd(client.totalReceivableUsd)}</td>
                   <td className="px-4 py-3">{client.activeProjects}/{client.totalProjects}</td>
                   <td className="px-4 py-3">
-                    <Link className="font-semibold text-cobalt" href={`/clients/${client.id}`}>
-                      Abrir
-                    </Link>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        aria-label={`Editar ${client.name}`}
+                        className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-black/5"
+                        onClick={() => openEditModal(client)}
+                        type="button"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Editar
+                      </button>
+                      <Link className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold text-cobalt transition hover:bg-cobalt/8" href={`/clients/${client.id}`}>
+                        Abrir
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -116,6 +172,30 @@ export function ClientsScreen({
           )}
         </Card>
       </div>
+
+      <EditEntityModal
+        open={Boolean(editingClient)}
+        title="Editar cliente"
+        description="Podés corregir el nombre comercial o las notas internas sin salir del listado."
+        submitLabel="Guardar cliente"
+        isPending={isPending}
+        disabled={demoMode}
+        error={editError}
+        onClose={closeEditModal}
+        onSubmit={handleEditSubmit}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Nombre</label>
+            <Input value={editForm.name} onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Notas</label>
+            <Textarea value={editForm.notes} onChange={(event) => setEditForm((prev) => ({ ...prev, notes: event.target.value }))} />
+          </div>
+          {demoMode ? <p className="text-sm text-ink/55">La edición persistente requiere `DATABASE_URL`.</p> : null}
+        </div>
+      </EditEntityModal>
     </div>
   );
 }

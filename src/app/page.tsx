@@ -37,14 +37,16 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow="Overview"
         title="El tablero financiero que mira caja, cobranza y remanente real"
-        description="Los filtros del dashboard no afectan el remanente: ese número siempre es histórico y acumulado. Todo lo demás sí se apoya en el período operativo."
+        description="Los filtros operativos distinguen caja real de cuentas por cobrar. El remanente siempre se calcula solo con ingresos cobrados y egresos reales."
         demoMode={demoMode}
       />
 
-      <div className="grid gap-4 xl:grid-cols-4">
-        <StatCard title="Ingresos" value={kpis.incomesUsd} detail="Período visible" tone="success" />
+      <div className="grid gap-4 xl:grid-cols-3">
+        <StatCard title="Ingresos reales" value={kpis.incomesUsd} detail="Cobrado en el período" tone="success" />
         <StatCard title="Egresos" value={kpis.expensesUsd} detail="Período visible" tone="danger" />
-        <StatCard title="Resultado Neto" value={kpis.netUsd} detail="Ingresos - egresos" tone={kpis.netUsd >= 0 ? "success" : "danger"} />
+        <StatCard title="Resultado Neto" value={kpis.netUsd} detail="Cobrado - egresos" tone={kpis.netUsd >= 0 ? "success" : "danger"} />
+        <StatCard title="Por cobrar" value={dashboard.kpis.receivableUsd} detail="Pendientes y recurrentes abiertos" tone="warning" />
+        <StatCard title="Vencido" value={dashboard.kpis.overdueUsd} detail="Cobranza atrasada" tone="danger" />
         <StatCard title="Remanente" value={kpis.remanenteUsd} detail="Histórico real" tone="neutral" />
       </div>
 

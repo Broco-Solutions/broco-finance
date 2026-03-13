@@ -3,7 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import {
   ContractFrequency,
   ExpenseType,
-  IncomeType,
+  IncomeStatus,
   PrismaClient,
   ProjectStatus,
   ScheduledPaymentStatus,
@@ -24,7 +24,7 @@ type ParsedIncomeRow = {
   clientName: string;
   projectName: string;
   projectStatus: ProjectStatus;
-  type: IncomeType;
+  isRecurring: boolean;
   notes: string | null;
   money: ParsedMoney;
 };
@@ -220,22 +220,14 @@ function normalizeProjectStatus(value: unknown, fallback: ProjectStatus = Projec
   return ProjectStatus.active;
 }
 
-function normalizeIncomeType(value: unknown, notes: string | null) {
+function isRecurringIncomeSource(value: unknown, notes: string | null) {
   const text = cleanText(value)?.toLowerCase();
 
   if (!text) {
-    return notes?.toLowerCase().includes("interes") ? IncomeType.final_payment : IncomeType.advance;
+    return Boolean(notes?.toLowerCase().includes("mensual") || notes?.toLowerCase().includes("mantenimiento"));
   }
 
-  if (text.includes("recurrente")) {
-    return IncomeType.recurring;
-  }
-
-  if (text.includes("final")) {
-    return IncomeType.final_payment;
-  }
-
-  return IncomeType.advance;
+  return text.includes("recurrente");
 }
 
 function normalizeExpenseType(value: unknown) {
@@ -455,7 +447,7 @@ async function main() {
         clientName,
         projectName,
         projectStatus: normalizeProjectStatus(row["Estado del proyecto"], rawClientName ? ProjectStatus.active : ProjectStatus.finished),
-        type: normalizeIncomeType(row["Tipo de Ingreso"], notes),
+        isRecurring: isRecurringIncomeSource(row["Tipo de Ingreso"], notes),
         notes,
         money,
       };
@@ -533,7 +525,7 @@ async function main() {
   }
 
   const recurringByProject = new Map<string, ParsedIncomeRow[]>();
-  for (const income of parsedIncomes.filter((row) => row.type === IncomeType.recurring)) {
+  for (const income of parsedIncomes.filter((row) => row.isRecurring)) {
     const key = buildProjectKey(income.clientName, income.projectName);
     recurringByProject.set(key, [...(recurringByProject.get(key) ?? []), income]);
   }
@@ -633,10 +625,10 @@ async function main() {
       data: {
         projectId: projectMap.get(buildProjectKey(income.clientName, income.projectName))!,
         date: income.date,
+        status: IncomeStatus.PAID,
         amountArs: income.money.amountArs,
         amountUsd: income.money.amountUsd,
         exchangeRate: income.money.exchangeRate,
-        type: income.type,
         notes: income.notes,
       },
     });

@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const filters = incomeFilterSchema.parse({
     projectId: params.projectId ?? null,
     clientId: params.clientId ?? null,
-    type: params.type ?? null,
+    status: params.status ?? null,
     from: params.from ?? null,
     to: params.to ?? null,
   });
