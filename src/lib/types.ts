@@ -2,6 +2,7 @@ export type ProjectStatus = "active" | "finished" | "cancelled";
 export type IncomeStatus = "PAID" | "PENDING";
 export type ContractFrequency = "monthly" | "quarterly" | "biannual" | "annual";
 export type ScheduledPaymentStatus = "pending" | "paid" | "overdue" | "cancelled";
+export type ScheduledExpenseStatus = "PENDING" | "PAID";
 export type ExpenseType = "fixed" | "variable";
 export type DistributionLayer = "emergency" | "growth";
 
@@ -59,7 +60,34 @@ export type ExpenseRecord = MonetaryFields & {
   projectName: string | null;
   description: string;
   salaryWithdrawalId: string | null;
+  scheduledExpenseId?: string | null;
   notes: string | null;
+};
+
+export type RecurringExpenseRecord = {
+  id: string;
+  description: string;
+  categoryId: string;
+  categoryName: string;
+  amountUsd: number;
+  startDate: string;
+  frequency: ContractFrequency;
+  isActive: boolean;
+  nextDueDate: string | null;
+  pendingCount: number;
+};
+
+export type ScheduledExpenseRecord = {
+  id: string;
+  recurringExpenseId: string;
+  description: string;
+  categoryId: string;
+  categoryName: string;
+  dueDate: string;
+  amountUsd: number;
+  status: ScheduledExpenseStatus;
+  paidAt: string | null;
+  actualExpenseId: string | null;
 };
 
 export type DistributionRecord = {
@@ -132,6 +160,7 @@ export type DashboardPayload = {
     remanenteUsd: number;
     receivableUsd: number;
     overdueUsd: number;
+    committedExpensesMonthUsd: number;
     salariesThisMonthUsd: number;
   };
   charts: {

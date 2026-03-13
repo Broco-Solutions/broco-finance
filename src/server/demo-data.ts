@@ -10,8 +10,10 @@ import type {
   IncomeRecord,
   ProjectDetailPayload,
   ProjectRecord,
+  RecurringExpenseRecord,
   RecurringContractRecord,
   SalaryRecord,
+  ScheduledExpenseRecord,
   ScheduledPaymentRecord,
 } from "@/lib/types";
 
@@ -176,6 +178,7 @@ export const demoExpenses: ExpenseRecord[] = [
     exchangeRate: null,
     description: "ChatGPT Teams",
     salaryWithdrawalId: null,
+    scheduledExpenseId: null,
     notes: null,
   },
   {
@@ -191,6 +194,7 @@ export const demoExpenses: ExpenseRecord[] = [
     exchangeRate: null,
     description: "Vercel + Neon",
     salaryWithdrawalId: null,
+    scheduledExpenseId: null,
     notes: null,
   },
   {
@@ -206,6 +210,7 @@ export const demoExpenses: ExpenseRecord[] = [
     exchangeRate: null,
     description: "Salario Tomas - Mar 2026",
     salaryWithdrawalId: "salary-1",
+    scheduledExpenseId: null,
     notes: null,
   },
   {
@@ -221,7 +226,62 @@ export const demoExpenses: ExpenseRecord[] = [
     exchangeRate: 1035.71,
     description: "Campaña Meta Ads",
     salaryWithdrawalId: null,
+    scheduledExpenseId: null,
     notes: null,
+  },
+];
+
+export const demoRecurringExpenses: RecurringExpenseRecord[] = [
+  {
+    id: "rexp-1",
+    description: "ChatGPT Team",
+    categoryId: "cat-software",
+    categoryName: "Herramientas/Software",
+    amountUsd: 120,
+    startDate: "2026-01-01",
+    frequency: "monthly",
+    isActive: true,
+    nextDueDate: "2026-03-22",
+    pendingCount: 3,
+  },
+  {
+    id: "rexp-2",
+    description: "Estudio contable",
+    categoryId: "cat-marketing",
+    categoryName: "Marketing",
+    amountUsd: 180,
+    startDate: "2026-01-01",
+    frequency: "monthly",
+    isActive: true,
+    nextDueDate: "2026-03-25",
+    pendingCount: 2,
+  },
+];
+
+export const demoScheduledExpenses: ScheduledExpenseRecord[] = [
+  {
+    id: "sexp-1",
+    recurringExpenseId: "rexp-1",
+    description: "ChatGPT Team",
+    categoryId: "cat-software",
+    categoryName: "Herramientas/Software",
+    dueDate: "2026-03-22",
+    amountUsd: 120,
+    status: "PENDING",
+    paidAt: null,
+    actualExpenseId: null,
+  },
+  {
+    id: "sexp-2",
+    recurringExpenseId: "rexp-2",
+    description: "Estudio contable",
+    categoryId: "cat-marketing",
+    categoryName: "Marketing",
+    dueDate: "2026-03-10",
+    amountUsd: 180,
+    status: "PENDING",
+    paidAt: null,
+    actualExpenseId: null,
   },
 ];
 
@@ -357,6 +417,7 @@ export const demoDashboard: DashboardPayload = {
     remanenteUsd: 4060,
     receivableUsd: 3950,
     overdueUsd: 600,
+    committedExpensesMonthUsd: 300,
     salariesThisMonthUsd: 1600,
   },
   charts: {

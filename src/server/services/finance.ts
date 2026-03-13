@@ -5,10 +5,11 @@ import {
   IncomeStatus,
   Prisma,
   ProjectStatus,
+  ScheduledExpenseStatus,
   ScheduledPaymentStatus,
   type PrismaClient,
 } from "@prisma/client";
-import { addDays, addMonths, format, isAfter, isBefore, parseISO, startOfDay, startOfMonth } from "date-fns";
+import { addDays, addMonths, endOfMonth, format, isAfter, isBefore, parseISO, startOfDay, startOfMonth } from "date-fns";
 import { z } from "zod";
 import type {
   AlertsPayload,
@@ -23,8 +24,10 @@ import type {
   IncomeRecord,
   ProjectDetailPayload,
   ProjectRecord,
+  RecurringExpenseRecord,
   RecurringContractRecord,
   SalaryRecord,
+  ScheduledExpenseRecord,
   ScheduledPaymentRecord,
 } from "@/lib/types";
 import {
@@ -39,8 +42,10 @@ import {
   demoLayers,
   demoProjectDetails,
   demoProjects,
+  demoRecurringExpenses,
   demoRecurringContracts,
   demoSalaries,
+  demoScheduledExpenses,
   demoScheduledPayments,
 } from "@/server/demo-data";
 import { AppError } from "@/server/errors";
@@ -52,6 +57,10 @@ const salaryCategoryName = "Sueldos/Honorarios";
 
 function isOpenScheduledStatus(status: ScheduledPaymentStatus) {
   return status === ScheduledPaymentStatus.pending || status === ScheduledPaymentStatus.overdue;
+}
+
+function isOpenScheduledExpenseStatus(status: ScheduledExpenseStatus | string) {
+  return status === ScheduledExpenseStatus.PENDING;
 }
 
 function isPaidIncomeStatus(status: IncomeStatus | string) {
@@ -67,6 +76,8 @@ const incomeStatusSchema = z.enum(["PAID", "PENDING"]);
 const expenseTypeSchema = z.enum(["fixed", "variable"]);
 const contractFrequencySchema = z.enum(["monthly", "quarterly", "biannual", "annual"]);
 const scheduledActionSchema = z.enum(["mark_paid", "cancel", "edit"]);
+const scheduledExpenseStatusSchema = z.enum(["PENDING", "PAID"]);
+const scheduledExpenseActionSchema = z.enum(["mark_paid"]);
 
 const baseMoneySchema = z
   .object({
@@ -119,6 +130,16 @@ export const expenseInputSchema = z.object({
   description: z.string().min(2, "La descripción es obligatoria."),
   notes: z.string().trim().nullable().optional(),
 }).merge(baseMoneySchema);
+
+export const recurringExpenseInputSchema = z.object({
+  description: z.string().min(2, "La descripción es obligatoria."),
+  categoryId: z.string().uuid("Categoría inválida."),
+  amountUsd: z.coerce.number().nonnegative(),
+  startDate: z.string().min(8, "Fecha inválida."),
+  frequency: contractFrequencySchema.default("monthly"),
+  isActive: z.boolean().optional(),
+  updatePendingExpenses: z.boolean().optional(),
+});
 
 export const recurringInputSchema = z.object({
   projectId: z.string().uuid("Proyecto inválido."),
@@ -200,6 +221,25 @@ export const expenseFilterSchema = z.object({
   projectId: z.string().uuid().nullable().optional(),
   from: z.string().nullable().optional(),
   to: z.string().nullable().optional(),
+});
+
+export const recurringExpenseFilterSchema = z.object({
+  categoryId: z.string().uuid().nullable().optional(),
+  active: z.enum(["true", "false"]).nullable().optional(),
+});
+
+export const scheduledExpenseFilterSchema = z.object({
+  status: scheduledExpenseStatusSchema.nullable().optional(),
+  dueBefore: z.string().nullable().optional(),
+  dueAfter: z.string().nullable().optional(),
+  currentMonth: z.boolean().nullable().optional(),
+  includeOverdue: z.boolean().nullable().optional(),
+});
+
+export const scheduledExpenseInputSchema = z.object({
+  action: scheduledExpenseActionSchema,
+  amountUsd: z.coerce.number().nonnegative(),
+  paidAt: z.string().nullable().optional(),
 });
 
 function requireDatabase() {
@@ -292,6 +332,20 @@ function buildPaymentSchedule(startDate: Date, endDate: Date | null, frequency: 
   return dates;
 }
 
+function buildFutureExpenseSchedule(startDate: Date, frequency: ContractFrequency) {
+  const dates: Date[] = [];
+  const firstDate = startOfDay(startDate);
+  const baseDate = isBefore(firstDate, startOfMonth(new Date())) ? startOfMonth(new Date()) : firstDate;
+  let cursor = baseDate;
+
+  while (dates.length < 12) {
+    dates.push(cursor);
+    cursor = addMonths(cursor, frequencyMonths(frequency));
+  }
+
+  return dates;
+}
+
 async function ensureSalaryCategory(db: DbClient) {
   return db.expenseCategory.upsert({
     where: { name: salaryCategoryName },
@@ -323,11 +377,30 @@ async function syncOpenEndedContracts(db: DbClient) {
   }
 }
 
+async function syncOpenRecurringExpenses(db: DbClient) {
+  const recurringExpenses = await db.recurringExpense.findMany({
+    where: { isActive: true },
+  });
+
+  for (const recurringExpense of recurringExpenses) {
+    await syncScheduledExpensesForRecurringExpense(db, recurringExpense, false);
+  }
+}
+
 async function clearPendingScheduledPayments(db: DbClient, contractId: string) {
   await db.scheduledPayment.deleteMany({
     where: {
       recurringContractId: contractId,
       status: ScheduledPaymentStatus.pending,
+    },
+  });
+}
+
+async function clearPendingScheduledExpenses(db: DbClient, recurringExpenseId: string) {
+  await db.scheduledExpense.deleteMany({
+    where: {
+      recurringExpenseId,
+      status: ScheduledExpenseStatus.PENDING,
     },
   });
 }
@@ -384,6 +457,59 @@ async function syncScheduledPayments(
       },
       data: {
         expectedAmountUsd: amountUsd,
+      },
+    });
+  }
+}
+
+async function syncScheduledExpensesForRecurringExpense(
+  db: DbClient,
+  recurringExpense: {
+    id: string;
+    amountUsd: Prisma.Decimal;
+    frequency: ContractFrequency;
+    startDate: Date;
+    isActive: boolean;
+  },
+  updatePendingExpenses: boolean,
+) {
+  if (!recurringExpense.isActive) {
+    return;
+  }
+
+  const dates = buildFutureExpenseSchedule(recurringExpense.startDate, recurringExpense.frequency);
+  const existing = await db.scheduledExpense.findMany({
+    where: { recurringExpenseId: recurringExpense.id },
+  });
+  const existingKeys = new Set(existing.map((expense) => dateOnly(expense.dueDate)));
+  const amountUsd = requireNumber(recurringExpense.amountUsd);
+
+  await Promise.all(
+    dates
+      .filter((date) => !existingKeys.has(dateOnly(date)))
+      .map((dueDate) =>
+        db.scheduledExpense.create({
+          data: {
+            recurringExpenseId: recurringExpense.id,
+            dueDate,
+            amountUsd,
+            status: ScheduledExpenseStatus.PENDING,
+          },
+        }),
+      ),
+  );
+
+  if (updatePendingExpenses) {
+    await db.scheduledExpense.updateMany({
+      where: {
+        recurringExpenseId: recurringExpense.id,
+        status: ScheduledExpenseStatus.PENDING,
+        dueDate: {
+          gte: startOfDay(new Date()),
+        },
+      },
+      data: {
+        amountUsd,
       },
     });
   }
@@ -506,6 +632,49 @@ function mapDemoScheduledPayments(filters?: z.infer<typeof scheduledFilterSchema
   );
 }
 
+function mapDemoRecurringExpenses(filters?: z.infer<typeof recurringExpenseFilterSchema>) {
+  return demoRecurringExpenses.filter((item) => {
+    if (filters?.categoryId && item.categoryId !== filters.categoryId) {
+      return false;
+    }
+    if (filters?.active) {
+      const active = filters.active === "true";
+      return item.isActive === active;
+    }
+    return true;
+  });
+}
+
+function mapDemoScheduledExpenses(filters?: z.infer<typeof scheduledExpenseFilterSchema>) {
+  const monthStart = startOfMonth(new Date());
+  const monthEnd = endOfMonth(new Date());
+
+  return demoScheduledExpenses.filter((item) => {
+    const dueDate = parseISO(item.dueDate);
+
+    if (filters?.status && item.status !== filters.status) {
+      return false;
+    }
+    if (filters?.dueAfter && isBefore(dueDate, parseISO(filters.dueAfter))) {
+      return false;
+    }
+    if (filters?.dueBefore && isAfter(dueDate, parseISO(filters.dueBefore))) {
+      return false;
+    }
+    if (filters?.currentMonth && (isBefore(dueDate, monthStart) || isAfter(dueDate, monthEnd))) {
+      return false;
+    }
+    if (filters?.includeOverdue === false && isBefore(dueDate, monthStart)) {
+      return false;
+    }
+    if (filters?.includeOverdue && isAfter(dueDate, monthEnd)) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 function mapClientRecord(client: Prisma.ClientGetPayload<{ include: { projects: { include: { incomes: true; scheduledPayments: true } } } }>): ClientRecord {
   const allIncomes = client.projects.flatMap((project) => project.incomes);
   const pendingPayments = client.projects.flatMap((project) => project.scheduledPayments).filter((payment) => isOpenScheduledStatus(payment.status));
@@ -575,12 +744,22 @@ function mapExpenseCategory(category: { id: string; name: string; isDefault: boo
 }
 
 function mapExpenseRecord(
-  expense: Prisma.ExpenseGetPayload<{
-    include: {
-      category: true;
-      project: true;
-    };
-  }>,
+  expense: {
+    id: string;
+    date: Date;
+    categoryId: string;
+    expenseType: ExpenseType;
+    projectId: string | null;
+    amountUsd: Prisma.Decimal | number;
+    amountArs: Prisma.Decimal | number | null;
+    exchangeRate: Prisma.Decimal | number | null;
+    description: string;
+    salaryWithdrawalId: string | null;
+    notes: string | null;
+    category: { name: string };
+    project: { name: string } | null;
+    scheduledExpense?: { id: string } | null;
+  },
 ): ExpenseRecord {
   return {
     id: expense.id,
@@ -595,6 +774,7 @@ function mapExpenseRecord(
     exchangeRate: toNumber(expense.exchangeRate),
     description: expense.description,
     salaryWithdrawalId: expense.salaryWithdrawalId,
+    scheduledExpenseId: expense.scheduledExpense?.id ?? null,
     notes: expense.notes,
   };
 }
@@ -638,6 +818,57 @@ function mapScheduledPaymentRecord(
     paidAt: record.paidAt ? dateOnly(record.paidAt) : null,
     actualIncomeId: record.actualIncomeId,
     notes: record.notes,
+  };
+}
+
+function mapRecurringExpenseRecord(
+  recurringExpense: Prisma.RecurringExpenseGetPayload<{
+    include: {
+      category: true;
+      scheduledExpenses: true;
+    };
+  }>,
+): RecurringExpenseRecord {
+  const nextDue = recurringExpense.scheduledExpenses
+    .filter((expense) => isOpenScheduledExpenseStatus(expense.status))
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())[0];
+
+  return {
+    id: recurringExpense.id,
+    description: recurringExpense.description,
+    categoryId: recurringExpense.categoryId,
+    categoryName: recurringExpense.category.name,
+    amountUsd: requireNumber(recurringExpense.amountUsd),
+    startDate: dateOnly(recurringExpense.startDate),
+    frequency: recurringExpense.frequency,
+    isActive: recurringExpense.isActive,
+    nextDueDate: nextDue ? dateOnly(nextDue.dueDate) : null,
+    pendingCount: recurringExpense.scheduledExpenses.filter((expense) => expense.status === ScheduledExpenseStatus.PENDING).length,
+  };
+}
+
+function mapScheduledExpenseRecord(
+  scheduledExpense: Prisma.ScheduledExpenseGetPayload<{
+    include: {
+      recurringExpense: {
+        include: {
+          category: true;
+        };
+      };
+    };
+  }>,
+): ScheduledExpenseRecord {
+  return {
+    id: scheduledExpense.id,
+    recurringExpenseId: scheduledExpense.recurringExpenseId,
+    description: scheduledExpense.recurringExpense.description,
+    categoryId: scheduledExpense.recurringExpense.categoryId,
+    categoryName: scheduledExpense.recurringExpense.category.name,
+    dueDate: dateOnly(scheduledExpense.dueDate),
+    amountUsd: requireNumber(scheduledExpense.amountUsd),
+    status: scheduledExpense.status,
+    paidAt: scheduledExpense.paidAt ? dateOnly(scheduledExpense.paidAt) : null,
+    actualExpenseId: scheduledExpense.actualExpenseId,
   };
 }
 
@@ -1048,6 +1279,11 @@ export async function listExpenses(filters?: z.infer<typeof expenseFilterSchema>
     include: {
       category: true,
       project: true,
+      scheduledExpense: {
+        select: {
+          id: true,
+        },
+      },
     },
     orderBy: { date: "desc" },
   });
@@ -1084,6 +1320,14 @@ export async function updateExpense(id: string, input: z.infer<typeof expenseInp
     throw new AppError("Los gastos creados por salarios se editan desde distribución.", 409);
   }
 
+  const linkedScheduledExpense = await prisma.scheduledExpense.findUnique({
+    where: { actualExpenseId: id },
+  });
+
+  if (linkedScheduledExpense) {
+    throw new AppError("Los gastos creados desde recurrentes se editan desde el pago programado.", 409);
+  }
+
   const money = normalizeMoney(input);
 
   return prisma.expense.update({
@@ -1112,7 +1356,189 @@ export async function deleteExpense(id: string) {
     throw new AppError("Los gastos creados por salarios se eliminan desde distribución.", 409);
   }
 
+  const linkedScheduledExpense = await prisma.scheduledExpense.findUnique({
+    where: { actualExpenseId: id },
+  });
+
+  if (linkedScheduledExpense) {
+    throw new AppError("Los gastos creados desde recurrentes se eliminan desde el pago programado.", 409);
+  }
+
   await prisma.expense.delete({ where: { id } });
+}
+
+export async function listRecurringExpenses(filters?: z.infer<typeof recurringExpenseFilterSchema>) {
+  if (!hasDatabaseConfig()) {
+    return { data: mapDemoRecurringExpenses(filters), demoMode: true };
+  }
+
+  await syncOpenRecurringExpenses(prisma);
+
+  const recurringExpenses = await prisma.recurringExpense.findMany({
+    where: {
+      categoryId: filters?.categoryId ?? undefined,
+      isActive: filters?.active ? filters.active === "true" : undefined,
+    },
+    include: {
+      category: true,
+      scheduledExpenses: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return { data: recurringExpenses.map(mapRecurringExpenseRecord), demoMode: false };
+}
+
+export async function createRecurringExpense(input: z.infer<typeof recurringExpenseInputSchema>) {
+  requireDatabase();
+
+  return prisma.$transaction(async (tx) => {
+    const recurringExpense = await tx.recurringExpense.create({
+      data: {
+        description: input.description.trim(),
+        categoryId: input.categoryId,
+        amountUsd: new Prisma.Decimal(input.amountUsd.toFixed(2)),
+        startDate: parseISO(input.startDate),
+        frequency: input.frequency as ContractFrequency,
+        isActive: input.isActive ?? true,
+      },
+    });
+
+    if (recurringExpense.isActive) {
+      await syncScheduledExpensesForRecurringExpense(tx, recurringExpense, true);
+    }
+
+    return recurringExpense;
+  });
+}
+
+export async function updateRecurringExpense(id: string, input: z.infer<typeof recurringExpenseInputSchema>) {
+  requireDatabase();
+
+  return prisma.$transaction(async (tx) => {
+    const recurringExpense = await tx.recurringExpense.update({
+      where: { id },
+      data: {
+        description: input.description.trim(),
+        categoryId: input.categoryId,
+        amountUsd: new Prisma.Decimal(input.amountUsd.toFixed(2)),
+        startDate: parseISO(input.startDate),
+        frequency: input.frequency as ContractFrequency,
+        isActive: input.isActive ?? true,
+      },
+    });
+
+    if (!recurringExpense.isActive) {
+      await clearPendingScheduledExpenses(tx, recurringExpense.id);
+      return recurringExpense;
+    }
+
+    if (input.updatePendingExpenses ?? true) {
+      await tx.scheduledExpense.deleteMany({
+        where: {
+          recurringExpenseId: recurringExpense.id,
+          status: ScheduledExpenseStatus.PENDING,
+          dueDate: {
+            gte: startOfDay(new Date()),
+          },
+        },
+      });
+    }
+
+    await syncScheduledExpensesForRecurringExpense(tx, recurringExpense, input.updatePendingExpenses ?? true);
+    return recurringExpense;
+  });
+}
+
+export async function listScheduledExpenses(filters?: z.infer<typeof scheduledExpenseFilterSchema>) {
+  if (!hasDatabaseConfig()) {
+    return { data: mapDemoScheduledExpenses(filters), demoMode: true };
+  }
+
+  await syncOpenRecurringExpenses(prisma);
+
+  const monthStart = startOfMonth(new Date());
+  const monthEnd = endOfMonth(new Date());
+  const dueDateWhere: Prisma.DateTimeFilter = {
+    gte: filters?.dueAfter
+      ? parseISO(filters.dueAfter)
+      : filters?.currentMonth && !filters?.includeOverdue
+        ? monthStart
+        : undefined,
+    lte: filters?.dueBefore
+      ? parseISO(filters.dueBefore)
+      : filters?.currentMonth || filters?.includeOverdue
+        ? monthEnd
+        : undefined,
+  };
+
+  const scheduledExpenses = await prisma.scheduledExpense.findMany({
+    where: {
+      status: (filters?.status as ScheduledExpenseStatus | undefined) ?? undefined,
+      dueDate:
+        Object.values(dueDateWhere).some((value) => value !== undefined)
+          ? dueDateWhere
+          : undefined,
+    },
+    include: {
+      recurringExpense: {
+        include: {
+          category: true,
+        },
+      },
+    },
+    orderBy: { dueDate: "asc" },
+  });
+
+  return { data: scheduledExpenses.map(mapScheduledExpenseRecord), demoMode: false };
+}
+
+export async function updateScheduledExpense(id: string, input: z.infer<typeof scheduledExpenseInputSchema>) {
+  requireDatabase();
+
+  return prisma.$transaction(async (tx) => {
+    const scheduledExpense = await tx.scheduledExpense.findUnique({
+      where: { id },
+      include: {
+        recurringExpense: true,
+      },
+    });
+
+    if (!scheduledExpense) {
+      throw new AppError("Gasto programado no encontrado.", 404);
+    }
+
+    if (scheduledExpense.status === ScheduledExpenseStatus.PAID) {
+      return scheduledExpense;
+    }
+
+    const paidAt = input.paidAt ? parseISO(input.paidAt) : startOfDay(new Date());
+    const finalAmountUsd = new Prisma.Decimal(input.amountUsd.toFixed(2));
+
+    const createdExpense = await tx.expense.create({
+      data: {
+        date: paidAt,
+        categoryId: scheduledExpense.recurringExpense.categoryId,
+        expenseType: ExpenseType.fixed,
+        projectId: null,
+        amountUsd: finalAmountUsd,
+        amountArs: null,
+        exchangeRate: null,
+        description: scheduledExpense.recurringExpense.description,
+        notes: "Pago registrado desde gasto recurrente.",
+      },
+    });
+
+    return tx.scheduledExpense.update({
+      where: { id },
+      data: {
+        amountUsd: finalAmountUsd,
+        status: ScheduledExpenseStatus.PAID,
+        paidAt,
+        actualExpenseId: createdExpense.id,
+      },
+    });
+  });
 }
 
 export async function getDistributionPage(month?: string | null): Promise<DistributionPagePayload> {
@@ -1518,6 +1944,10 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
 
   await syncOpenEndedContracts(prisma);
   await syncOverduePayments(prisma);
+  await syncOpenRecurringExpenses(prisma);
+
+  const currentMonthStart = startOfMonth(new Date());
+  const currentMonthEnd = endOfMonth(new Date());
 
   const incomeWhere: Prisma.IncomeWhereInput = {
     status: IncomeStatus.PAID,
@@ -1553,7 +1983,7 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
     project: filters?.clientId ? { clientId: filters.clientId } : undefined,
   };
 
-  const [incomes, pendingIncomes, expenses, payments, layers, allIncomes, allExpenses, salaries, projects] = await Promise.all([
+  const [incomes, pendingIncomes, expenses, payments, committedExpensesMonth, layers, allIncomes, allExpenses, salaries, projects] = await Promise.all([
     prisma.income.findMany({
       where: incomeWhere,
       include: { project: { include: { client: true } } },
@@ -1573,12 +2003,24 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
       include: { project: { include: { client: true } } },
       orderBy: { expectedDate: "asc" },
     }),
+    prisma.scheduledExpense.findMany({
+      where: {
+        status: ScheduledExpenseStatus.PENDING,
+        dueDate: {
+          gte: currentMonthStart,
+          lte: currentMonthEnd,
+        },
+      },
+      select: {
+        amountUsd: true,
+      },
+    }),
     prisma.distributionConfig.findMany({ orderBy: { layer: "asc" } }),
     prisma.income.findMany({ where: { status: IncomeStatus.PAID }, select: { amountUsd: true } }),
     prisma.expense.findMany({ select: { amountUsd: true } }),
     prisma.salaryWithdrawal.findMany({
       where: {
-        month: startOfMonth(new Date()),
+        month: currentMonthStart,
       },
     }),
     prisma.project.findMany({
@@ -1675,6 +2117,7 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
       overdueUsd: mappedPayments
         .filter((payment) => payment.status === "overdue")
         .reduce((sum, item) => sum + item.expectedAmountUsd, 0),
+      committedExpensesMonthUsd: committedExpensesMonth.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
       salariesThisMonthUsd: salaries.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
     },
     charts: {

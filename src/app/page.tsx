@@ -28,6 +28,7 @@ export default async function DashboardPage() {
   const kpis = {
     incomesUsd: toCurrencyNumber(dashboard.kpis.incomesUsd) ?? 0,
     expensesUsd: toCurrencyNumber(dashboard.kpis.expensesUsd) ?? 0,
+    committedExpensesMonthUsd: toCurrencyNumber(dashboard.kpis.committedExpensesMonthUsd) ?? 0,
     netUsd: toCurrencyNumber(dashboard.kpis.netUsd) ?? 0,
     remanenteUsd: toCurrencyNumber(dashboard.kpis.remanenteUsd) ?? 0,
   };
@@ -37,13 +38,14 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow="Overview"
         title="El tablero financiero que mira caja, cobranza y remanente real"
-        description="Los filtros operativos distinguen caja real de cuentas por cobrar. El remanente siempre se calcula solo con ingresos cobrados y egresos reales."
+        description="Los filtros operativos distinguen caja real de cuentas por cobrar. El remanente siempre se calcula solo con ingresos cobrados y egresos reales; los costos comprometidos del mes viven aparte."
         demoMode={demoMode}
       />
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-4">
         <StatCard title="Ingresos reales" value={kpis.incomesUsd} detail="Cobrado en el período" tone="success" />
-        <StatCard title="Egresos" value={kpis.expensesUsd} detail="Período visible" tone="danger" />
+        <StatCard title="Egresos reales" value={kpis.expensesUsd} detail="Solo pagos ya ejecutados" tone="danger" />
+        <StatCard title="Gastos comprometidos (Mes)" value={kpis.committedExpensesMonthUsd} detail="Pendientes hasta fin de mes" tone="warning" />
         <StatCard title="Resultado Neto" value={kpis.netUsd} detail="Cobrado - egresos" tone={kpis.netUsd >= 0 ? "success" : "danger"} />
         <StatCard title="Por cobrar" value={dashboard.kpis.receivableUsd} detail="Pendientes y recurrentes abiertos" tone="warning" />
         <StatCard title="Vencido" value={dashboard.kpis.overdueUsd} detail="Cobranza atrasada" tone="danger" />
