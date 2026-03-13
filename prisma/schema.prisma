@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStatus {
+  active
+  finished
+  cancelled
+}
+
+enum IncomeType {
+  advance
+  final_payment
+  recurring
+}
+
+enum ContractFrequency {
+  monthly
+  quarterly
+  biannual
+  annual
+}
+
+enum ScheduledPaymentStatus {
+  pending
+  paid
+  overdue
+  cancelled
+}
+
+enum ExpenseType {
+  fixed
+  variable
+}
+
+enum DistributionLayer {
+  emergency
+  growth
+}
+
+model Client {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String    @unique
+  notes     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  projects  Project[]
+
+  @@map("clients")
+}
+
+model Project {
+  id               String              @id @default(uuid()) @db.Uuid
+  clientId         String              @map("client_id") @db.Uuid
+  name             String
+  status           ProjectStatus       @default(active)
+  totalBudgetUsd   Decimal?            @map("total_budget_usd") @db.Decimal(12, 2)
+  notes            String?
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+  client           Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  incomes          Income[]
+  recurring        RecurringContract[]
+  expenses         Expense[]
+  scheduledPayments ScheduledPayment[]
+
+  @@unique([clientId, name])
+  @@index([clientId, status])
+  @@map("projects")
+}
+
+model Income {
+  id            String             @id @default(uuid()) @db.Uuid
+  projectId     String             @map("project_id") @db.Uuid
+  date          DateTime           @db.Date
+  amountArs     Decimal?           @map("amount_ars") @db.Decimal(14, 2)
+  amountUsd     Decimal            @map("amount_usd") @db.Decimal(12, 2)
+  exchangeRate  Decimal?           @map("exchange_rate") @db.Decimal(12, 4)
+  type          IncomeType
+  notes         String?
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  project       Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  scheduledPayment ScheduledPayment?
+
+  @@index([projectId, date])
+  @@index([type, date])
+  @@map("incomes")
+}
+
+model RecurringContract {
+  id          String              @id @default(uuid()) @db.Uuid
+  projectId   String              @map("project_id") @db.Uuid
+  description String
+  amountUsd   Decimal             @map("amount_usd") @db.Decimal(12, 2)
+  amountArs   Decimal?            @map("amount_ars") @db.Decimal(14, 2)
+  frequency   ContractFrequency
+  startDate   DateTime            @map("start_date") @db.Date
+  endDate     DateTime?           @map("end_date") @db.Date
+  isActive    Boolean             @default(true) @map("is_active")
+  notes       String?
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  payments    ScheduledPayment[]
+
+  @@index([projectId, isActive])
+  @@map("recurring_contracts")
+}
+
+model ScheduledPayment {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  recurringContractId String?                 @map("recurring_contract_id") @db.Uuid
+  projectId           String                  @map("project_id") @db.Uuid
+  expectedDate        DateTime                @map("expected_date") @db.Date
+  expectedAmountUsd   Decimal                 @map("expected_amount_usd") @db.Decimal(12, 2)
+  status              ScheduledPaymentStatus  @default(pending)
+  actualIncomeId      String?                 @unique @map("actual_income_id") @db.Uuid
+  notes               String?
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+  recurringContract   RecurringContract?      @relation(fields: [recurringContractId], references: [id], onDelete: SetNull)
+  project             Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  actualIncome        Income?                 @relation(fields: [actualIncomeId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, expectedDate])
+  @@index([status, expectedDate])
+  @@map("scheduled_payments")
+}
+
+model ExpenseCategory {
+  id         String    @id @default(uuid()) @db.Uuid
+  name       String    @unique
+  isDefault  Boolean   @default(false) @map("is_default")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  expenses   Expense[]
+
+  @@map("expense_categories")
+}
+
+model Expense {
+  id                 String             @id @default(uuid()) @db.Uuid
+  date               DateTime           @db.Date
+  categoryId         String             @map("category_id") @db.Uuid
+  expenseType        ExpenseType        @map("expense_type")
+  projectId          String?            @map("project_id") @db.Uuid
+  amountArs          Decimal?           @map("amount_ars") @db.Decimal(14, 2)
+  amountUsd          Decimal            @map("amount_usd") @db.Decimal(12, 2)
+  exchangeRate       Decimal?           @map("exchange_rate") @db.Decimal(12, 4)
+  description        String
+  salaryWithdrawalId String?            @unique @map("salary_withdrawal_id") @db.Uuid
+  notes              String?
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  category           ExpenseCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  project            Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  salaryWithdrawal   SalaryWithdrawal?  @relation(fields: [salaryWithdrawalId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId, date])
+  @@index([projectId, date])
+  @@map("expenses")
+}
+
+model DistributionConfig {
+  id              String             @id @default(uuid()) @db.Uuid
+  layer           DistributionLayer  @unique
+  currentAmountUsd Decimal           @map("current_amount_usd") @db.Decimal(12, 2)
+  storageLocation String?            @map("storage_location")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  @@map("distribution_config")
+}
+
+model SalaryWithdrawal {
+  id           String    @id @default(uuid()) @db.Uuid
+  personName   String    @map("person_name")
+  month        DateTime  @db.Date
+  amountUsd    Decimal   @map("amount_usd") @db.Decimal(12, 2)
+  amountArs    Decimal?  @map("amount_ars") @db.Decimal(14, 2)
+  exchangeRate Decimal?  @map("exchange_rate") @db.Decimal(12, 4)
+  date         DateTime  @db.Date
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  expense      Expense?
+
+  @@index([personName, month])
+  @@index([month])
+  @@map("salary_withdrawals")
+}
