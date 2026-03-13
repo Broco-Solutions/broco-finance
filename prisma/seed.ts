@@ -565,177 +565,205 @@ async function main() {
     new Set([...DEFAULT_CATEGORIES, ...parsedExpenses.map((expense) => expense.categoryName)]),
   );
 
-  const counts = await prisma.$transaction(async (tx) => {
-    await tx.scheduledPayment.deleteMany();
-    await tx.recurringContract.deleteMany();
-    await tx.expense.deleteMany();
-    await tx.income.deleteMany();
-    await tx.salaryWithdrawal.deleteMany();
-    await tx.project.deleteMany();
-    await tx.client.deleteMany();
-    await tx.expenseCategory.deleteMany();
-    await tx.distributionConfig.deleteMany();
+  await prisma.scheduledPayment.deleteMany();
+  await prisma.recurringContract.deleteMany();
+  await prisma.expense.deleteMany();
+  await prisma.income.deleteMany();
+  await prisma.salaryWithdrawal.deleteMany();
+  await prisma.project.deleteMany();
+  await prisma.client.deleteMany();
+  await prisma.expenseCategory.deleteMany();
+  await prisma.distributionConfig.deleteMany();
 
-    const clientMap = new Map<string, string>();
-    for (const clientName of clientNames) {
-      const client = await tx.client.create({
-        data: {
-          name: clientName,
-        },
-      });
-      clientMap.set(clientName, client.id);
-    }
+  const clientMap = new Map<string, string>();
+  for (const clientName of clientNames) {
+    const client = await prisma.client.upsert({
+      where: {
+        name: clientName,
+      },
+      update: {},
+      create: {
+        name: clientName,
+      },
+    });
+    clientMap.set(clientName, client.id);
+  }
 
-    const projectMap = new Map<string, string>();
-    for (const projectSeed of projectSeeds.values()) {
-      const project = await tx.project.create({
-        data: {
-          clientId: clientMap.get(projectSeed.clientName)!,
+  const projectMap = new Map<string, string>();
+  for (const projectSeed of projectSeeds.values()) {
+    const clientId = clientMap.get(projectSeed.clientName)!;
+    const project = await prisma.project.upsert({
+      where: {
+        clientId_name: {
+          clientId,
           name: projectSeed.projectName,
-          status: projectSeed.status,
         },
-      });
-      projectMap.set(buildProjectKey(projectSeed.clientName, projectSeed.projectName), project.id);
-    }
+      },
+      update: {
+        status: projectSeed.status,
+      },
+      create: {
+        clientId,
+        name: projectSeed.projectName,
+        status: projectSeed.status,
+      },
+    });
+    projectMap.set(buildProjectKey(projectSeed.clientName, projectSeed.projectName), project.id);
+  }
 
-    for (const category of categories) {
-      await tx.expenseCategory.create({
+  const categoryMap = new Map<string, string>();
+  for (const category of categories) {
+    const expenseCategory = await prisma.expenseCategory.upsert({
+      where: {
+        name: category,
+      },
+      update: {
+        isDefault: true,
+      },
+      create: {
+        name: category,
+        isDefault: true,
+      },
+    });
+    categoryMap.set(expenseCategory.name, expenseCategory.id);
+  }
+
+  for (const income of parsedIncomes) {
+    await prisma.income.create({
+      data: {
+        projectId: projectMap.get(buildProjectKey(income.clientName, income.projectName))!,
+        date: income.date,
+        amountArs: income.money.amountArs,
+        amountUsd: income.money.amountUsd,
+        exchangeRate: income.money.exchangeRate,
+        type: income.type,
+        notes: income.notes,
+      },
+    });
+  }
+
+  for (const expense of parsedExpenses) {
+    const projectId = expense.projectName
+      ? projectMap.get(buildProjectKey(INTERNAL_CLIENT_NAME, expense.projectName)) ?? null
+      : null;
+
+    await prisma.expense.create({
+      data: {
+        date: expense.date,
+        categoryId: categoryMap.get(expense.categoryName)!,
+        expenseType: expense.expenseType,
+        projectId,
+        amountArs: expense.money.amountArs,
+        amountUsd: expense.money.amountUsd,
+        exchangeRate: expense.money.exchangeRate,
+        description: expense.description,
+        notes: expense.notes,
+      },
+    });
+  }
+
+  for (const contract of recurringContracts) {
+    const recurring = await prisma.recurringContract.create({
+      data: {
+        projectId: projectMap.get(buildProjectKey(contract.clientName, contract.projectName))!,
+        description: contract.description,
+        amountUsd: contract.latestAmountUsd,
+        amountArs: contract.latestAmountArs,
+        frequency: contract.frequency,
+        startDate: contract.startDate,
+        endDate: contract.endDate,
+        isActive: true,
+        notes: contract.notes,
+      },
+    });
+
+    let generated = 0;
+    let cursor = startOfMonth(contract.nextDueDate);
+    while (generated < 12 && (!contract.endDate || cursor <= startOfMonth(contract.endDate))) {
+      const expectedDate = cursor;
+      await prisma.scheduledPayment.create({
         data: {
-          name: category,
-          isDefault: true,
+          recurringContractId: recurring.id,
+          projectId: recurring.projectId,
+          expectedDate,
+          expectedAmountUsd: contract.latestAmountUsd,
+          status: expectedDate < startOfMonth(new Date()) ? ScheduledPaymentStatus.overdue : ScheduledPaymentStatus.pending,
+          notes: `Generado desde seed XLSX (${path.basename(workbookPath)})`,
         },
       });
+      generated += 1;
+      cursor = addMonths(cursor, frequencyStepMonths(contract.frequency));
     }
+  }
 
-    const categoryMap = new Map<string, string>();
-    const createdCategories = await tx.expenseCategory.findMany();
-    for (const category of createdCategories) {
-      categoryMap.set(category.name, category.id);
-    }
+  const emergency = distributionRows.find((row) => /capa 1/i.test(row.label));
+  const growth = distributionRows.find((row) => /capa 2/i.test(row.label));
 
-    for (const income of parsedIncomes) {
-      await tx.income.create({
-        data: {
-          projectId: projectMap.get(buildProjectKey(income.clientName, income.projectName))!,
-          date: income.date,
-          amountArs: income.money.amountArs,
-          amountUsd: income.money.amountUsd,
-          exchangeRate: income.money.exchangeRate,
-          type: income.type,
-          notes: income.notes,
-        },
-      });
-    }
+  if (emergency) {
+    await prisma.distributionConfig.upsert({
+      where: {
+        layer: "emergency",
+      },
+      update: {
+        currentAmountUsd: emergency.amount!,
+        storageLocation: emergency.location,
+      },
+      create: {
+        layer: "emergency",
+        currentAmountUsd: emergency.amount!,
+        storageLocation: emergency.location,
+      },
+    });
+  }
 
-    for (const expense of parsedExpenses) {
-      const projectId = expense.projectName
-        ? projectMap.get(buildProjectKey(INTERNAL_CLIENT_NAME, expense.projectName)) ?? null
-        : null;
+  if (growth) {
+    await prisma.distributionConfig.upsert({
+      where: {
+        layer: "growth",
+      },
+      update: {
+        currentAmountUsd: growth.amount!,
+        storageLocation: growth.location,
+      },
+      create: {
+        layer: "growth",
+        currentAmountUsd: growth.amount!,
+        storageLocation: growth.location,
+      },
+    });
+  }
 
-      await tx.expense.create({
-        data: {
-          date: expense.date,
-          categoryId: categoryMap.get(expense.categoryName)!,
-          expenseType: expense.expenseType,
-          projectId,
-          amountArs: expense.money.amountArs,
-          amountUsd: expense.money.amountUsd,
-          exchangeRate: expense.money.exchangeRate,
-          description: expense.description,
-          notes: expense.notes,
-        },
-      });
-    }
+  const [
+    clients,
+    projects,
+    incomes,
+    expenses,
+    expenseCategories,
+    recurringCount,
+    scheduledPayments,
+    distributionCount,
+  ] = await Promise.all([
+    prisma.client.count(),
+    prisma.project.count(),
+    prisma.income.count(),
+    prisma.expense.count(),
+    prisma.expenseCategory.count(),
+    prisma.recurringContract.count(),
+    prisma.scheduledPayment.count(),
+    prisma.distributionConfig.count(),
+  ]);
 
-    for (const contract of recurringContracts) {
-      const recurring = await tx.recurringContract.create({
-        data: {
-          projectId: projectMap.get(buildProjectKey(contract.clientName, contract.projectName))!,
-          description: contract.description,
-          amountUsd: contract.latestAmountUsd,
-          amountArs: contract.latestAmountArs,
-          frequency: contract.frequency,
-          startDate: contract.startDate,
-          endDate: contract.endDate,
-          isActive: true,
-          notes: contract.notes,
-        },
-      });
-
-      let generated = 0;
-      let cursor = startOfMonth(contract.nextDueDate);
-      while (generated < 12 && (!contract.endDate || cursor <= startOfMonth(contract.endDate))) {
-        const expectedDate = cursor;
-        await tx.scheduledPayment.create({
-          data: {
-            recurringContractId: recurring.id,
-            projectId: recurring.projectId,
-            expectedDate,
-            expectedAmountUsd: contract.latestAmountUsd,
-            status: expectedDate < startOfMonth(new Date()) ? ScheduledPaymentStatus.overdue : ScheduledPaymentStatus.pending,
-            notes: `Generado desde seed XLSX (${path.basename(workbookPath)})`,
-          },
-        });
-        generated += 1;
-        cursor = addMonths(cursor, frequencyStepMonths(contract.frequency));
-      }
-    }
-
-    const emergency = distributionRows.find((row) => /capa 1/i.test(row.label));
-    const growth = distributionRows.find((row) => /capa 2/i.test(row.label));
-
-    if (emergency) {
-      await tx.distributionConfig.create({
-        data: {
-          layer: "emergency",
-          currentAmountUsd: emergency.amount!,
-          storageLocation: emergency.location,
-        },
-      });
-    }
-
-    if (growth) {
-      await tx.distributionConfig.create({
-        data: {
-          layer: "growth",
-          currentAmountUsd: growth.amount!,
-          storageLocation: growth.location,
-        },
-      });
-    }
-
-    const [
-      clients,
-      projects,
-      incomes,
-      expenses,
-      expenseCategories,
-      recurringCount,
-      scheduledPayments,
-      distributionCount,
-    ] = await Promise.all([
-      tx.client.count(),
-      tx.project.count(),
-      tx.income.count(),
-      tx.expense.count(),
-      tx.expenseCategory.count(),
-      tx.recurringContract.count(),
-      tx.scheduledPayment.count(),
-      tx.distributionConfig.count(),
-    ]);
-
-    return {
-      workbook: path.basename(workbookPath),
-      clients,
-      projects,
-      incomes,
-      expenses,
-      expenseCategories,
-      recurringContracts: recurringCount,
-      scheduledPayments,
-      distributionConfig: distributionCount,
-    };
-  });
+  const counts = {
+    workbook: path.basename(workbookPath),
+    clients,
+    projects,
+    incomes,
+    expenses,
+    expenseCategories,
+    recurringContracts: recurringCount,
+    scheduledPayments,
+    distributionConfig: distributionCount,
+  };
 
   console.log("Seed XLSX completado:");
   console.table(counts);

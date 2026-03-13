@@ -35,9 +35,6 @@ export function LoginForm() {
       <div className="space-y-2">
         <div className="chip">Acceso interno</div>
         <h1 className="font-display text-4xl text-ink">Entrá al tablero operativo</h1>
-        <p className="text-sm leading-7 text-ink/60">
-          Si todavía no configuraste `APP_PASSWORD`, usá la clave <span className="font-semibold">demo</span>.
-        </p>
       </div>
       <div className="space-y-2">
         <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/50">Contraseña</label>
