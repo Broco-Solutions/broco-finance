@@ -31,13 +31,14 @@ export function RecurringScreen({
     () => payments.filter((payment) => payment.type === "MAINTENANCE"),
     [payments],
   );
+  const todayKey = new Date().toISOString().slice(0, 10);
 
   const subscribedProjects = useMemo(
     () =>
       projects
         .filter(
           (project) =>
-            (project.monthlyFeeUsd ?? 0) > 0 ||
+            ((project.monthlyFeeUsd ?? 0) > 0 && (!project.monthlyFeeEndDate || project.monthlyFeeEndDate >= todayKey)) ||
             maintenancePayments.some((payment) => payment.projectId === project.id),
         )
         .sort((left, right) => {
@@ -47,7 +48,7 @@ export function RecurringScreen({
           }
           return (right.monthlyFeeUsd ?? 0) - (left.monthlyFeeUsd ?? 0);
         }),
-    [maintenancePayments, projects],
+    [maintenancePayments, projects, todayKey],
   );
 
   const monthOptions = useMemo(() => {
@@ -80,10 +81,17 @@ export function RecurringScreen({
   const summary = useMemo(
     () => ({
       activeSubscriptions: subscribedProjects.filter(
-        (project) => project.status === "ACTIVE" && (project.monthlyFeeUsd ?? 0) > 0,
+        (project) =>
+          project.status === "ACTIVE" &&
+          (project.monthlyFeeUsd ?? 0) > 0 &&
+          (!project.monthlyFeeEndDate || project.monthlyFeeEndDate >= todayKey),
       ).length,
       monthlyRecurringRevenueUsd: subscribedProjects.reduce(
-        (sum, project) => sum + (project.status === "ACTIVE" ? project.monthlyFeeUsd ?? 0 : 0),
+        (sum, project) =>
+          sum +
+          (project.status === "ACTIVE" && (!project.monthlyFeeEndDate || project.monthlyFeeEndDate >= todayKey)
+            ? project.monthlyFeeUsd ?? 0
+            : 0),
         0,
       ),
       pendingMonthUsd: monthPayments
@@ -93,7 +101,7 @@ export function RecurringScreen({
         .filter((payment) => payment.status === "paid")
         .reduce((sum, payment) => sum + payment.expectedAmountUsd, 0),
     }),
-    [monthPayments, subscribedProjects],
+    [monthPayments, subscribedProjects, todayKey],
   );
 
   return (
@@ -156,7 +164,7 @@ export function RecurringScreen({
             description="Cuando un proyecto tenga `monthlyFeeUsd` mayor a cero, aparecerá automáticamente en este tablero junto a su cronograma de mantenimiento."
           />
         ) : (
-          <DataTable headers={["Cliente", "Proyecto", "Estado", "Fee mensual", "Cobrado", "Saldo desarrollo"]} scrollAfter={8}>
+          <DataTable headers={["Cliente", "Proyecto", "Estado", "Fee mensual", "Fin", "Cobrado", "Saldo desarrollo"]} scrollAfter={8}>
             {subscribedProjects.map((project) => (
               <tr key={project.id}>
                 <td className="px-4 py-3">{project.clientName}</td>
@@ -166,6 +174,7 @@ export function RecurringScreen({
                 </td>
                 <td className="px-4 py-3">{formatProjectStatus(project.status)}</td>
                 <td className="px-4 py-3">{formatUsd(project.monthlyFeeUsd)}</td>
+                <td className="px-4 py-3">{formatShortDate(project.monthlyFeeEndDate)}</td>
                 <td className="px-4 py-3">{formatUsd(project.maintenanceCollectedUsd)}</td>
                 <td className="px-4 py-3">{formatUsd(project.developmentPendingUsd)}</td>
               </tr>
@@ -205,6 +214,9 @@ export function RecurringScreen({
                   <MarkPaymentPaidButton
                     paymentId={payment.id}
                     paymentStatus={payment.status}
+                    paymentType={payment.type}
+                    expectedAmountUsd={payment.expectedAmountUsd}
+                    projectName={payment.projectName}
                     demoMode={demoMode}
                     compact
                   />

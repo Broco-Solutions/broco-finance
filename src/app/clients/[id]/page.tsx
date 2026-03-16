@@ -87,7 +87,15 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
                   <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
                   <td className="px-4 py-3 uppercase">{payment.status}</td>
                   <td className="px-4 py-3">
-                    <MarkPaymentPaidButton paymentId={payment.id} paymentStatus={payment.status} demoMode={!process.env.DATABASE_URL} compact />
+                    <MarkPaymentPaidButton
+                      paymentId={payment.id}
+                      paymentStatus={payment.status}
+                      paymentType={payment.type}
+                      expectedAmountUsd={payment.expectedAmountUsd}
+                      projectName={payment.projectName}
+                      demoMode={!process.env.DATABASE_URL}
+                      compact
+                    />
                   </td>
                 </tr>
               ))}

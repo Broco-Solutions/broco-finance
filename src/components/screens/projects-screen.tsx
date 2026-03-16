@@ -27,6 +27,7 @@ type ProjectFormState = {
   status: ProjectStatus;
   devBudgetUsd: string;
   monthlyFeeUsd: string;
+  monthlyFeeEndDate: string;
   notes: string;
 };
 
@@ -53,6 +54,7 @@ function buildEmptyForm(clients: ClientRecord[]): ProjectFormState {
     status: "ACTIVE",
     devBudgetUsd: "",
     monthlyFeeUsd: "",
+    monthlyFeeEndDate: "",
     notes: "",
   };
 }
@@ -64,6 +66,7 @@ function toPayload(form: ProjectFormState) {
     status: form.status,
     devBudgetUsd: form.devBudgetUsd ? Number(form.devBudgetUsd) : null,
     monthlyFeeUsd: form.monthlyFeeUsd ? Number(form.monthlyFeeUsd) : null,
+    monthlyFeeEndDate: form.monthlyFeeEndDate || null,
     notes: form.notes || null,
   };
 }
@@ -135,6 +138,7 @@ export function ProjectsScreen({
       status: project.status,
       devBudgetUsd: toFixedCurrencyInput(project.devBudgetUsd),
       monthlyFeeUsd: toFixedCurrencyInput(project.monthlyFeeUsd),
+      monthlyFeeEndDate: project.monthlyFeeEndDate ?? "",
       notes: project.notes ?? "",
     });
     setEditError(null);
@@ -250,7 +254,7 @@ export function ProjectsScreen({
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-[1.35rem] border border-cobalt/15 bg-cobalt/5 p-4">
                 <div className="text-xs font-semibold uppercase tracking-[0.16em] text-cobalt">Desarrollo fijo</div>
                 <Input
@@ -272,6 +276,16 @@ export function ProjectsScreen({
                   value={form.monthlyFeeUsd}
                   onChange={(event) => setForm((prev) => ({ ...prev, monthlyFeeUsd: event.target.value }))}
                 />
+              </div>
+              <div className="rounded-[1.35rem] border border-amber-950/15 bg-amber-50/70 p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-950">Fin mantenimiento</div>
+                <Input
+                  className="mt-3"
+                  type="date"
+                  value={form.monthlyFeeEndDate}
+                  onChange={(event) => setForm((prev) => ({ ...prev, monthlyFeeEndDate: event.target.value }))}
+                />
+                <p className="mt-3 text-xs text-ink/55">Vacío = horizonte abierto de 12 meses.</p>
               </div>
             </div>
 
@@ -357,6 +371,9 @@ export function ProjectsScreen({
                           <div className="font-display text-2xl text-emerald-950">{formatUsd(project.monthlyFeeUsd)}</div>
                           <div className="text-xs text-ink/55">
                             Cobrado por mantenimiento: {formatUsd(project.maintenanceCollectedUsd)}
+                          </div>
+                          <div className="text-xs text-ink/55">
+                            {project.monthlyFeeEndDate ? `Vence ${formatShortDate(project.monthlyFeeEndDate)}` : "Sin fecha de cierre"}
                           </div>
                         </div>
                       ) : (
@@ -446,15 +463,25 @@ export function ProjectsScreen({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fee mensual</label>
-            <Input
-              min="0"
-              step="0.01"
-              type="number"
-              value={editForm.monthlyFeeUsd}
-              onChange={(event) => setEditForm((prev) => ({ ...prev, monthlyFeeUsd: event.target.value }))}
-            />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fee mensual</label>
+              <Input
+                min="0"
+                step="0.01"
+                type="number"
+                value={editForm.monthlyFeeUsd}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, monthlyFeeUsd: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha de fin de mantenimiento</label>
+              <Input
+                type="date"
+                value={editForm.monthlyFeeEndDate}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, monthlyFeeEndDate: event.target.value }))}
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -481,7 +508,7 @@ export function ProjectsScreen({
       <ConfirmActionModal
         open={Boolean(deletingProject)}
         title="Eliminar proyecto"
-        description="La baja física sigue protegida. Si hay ingresos, gastos o contratos asociados, el backend va a impedirla y sugerir `CANCELLED`."
+        description="La baja física sigue protegida. Si hay ingresos, gastos o cobros programados asociados, el backend va a impedirla y sugerir `CANCELLED`."
         confirmLabel="Eliminar proyecto"
         isPending={isPending}
         disabled={demoMode}

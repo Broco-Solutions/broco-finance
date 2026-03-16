@@ -64,6 +64,7 @@ export const demoProjects: ProjectRecord[] = [
     status: "ACTIVE",
     devBudgetUsd: 10000,
     monthlyFeeUsd: 900,
+    monthlyFeeEndDate: "2026-04-05",
     notes: "Pipeline comercial y recordatorios",
     pendingIncomeCount: 1,
     developmentCollectedUsd: 4600,
@@ -80,6 +81,7 @@ export const demoProjects: ProjectRecord[] = [
     status: "ACTIVE",
     devBudgetUsd: 4200,
     monthlyFeeUsd: 450,
+    monthlyFeeEndDate: null,
     notes: null,
     pendingIncomeCount: 0,
     developmentCollectedUsd: 3600,
@@ -96,6 +98,7 @@ export const demoProjects: ProjectRecord[] = [
     status: "ACTIVE",
     devBudgetUsd: null,
     monthlyFeeUsd: 950,
+    monthlyFeeEndDate: "2026-03-31",
     notes: "Contrato recurrente",
     pendingIncomeCount: 1,
     developmentCollectedUsd: 0,
@@ -112,6 +115,7 @@ export const demoProjects: ProjectRecord[] = [
     status: "COMPLETED",
     devBudgetUsd: 5200,
     monthlyFeeUsd: null,
+    monthlyFeeEndDate: null,
     notes: null,
     pendingIncomeCount: 0,
     developmentCollectedUsd: 5200,
@@ -403,6 +407,19 @@ export const demoAlerts: AlertsPayload = {
     count: 2,
     totalUsd: 3350,
     items: demoScheduledPayments.filter((item) => item.status === "pending"),
+  },
+  subscriptionsEndingSoon: {
+    count: 2,
+    items: demoProjects
+      .filter((project) => project.monthlyFeeEndDate)
+      .map((project) => ({
+        projectId: project.id,
+        projectName: project.name,
+        clientName: project.clientName,
+        monthlyFeeUsd: project.monthlyFeeUsd ?? 0,
+        endDate: project.monthlyFeeEndDate!,
+        daysRemaining: project.monthlyFeeEndDate === "2026-03-31" ? 15 : 20,
+      })),
   },
 };
 

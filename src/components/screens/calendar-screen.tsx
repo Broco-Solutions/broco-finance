@@ -80,6 +80,9 @@ export function CalendarScreen({
                           <MarkPaymentPaidButton
                             paymentId={payment.id}
                             paymentStatus={payment.status}
+                            paymentType={payment.type}
+                            expectedAmountUsd={payment.expectedAmountUsd}
+                            projectName={payment.projectName}
                             demoMode={demoMode}
                             compact
                           />
@@ -103,7 +106,15 @@ export function CalendarScreen({
               <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
               <td className="px-4 py-3 uppercase">{payment.status}</td>
               <td className="px-4 py-3">
-                <MarkPaymentPaidButton paymentId={payment.id} paymentStatus={payment.status} demoMode={demoMode} compact />
+                <MarkPaymentPaidButton
+                  paymentId={payment.id}
+                  paymentStatus={payment.status}
+                  paymentType={payment.type}
+                  expectedAmountUsd={payment.expectedAmountUsd}
+                  projectName={payment.projectName}
+                  demoMode={demoMode}
+                  compact
+                />
               </td>
             </tr>
           ))}

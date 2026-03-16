@@ -53,6 +53,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           <p className="mt-4 text-xs uppercase tracking-[0.16em] text-ink/45">
             Mantenimiento cobrado: {formatUsd(detail.project.maintenanceCollectedUsd)}
           </p>
+          <p className="mt-1 text-xs uppercase tracking-[0.16em] text-ink/45">
+            {detail.project.monthlyFeeEndDate
+              ? `Vence ${formatShortDate(detail.project.monthlyFeeEndDate)}`
+              : "Sin fecha de cierre"}
+          </p>
         </Card>
 
         <Card>

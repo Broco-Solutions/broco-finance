@@ -1,5 +1,6 @@
 import nextDynamic from "next/dynamic";
 import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-button";
+import { AlertBanner } from "@/components/ui/alert-banner";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
@@ -41,6 +42,8 @@ export default async function DashboardPage() {
         description="Los filtros operativos distinguen caja real de cuentas por cobrar. Desarrollo y mantenimiento se separan a nivel operativo, pero ambos siguen sumando caja, resultado neto y remanente."
         demoMode={demoMode}
       />
+
+      <AlertBanner alerts={dashboard.alerts} />
 
       <div className="grid gap-4 xl:grid-cols-4">
         <StatCard title="Ingresos reales" value={kpis.incomesUsd} detail="Cobrado en el período" tone="success" />
@@ -90,7 +93,15 @@ export default async function DashboardPage() {
                   <td className="px-4 py-3">{formatUsd(toCurrencyNumber(payment.expectedAmountUsd))}</td>
                   <td className="px-4 py-3 uppercase">{payment.status}</td>
                   <td className="px-4 py-3">
-                    <MarkPaymentPaidButton paymentId={payment.id} paymentStatus={payment.status} demoMode={demoMode} compact />
+                    <MarkPaymentPaidButton
+                      paymentId={payment.id}
+                      paymentStatus={payment.status}
+                      paymentType={payment.type}
+                      expectedAmountUsd={payment.expectedAmountUsd}
+                      projectName={payment.projectName}
+                      demoMode={demoMode}
+                      compact
+                    />
                   </td>
                 </tr>
               ))}

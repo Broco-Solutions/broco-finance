@@ -10,7 +10,7 @@ import {
   ScheduledPaymentStatus,
   type PrismaClient,
 } from "@prisma/client";
-import { addDays, addMonths, endOfMonth, format, isAfter, isBefore, parseISO, startOfDay, startOfMonth } from "date-fns";
+import { addDays, addMonths, differenceInCalendarDays, endOfMonth, format, isAfter, isBefore, parseISO, startOfDay, startOfMonth } from "date-fns";
 import { z } from "zod";
 import type {
   AlertsPayload,
@@ -92,6 +92,10 @@ function normalizeOptionalText(value: string | null | undefined) {
   return trimmed ? trimmed : null;
 }
 
+function normalizeOptionalDate(value: string | null | undefined) {
+  return value ? parseISO(value) : null;
+}
+
 const projectStatusSchema = z.enum(["ACTIVE", "COMPLETED", "CANCELLED"]);
 const incomeStatusSchema = z.enum(["PAID", "PENDING"]);
 const incomeTypeSchema = z.enum(["DEVELOPMENT", "MAINTENANCE"]);
@@ -134,6 +138,7 @@ export const projectInputSchema = z.object({
   status: projectStatusSchema.default("ACTIVE"),
   devBudgetUsd: z.coerce.number().nonnegative().nullable().optional(),
   monthlyFeeUsd: z.coerce.number().nonnegative().nullable().optional(),
+  monthlyFeeEndDate: z.string().nullable().optional(),
   notes: z.string().trim().nullable().optional(),
 });
 
@@ -381,9 +386,23 @@ async function syncOpenRecurringExpenses(db: DbClient) {
   }
 }
 
-function buildMaintenanceScheduleDates(referenceDate = new Date()) {
+function buildMaintenanceScheduleDates(referenceDate = new Date(), endDate: Date | null = null) {
   const firstDate = startOfMonth(referenceDate);
-  return Array.from({ length: maintenanceScheduleHorizonMonths }, (_, index) => addMonths(firstDate, index));
+  const limitDate = endDate ? startOfMonth(endDate) : addMonths(firstDate, maintenanceScheduleHorizonMonths - 1);
+
+  if (isAfter(firstDate, limitDate)) {
+    return [];
+  }
+
+  const dates: Date[] = [];
+  let cursor = firstDate;
+
+  while (!isAfter(cursor, limitDate)) {
+    dates.push(cursor);
+    cursor = addMonths(cursor, 1);
+  }
+
+  return dates;
 }
 
 async function syncProjectMaintenanceSchedule(
@@ -392,6 +411,7 @@ async function syncProjectMaintenanceSchedule(
     id: string;
     status: ProjectStatus;
     monthlyFeeUsd: Prisma.Decimal | number | null;
+    monthlyFeeEndDate: Date | null;
   },
   updatePendingPayments: boolean,
 ) {
@@ -411,6 +431,7 @@ async function syncProjectMaintenanceSchedule(
     return;
   }
 
+  const contractEndMonth = project.monthlyFeeEndDate ? startOfMonth(project.monthlyFeeEndDate) : null;
   const existingPayments = await db.scheduledPayment.findMany({
     where: {
       projectId: project.id,
@@ -421,7 +442,20 @@ async function syncProjectMaintenanceSchedule(
     existingPayments
       .filter((payment) => payment.expectedDate >= currentMonth)
       .sort((left, right) => left.expectedDate.getTime() - right.expectedDate.getTime())[0]?.expectedDate ?? currentMonth;
-  const scheduleDates = buildMaintenanceScheduleDates(scheduleStart);
+  const scheduleDates = buildMaintenanceScheduleDates(scheduleStart, contractEndMonth);
+
+  if (scheduleDates.length === 0) {
+    await db.scheduledPayment.deleteMany({
+      where: {
+        projectId: project.id,
+        type: IncomeType.MAINTENANCE,
+        status: ScheduledPaymentStatus.pending,
+        expectedDate: { gte: currentMonth },
+      },
+    });
+    return;
+  }
+
   const latestScheduledDate = scheduleDates[scheduleDates.length - 1];
   const existingKeys = new Set(existingPayments.map((payment) => dateOnly(payment.expectedDate)));
   const amountUsd = new Prisma.Decimal(monthlyFeeUsd.toFixed(2));
@@ -467,6 +501,28 @@ async function syncProjectMaintenanceSchedule(
   });
 }
 
+async function syncProjectMaintenanceFee(
+  db: DbClient,
+  projectId: string,
+  nextMonthlyFeeUsd: Prisma.Decimal,
+) {
+  const project = await db.project.update({
+    where: { id: projectId },
+    data: {
+      monthlyFeeUsd: nextMonthlyFeeUsd,
+    },
+    select: {
+      id: true,
+      status: true,
+      monthlyFeeUsd: true,
+      monthlyFeeEndDate: true,
+    },
+  });
+
+  await syncProjectMaintenanceSchedule(db, project, true);
+  return project;
+}
+
 async function syncProjectSubscriptions(db: DbClient) {
   const projects = await db.project.findMany({
     where: {
@@ -489,6 +545,7 @@ async function syncProjectSubscriptions(db: DbClient) {
       id: true,
       status: true,
       monthlyFeeUsd: true,
+      monthlyFeeEndDate: true,
     },
   });
 
@@ -802,6 +859,7 @@ function mapProjectRecord(
     status: project.status,
     devBudgetUsd: toNumber(project.devBudgetUsd),
     monthlyFeeUsd: toNumber(project.monthlyFeeUsd),
+    monthlyFeeEndDate: project.monthlyFeeEndDate ? dateOnly(project.monthlyFeeEndDate) : null,
     notes: project.notes,
     pendingIncomeCount: project.incomes.filter((income) => isPendingIncomeStatus(income.status)).length,
     developmentCollectedUsd,
@@ -1222,6 +1280,7 @@ export async function createProject(input: z.infer<typeof projectInputSchema>) {
           typeof input.devBudgetUsd === "number" ? new Prisma.Decimal(input.devBudgetUsd.toFixed(2)) : null,
         monthlyFeeUsd:
           typeof input.monthlyFeeUsd === "number" ? new Prisma.Decimal(input.monthlyFeeUsd.toFixed(2)) : null,
+        monthlyFeeEndDate: normalizeOptionalDate(input.monthlyFeeEndDate),
         notes: normalizeOptionalText(input.notes),
       },
     });
@@ -1245,6 +1304,7 @@ export async function updateProject(id: string, input: z.infer<typeof projectInp
           typeof input.devBudgetUsd === "number" ? new Prisma.Decimal(input.devBudgetUsd.toFixed(2)) : null,
         monthlyFeeUsd:
           typeof input.monthlyFeeUsd === "number" ? new Prisma.Decimal(input.monthlyFeeUsd.toFixed(2)) : null,
+        monthlyFeeEndDate: normalizeOptionalDate(input.monthlyFeeEndDate),
         notes: normalizeOptionalText(input.notes),
       },
     });
@@ -1849,6 +1909,10 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
     let incomeId = input.incomeId ?? null;
     const paidAt = input.paidAt ? parseISO(input.paidAt) : startOfDay(new Date());
     const inferredIncomeType = payment.type;
+    let settledAmountUsd =
+      typeof input.expectedAmountUsd === "number"
+        ? new Prisma.Decimal(input.expectedAmountUsd.toFixed(2))
+        : payment.expectedAmountUsd;
 
     if (!incomeId && input.createIncome) {
       const money = normalizeMoney(input.createIncome);
@@ -1863,6 +1927,7 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
         },
       });
       incomeId = createdIncome.id;
+      settledAmountUsd = money.amountUsd;
     }
 
     if (!incomeId) {
@@ -1873,7 +1938,7 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
           status: IncomeStatus.PAID,
           type: inferredIncomeType,
           notes: input.notes ?? payment.notes ?? "Cobro registrado desde pago programado.",
-          amountUsd: payment.expectedAmountUsd,
+          amountUsd: settledAmountUsd,
           amountArs: null,
           exchangeRate: null,
         },
@@ -1885,15 +1950,25 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
       throw new AppError("Seleccioná o creá un ingreso para marcar como cobrado.", 422);
     }
 
-    return tx.scheduledPayment.update({
+    const updatedPayment = await tx.scheduledPayment.update({
       where: { id },
       data: {
         status: ScheduledPaymentStatus.paid,
         paidAt,
         actualIncomeId: incomeId,
         notes: input.notes ?? payment.notes,
+        expectedAmountUsd: settledAmountUsd,
       },
     });
+
+    if (
+      payment.type === IncomeType.MAINTENANCE &&
+      requireNumber(settledAmountUsd) !== requireNumber(payment.expectedAmountUsd)
+    ) {
+      await syncProjectMaintenanceFee(tx, payment.projectId, settledAmountUsd);
+    }
+
+    return updatedPayment;
   });
 }
 
@@ -1921,6 +1996,22 @@ export async function getAlerts(): Promise<AlertsPayload> {
     },
     orderBy: { expectedDate: "asc" },
   });
+  const endingProjects = await prisma.project.findMany({
+    where: {
+      status: ProjectStatus.ACTIVE,
+      monthlyFeeUsd: {
+        gt: new Prisma.Decimal(0),
+      },
+      monthlyFeeEndDate: {
+        gte: now,
+        lte: in30,
+      },
+    },
+    include: {
+      client: true,
+    },
+    orderBy: { monthlyFeeEndDate: "asc" },
+  });
 
   const mapped = payments.map(mapScheduledPaymentRecord);
   const overdue = mapped.filter((item) => item.status === "overdue");
@@ -1932,6 +2023,14 @@ export async function getAlerts(): Promise<AlertsPayload> {
     const date = parseISO(item.expectedDate);
     return item.status === "pending" && !isBefore(date, now) && !isAfter(date, in30);
   });
+  const subscriptionsEndingSoon = endingProjects.map((project) => ({
+    projectId: project.id,
+    projectName: project.name,
+    clientName: project.client.name,
+    monthlyFeeUsd: requireNumber(project.monthlyFeeUsd),
+    endDate: dateOnly(project.monthlyFeeEndDate!),
+    daysRemaining: differenceInCalendarDays(project.monthlyFeeEndDate!, now),
+  }));
 
   return {
     overdue: {
@@ -1948,6 +2047,10 @@ export async function getAlerts(): Promise<AlertsPayload> {
       count: upcoming30Days.length,
       totalUsd: upcoming30Days.reduce((sum, item) => sum + item.expectedAmountUsd, 0),
       items: upcoming30Days,
+    },
+    subscriptionsEndingSoon: {
+      count: subscriptionsEndingSoon.length,
+      items: subscriptionsEndingSoon,
     },
   };
 }

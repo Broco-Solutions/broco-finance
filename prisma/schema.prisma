@@ -73,6 +73,7 @@ model Project {
   status           ProjectStatus       @default(ACTIVE)
   devBudgetUsd     Decimal?            @map("dev_budget_usd") @db.Decimal(12, 2)
   monthlyFeeUsd    Decimal?            @map("monthly_fee_usd") @db.Decimal(12, 2)
+  monthlyFeeEndDate DateTime?          @map("monthly_fee_end_date") @db.Date
   notes            String?
   createdAt        DateTime            @default(now()) @map("created_at")
   updatedAt        DateTime            @updatedAt @map("updated_at")

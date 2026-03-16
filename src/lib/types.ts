@@ -34,6 +34,7 @@ export type ProjectRecord = {
   status: ProjectStatus;
   devBudgetUsd: number | null;
   monthlyFeeUsd: number | null;
+  monthlyFeeEndDate: string | null;
   notes: string | null;
   pendingIncomeCount: number;
   developmentCollectedUsd: number;
@@ -129,10 +130,20 @@ export type ScheduledPaymentRecord = {
   notes: string | null;
 };
 
+export type SubscriptionLifecycleAlert = {
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  monthlyFeeUsd: number;
+  endDate: string;
+  daysRemaining: number;
+};
+
 export type AlertsPayload = {
   overdue: { count: number; totalUsd: number; items: ScheduledPaymentRecord[] };
   upcoming7Days: { count: number; totalUsd: number; items: ScheduledPaymentRecord[] };
   upcoming30Days: { count: number; totalUsd: number; items: ScheduledPaymentRecord[] };
+  subscriptionsEndingSoon: { count: number; items: SubscriptionLifecycleAlert[] };
 };
 
 export type DistributionSummary = {
