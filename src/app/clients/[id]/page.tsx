@@ -41,13 +41,18 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
       <Card>
         <h2 className="font-display text-2xl text-ink">Proyectos</h2>
         <div className="mt-4">
-          <DataTable headers={["Proyecto", "Estado", "Cobrado", "Presupuesto"]}>
+          <DataTable headers={["Proyecto", "Estado", "Cobrado", "Desarrollo", "Fee mensual"]}>
             {detail.projects.map((project) => (
               <tr key={project.id}>
                 <td className="px-4 py-3">{project.name}</td>
                 <td className="px-4 py-3">{formatProjectStatus(project.status)}</td>
                 <td className="px-4 py-3">{formatUsd(project.totalCollectedUsd)}</td>
-                <td className="px-4 py-3">{project.totalBudgetUsd ? formatUsd(project.totalBudgetUsd) : "—"}</td>
+                <td className="px-4 py-3">
+                  {project.devBudgetUsd !== null
+                    ? `${formatUsd(project.developmentCollectedUsd)} / ${formatUsd(project.devBudgetUsd)}`
+                    : "—"}
+                </td>
+                <td className="px-4 py-3">{formatUsd(project.monthlyFeeUsd)}</td>
               </tr>
             ))}
           </DataTable>

@@ -38,7 +38,7 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow="Overview"
         title="El tablero financiero que mira caja, cobranza y remanente real"
-        description="Los filtros operativos distinguen caja real de cuentas por cobrar. El remanente siempre se calcula solo con ingresos cobrados y egresos reales; los costos comprometidos del mes viven aparte."
+        description="Los filtros operativos distinguen caja real de cuentas por cobrar. Desarrollo y mantenimiento se separan a nivel operativo, pero ambos siguen sumando caja, resultado neto y remanente."
         demoMode={demoMode}
       />
 

@@ -76,6 +76,18 @@ export function formatIncomeStatus(value: string | null | undefined) {
   return "—";
 }
 
+export function formatIncomeType(value: string | null | undefined) {
+  if (value === "DEVELOPMENT") {
+    return "Desarrollo";
+  }
+
+  if (value === "MAINTENANCE") {
+    return "Mantenimiento";
+  }
+
+  return "—";
+}
+
 export function formatProjectStatus(value: string | null | undefined) {
   if (value === "ACTIVE") {
     return "Activo";

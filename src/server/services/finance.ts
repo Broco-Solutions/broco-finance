@@ -3,6 +3,7 @@ import {
   DistributionLayer,
   ExpenseType,
   IncomeStatus,
+  IncomeType,
   Prisma,
   ProjectStatus,
   ScheduledExpenseStatus,
@@ -71,6 +72,14 @@ function isPendingIncomeStatus(status: IncomeStatus | string) {
   return status === IncomeStatus.PENDING;
 }
 
+function isDevelopmentIncomeType(type: IncomeType | string) {
+  return type === IncomeType.DEVELOPMENT;
+}
+
+function isMaintenanceIncomeType(type: IncomeType | string) {
+  return type === IncomeType.MAINTENANCE;
+}
+
 function isActiveProjectStatus(status: ProjectStatus | string) {
   return status === ProjectStatus.ACTIVE;
 }
@@ -86,6 +95,7 @@ function normalizeOptionalText(value: string | null | undefined) {
 
 const projectStatusSchema = z.enum(["ACTIVE", "COMPLETED", "CANCELLED"]);
 const incomeStatusSchema = z.enum(["PAID", "PENDING"]);
+const incomeTypeSchema = z.enum(["DEVELOPMENT", "MAINTENANCE"]);
 const expenseTypeSchema = z.enum(["fixed", "variable"]);
 const contractFrequencySchema = z.enum(["monthly", "quarterly", "biannual", "annual"]);
 const scheduledActionSchema = z.enum(["mark_paid", "cancel", "edit"]);
@@ -123,7 +133,8 @@ export const projectInputSchema = z.object({
   clientId: z.string().uuid("Cliente inválido."),
   name: z.string().trim().min(2, "El nombre es obligatorio."),
   status: projectStatusSchema.default("ACTIVE"),
-  totalBudgetUsd: z.coerce.number().nonnegative().nullable().optional(),
+  devBudgetUsd: z.coerce.number().nonnegative().nullable().optional(),
+  monthlyFeeUsd: z.coerce.number().nonnegative().nullable().optional(),
   notes: z.string().trim().nullable().optional(),
 });
 
@@ -131,6 +142,7 @@ export const incomeInputSchema = z.object({
   projectId: z.string().uuid("Proyecto inválido."),
   date: z.string().min(8, "Fecha inválida."),
   status: incomeStatusSchema,
+  type: incomeTypeSchema.default("DEVELOPMENT"),
   notes: z.string().trim().nullable().optional(),
 }).merge(baseMoneySchema);
 
@@ -279,6 +291,15 @@ function toNumber(value: Prisma.Decimal | number | null | undefined) {
 
 function requireNumber(value: Prisma.Decimal | number | null | undefined) {
   return Number(value ?? 0);
+}
+
+function calculateDevelopmentPending(devBudget: Prisma.Decimal | number | null | undefined, developmentCollectedUsd: number) {
+  const budget = toNumber(devBudget);
+  if (budget === null) {
+    return null;
+  }
+
+  return Math.max(budget - developmentCollectedUsd, 0);
 }
 
 function sumIncomeUsd<T extends { amountUsd: Prisma.Decimal | number; status: IncomeStatus | string }>(
@@ -754,6 +775,14 @@ function mapProjectRecord(
   }>,
 ): ProjectRecord {
   const nextPayment = nextReceivableDate(project.incomes, project.scheduledPayments);
+  const developmentCollectedUsd = sumIncomeUsd(
+    project.incomes,
+    (income) => isPaidIncomeStatus(income.status) && isDevelopmentIncomeType(income.type),
+  );
+  const maintenanceCollectedUsd = sumIncomeUsd(
+    project.incomes,
+    (income) => isPaidIncomeStatus(income.status) && isMaintenanceIncomeType(income.type),
+  );
 
   return {
     id: project.id,
@@ -761,10 +790,14 @@ function mapProjectRecord(
     clientName: project.client.name,
     name: project.name,
     status: project.status,
-    totalBudgetUsd: toNumber(project.totalBudgetUsd),
+    devBudgetUsd: toNumber(project.devBudgetUsd),
+    monthlyFeeUsd: toNumber(project.monthlyFeeUsd),
     notes: project.notes,
     pendingIncomeCount: project.incomes.filter((income) => isPendingIncomeStatus(income.status)).length,
-    totalCollectedUsd: sumIncomeUsd(project.incomes, (income) => isPaidIncomeStatus(income.status)),
+    developmentCollectedUsd,
+    maintenanceCollectedUsd,
+    developmentPendingUsd: calculateDevelopmentPending(project.devBudgetUsd, developmentCollectedUsd),
+    totalCollectedUsd: developmentCollectedUsd + maintenanceCollectedUsd,
     nextPaymentDate: nextPayment ? dateOnly(nextPayment) : null,
   };
 }
@@ -784,6 +817,7 @@ function mapIncomeRecord(
     amountArs: toNumber(income.amountArs),
     exchangeRate: toNumber(income.exchangeRate),
     status: income.status,
+    type: income.type,
     notes: income.notes,
   };
 }
@@ -1210,8 +1244,10 @@ export async function createProject(input: z.infer<typeof projectInputSchema>) {
       clientId: input.clientId,
       name: input.name.trim(),
       status: input.status as ProjectStatus,
-      totalBudgetUsd:
-        typeof input.totalBudgetUsd === "number" ? new Prisma.Decimal(input.totalBudgetUsd.toFixed(2)) : null,
+      devBudgetUsd:
+        typeof input.devBudgetUsd === "number" ? new Prisma.Decimal(input.devBudgetUsd.toFixed(2)) : null,
+      monthlyFeeUsd:
+        typeof input.monthlyFeeUsd === "number" ? new Prisma.Decimal(input.monthlyFeeUsd.toFixed(2)) : null,
       notes: normalizeOptionalText(input.notes),
     },
   });
@@ -1226,8 +1262,10 @@ export async function updateProject(id: string, input: z.infer<typeof projectInp
       clientId: input.clientId,
       name: input.name.trim(),
       status: input.status as ProjectStatus,
-      totalBudgetUsd:
-        typeof input.totalBudgetUsd === "number" ? new Prisma.Decimal(input.totalBudgetUsd.toFixed(2)) : null,
+      devBudgetUsd:
+        typeof input.devBudgetUsd === "number" ? new Prisma.Decimal(input.devBudgetUsd.toFixed(2)) : null,
+      monthlyFeeUsd:
+        typeof input.monthlyFeeUsd === "number" ? new Prisma.Decimal(input.monthlyFeeUsd.toFixed(2)) : null,
       notes: normalizeOptionalText(input.notes),
     },
   });
@@ -1287,6 +1325,7 @@ export async function createIncome(input: z.infer<typeof incomeInputSchema>) {
       projectId: input.projectId,
       date: parseISO(input.date),
       status: input.status as IncomeStatus,
+      type: input.type as IncomeType,
       notes: normalizeOptionalText(input.notes),
       ...money,
     },
@@ -1312,6 +1351,7 @@ export async function updateIncome(id: string, input: z.infer<typeof incomeInput
       projectId: input.projectId,
       date: parseISO(input.date),
       status: input.status as IncomeStatus,
+      type: input.type as IncomeType,
       notes: normalizeOptionalText(input.notes),
       ...money,
     },
@@ -1917,6 +1957,8 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
 
     let incomeId = input.incomeId ?? null;
     const paidAt = input.paidAt ? parseISO(input.paidAt) : startOfDay(new Date());
+    const inferredIncomeType =
+      payment.recurringContractId ? IncomeType.MAINTENANCE : IncomeType.DEVELOPMENT;
 
     if (!incomeId && input.createIncome) {
       const money = normalizeMoney(input.createIncome);
@@ -1925,6 +1967,7 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
           projectId: input.createIncome.projectId,
           date: parseISO(input.createIncome.date),
           status: IncomeStatus.PAID,
+          type: (input.createIncome.type as IncomeType | undefined) ?? inferredIncomeType,
           notes: input.createIncome.notes ?? null,
           ...money,
         },
@@ -1938,6 +1981,7 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
           projectId: payment.projectId,
           date: paidAt,
           status: IncomeStatus.PAID,
+          type: inferredIncomeType,
           notes: input.notes ?? payment.notes ?? "Cobro registrado desde pago programado.",
           amountUsd: payment.expectedAmountUsd,
           amountArs: null,

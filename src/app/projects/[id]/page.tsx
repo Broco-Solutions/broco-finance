@@ -1,15 +1,15 @@
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatIncomeStatus, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
+import { formatIncomeStatus, formatIncomeType, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { getProjectDetail } from "@/server/services/finance";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
   const detail = await getProjectDetail(params.id);
-  const progress = detail.project.totalBudgetUsd
-    ? Math.min((detail.project.totalCollectedUsd / detail.project.totalBudgetUsd) * 100, 100)
+  const progress = detail.project.devBudgetUsd
+    ? Math.min((detail.project.developmentCollectedUsd / detail.project.devBudgetUsd) * 100, 100)
     : null;
 
   return (
@@ -20,6 +20,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         description={`Cliente: ${detail.project.clientName}. Estado: ${formatProjectStatus(detail.project.status)}. ${detail.project.notes ?? "Sin notas operativas."}`}
         demoMode={!process.env.DATABASE_URL}
       />
+
       {detail.project.pendingIncomeCount > 0 && detail.project.status !== "ACTIVE" ? (
         <Card className="border-coral/25 bg-coral/10">
           <div className="text-sm text-brick">
@@ -27,31 +28,49 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           </div>
         </Card>
       ) : null}
-      <Card>
-        <div className="grid gap-6 lg:grid-cols-[1fr,1.2fr]">
-          <div>
-            <div className="text-xs uppercase tracking-[0.16em] text-ink/45">Cobrado</div>
-            <div className="mt-3 font-display text-4xl text-ink">{formatUsd(detail.project.totalCollectedUsd)}</div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card className="border-cobalt/15 bg-[linear-gradient(135deg,rgba(238,247,255,0.95),rgba(255,255,255,0.95))]">
+          <div className="text-xs uppercase tracking-[0.16em] text-cobalt">Progreso de desarrollo</div>
+          <div className="mt-3 font-display text-4xl text-ink">
+            {detail.project.devBudgetUsd ? `${progress?.toFixed(1) ?? "0.0"}%` : "—"}
           </div>
-          {progress !== null ? (
-            <div>
-              <div className="text-xs uppercase tracking-[0.16em] text-ink/45">Presupuesto</div>
-              <div className="mt-3 h-4 overflow-hidden rounded-full bg-black/8">
-                <div className="h-full rounded-full bg-cobalt" style={{ width: `${progress}%` }} />
-              </div>
-              <p className="mt-2 text-sm text-ink/55">{progress.toFixed(1)}% del presupuesto cobrado</p>
-            </div>
-          ) : null}
-        </div>
-      </Card>
+          <div className="mt-4 h-3 overflow-hidden rounded-full bg-black/8">
+            <div className="h-full rounded-full bg-cobalt" style={{ width: `${progress ?? 0}%` }} />
+          </div>
+          <p className="mt-3 text-sm text-ink/60">
+            {formatUsd(detail.project.developmentCollectedUsd)} / {formatUsd(detail.project.devBudgetUsd)}
+          </p>
+          <p className="mt-1 text-xs uppercase tracking-[0.16em] text-ink/45">
+            Saldo pendiente: {formatUsd(detail.project.developmentPendingUsd)}
+          </p>
+        </Card>
+
+        <Card className="border-emerald-900/15 bg-[linear-gradient(135deg,rgba(236,253,245,0.96),rgba(255,255,255,0.94))]">
+          <div className="text-xs uppercase tracking-[0.16em] text-emerald-950">Estado de suscripción</div>
+          <div className="mt-3 font-display text-4xl text-ink">{formatUsd(detail.project.monthlyFeeUsd)}</div>
+          <p className="mt-2 text-sm text-ink/60">Fee mensual vigente del mantenimiento.</p>
+          <p className="mt-4 text-xs uppercase tracking-[0.16em] text-ink/45">
+            Mantenimiento cobrado: {formatUsd(detail.project.maintenanceCollectedUsd)}
+          </p>
+        </Card>
+
+        <Card>
+          <div className="text-xs uppercase tracking-[0.16em] text-ink/45">Cobrado total</div>
+          <div className="mt-3 font-display text-4xl text-ink">{formatUsd(detail.project.totalCollectedUsd)}</div>
+          <p className="mt-2 text-sm text-ink/60">Caja acumulada considerando desarrollo y mantenimiento.</p>
+        </Card>
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <h2 className="font-display text-2xl text-ink">Ingresos</h2>
           <div className="mt-4">
-            <DataTable headers={["Fecha", "USD", "Estado", "Notas"]}>
+            <DataTable headers={["Fecha", "Tipo", "USD", "Estado", "Notas"]}>
               {detail.incomes.map((income) => (
                 <tr key={income.id}>
                   <td className="px-4 py-3">{formatShortDate(income.date)}</td>
+                  <td className="px-4 py-3">{formatIncomeType(income.type)}</td>
                   <td className="px-4 py-3">{formatUsd(income.amountUsd)}</td>
                   <td className="px-4 py-3 uppercase">{formatIncomeStatus(income.status)}</td>
                   <td className="px-4 py-3">{income.notes ?? "—"}</td>

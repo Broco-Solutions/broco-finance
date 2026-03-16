@@ -18,6 +18,11 @@ enum IncomeStatus {
   PENDING
 }
 
+enum IncomeType {
+  DEVELOPMENT
+  MAINTENANCE
+}
+
 enum ContractFrequency {
   monthly
   quarterly
@@ -66,7 +71,8 @@ model Project {
   clientId         String              @map("client_id") @db.Uuid
   name             String
   status           ProjectStatus       @default(ACTIVE)
-  totalBudgetUsd   Decimal?            @map("total_budget_usd") @db.Decimal(12, 2)
+  devBudgetUsd     Decimal?            @map("dev_budget_usd") @db.Decimal(12, 2)
+  monthlyFeeUsd    Decimal?            @map("monthly_fee_usd") @db.Decimal(12, 2)
   notes            String?
   createdAt        DateTime            @default(now()) @map("created_at")
   updatedAt        DateTime            @updatedAt @map("updated_at")
@@ -86,6 +92,7 @@ model Income {
   projectId     String             @map("project_id") @db.Uuid
   date          DateTime           @db.Date
   status        IncomeStatus       @default(PAID)
+  type          IncomeType         @default(DEVELOPMENT) @map("income_type")
   amountArs     Decimal?           @map("amount_ars") @db.Decimal(14, 2)
   amountUsd     Decimal            @map("amount_usd") @db.Decimal(12, 2)
   exchangeRate  Decimal?           @map("exchange_rate") @db.Decimal(12, 4)
