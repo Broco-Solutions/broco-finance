@@ -186,7 +186,7 @@ export function ClientsScreen({
         demoMode={demoMode}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[0.88fr,1.12fr]">
+      <div className="space-y-6">
         <Card>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>

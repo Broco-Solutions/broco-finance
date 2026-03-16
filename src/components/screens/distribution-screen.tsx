@@ -175,7 +175,7 @@ export function DistributionScreen({
         </div>
       </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr,1.05fr]">
+      <div className="space-y-6">
         <Card>
           <form className="space-y-4" onSubmit={saveLayers}>
             <h2 className="font-display text-2xl text-ink">Capas de distribución</h2>

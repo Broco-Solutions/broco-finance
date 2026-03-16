@@ -16,7 +16,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="min-w-0 flex-1">
         <Header />
-        <main className="mx-auto max-w-[1600px] space-y-8 px-5 py-8 md:px-8">{children}</main>
+        <main className="mx-auto max-w-[1600px] space-y-6 px-4 py-5 md:space-y-8 md:px-8 md:py-8 lg:px-10">
+          {children}
+        </main>
       </div>
     </div>
   );

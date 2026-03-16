@@ -21,8 +21,8 @@ export function DataTable({
 
   return (
     <div className={cn("overflow-hidden rounded-[1.35rem] border border-black/10", className)}>
-      <div className={cn("overflow-x-auto", shouldScroll && `overflow-y-auto ${maxHeightClassName}`)}>
-        <table className="min-w-full divide-y divide-black/10 text-left text-sm">
+      <div className={cn("overflow-x-auto overscroll-x-contain", shouldScroll && `overflow-y-auto ${maxHeightClassName}`)}>
+        <table className="min-w-max w-full divide-y divide-black/10 text-left text-sm">
           <thead className="bg-ink text-paper">
             <tr>
               {headers.map((header) => (

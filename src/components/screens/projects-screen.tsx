@@ -209,7 +209,7 @@ export function ProjectsScreen({
         demoMode={demoMode}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[0.92fr,1.08fr]">
+      <div className="space-y-6">
         <Card>
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>

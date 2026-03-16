@@ -2,26 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, BriefcaseBusiness, CalendarDays, CircleDollarSign, FolderKanban, HandCoins, LayoutDashboard, RefreshCcw } from "lucide-react";
 import { BrandLogo } from "@/components/layout/brand-logo";
+import { navigationItems } from "@/components/layout/navigation-config";
 import { cn } from "@/lib/utils";
-
-const items = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/clients", label: "Clientes", icon: BriefcaseBusiness },
-  { href: "/projects", label: "Proyectos", icon: FolderKanban },
-  { href: "/incomes", label: "Ingresos", icon: CircleDollarSign },
-  { href: "/expenses", label: "Gastos", icon: Activity },
-  { href: "/recurring", label: "Recurrentes", icon: RefreshCcw },
-  { href: "/distribution", label: "Distribución", icon: HandCoins },
-  { href: "/calendar", label: "Calendario", icon: CalendarDays },
-];
 
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[280px] shrink-0 flex-col justify-between bg-ink px-6 py-7 text-paper lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-[280px] shrink-0 flex-col justify-between bg-ink px-6 py-7 text-paper lg:flex xl:w-[296px]">
       <div className="space-y-10">
         <div className="space-y-4">
           <BrandLogo className="max-w-[220px] bg-gradient-to-br from-slate-950 via-black to-cobalt/80 p-3" priority />
@@ -34,7 +23,7 @@ export function Sidebar() {
           </div>
         </div>
         <nav className="space-y-2">
-          {items.map((item) => {
+          {navigationItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (

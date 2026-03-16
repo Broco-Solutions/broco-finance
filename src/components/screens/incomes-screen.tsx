@@ -227,7 +227,7 @@ export function IncomesScreen({
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr,1.05fr]">
+      <div className="space-y-6">
         <Card>
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>

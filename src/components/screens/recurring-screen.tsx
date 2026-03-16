@@ -134,7 +134,7 @@ export function RecurringScreen({
         description="Cada contrato genera un horizonte de cobros. Los estados viven en `scheduled_payments`, no en el contrato."
         demoMode={demoMode}
       />
-      <div className="grid gap-6 xl:grid-cols-[0.84fr,1.16fr]">
+      <div className="space-y-6">
         <Card>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <h2 className="font-display text-2xl text-ink">Nuevo contrato recurrente</h2>

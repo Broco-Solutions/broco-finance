@@ -407,7 +407,7 @@ export function ExpensesScreen({
       </div>
 
       {activeTab === "ledger" ? (
-        <div className="grid gap-6 xl:grid-cols-[0.84fr,1.16fr]">
+        <div className="space-y-6">
           <Card>
             <form className="space-y-4" onSubmit={handleExpenseSubmit}>
               <div>
@@ -581,7 +581,7 @@ export function ExpensesScreen({
           </Card>
         </div>
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[0.84fr,1.16fr]">
+        <div className="space-y-6">
           <Card>
             <form className="space-y-4" onSubmit={handleRecurringSubmit}>
               <div>
