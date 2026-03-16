@@ -1437,6 +1437,37 @@ export async function createExpenseCategory(input: z.infer<typeof expenseCategor
   });
 }
 
+export async function updateExpenseCategory(id: string, input: z.infer<typeof expenseCategoryInputSchema>) {
+  requireDatabase();
+
+  return prisma.expenseCategory.update({
+    where: { id },
+    data: {
+      name: input.name.trim(),
+    },
+  });
+}
+
+export async function deleteExpenseCategory(id: string) {
+  requireDatabase();
+
+  const [expenseCount, recurringExpenseCount] = await Promise.all([
+    prisma.expense.count({ where: { categoryId: id } }),
+    prisma.recurringExpense.count({ where: { categoryId: id } }),
+  ]);
+
+  if (expenseCount > 0 || recurringExpenseCount > 0) {
+    throw new AppError(
+      "No podés eliminar una categoría con gastos o plantillas recurrentes asociados. Reasigná esos movimientos antes.",
+      409,
+    );
+  }
+
+  await prisma.expenseCategory.delete({
+    where: { id },
+  });
+}
+
 export async function listExpenses(filters?: z.infer<typeof expenseFilterSchema>) {
   if (!hasDatabaseConfig()) {
     return { data: mapDemoExpenses(filters), demoMode: true };

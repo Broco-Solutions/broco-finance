@@ -1,5 +1,6 @@
 "use client";
 
+import { Pencil, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { isBefore, parseISO, startOfDay } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -17,7 +18,9 @@ import { PayScheduledExpenseModal } from "@/components/expenses/pay-scheduled-ex
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { DataTable } from "@/components/ui/data-table";
+import { EditEntityModal } from "@/components/ui/edit-entity-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
@@ -87,6 +90,12 @@ function tabButtonClass(active: boolean) {
     : "border-black/10 bg-white/80 text-ink hover:bg-black/5";
 }
 
+function actionButtonClass(tone: "neutral" | "danger" = "neutral") {
+  return tone === "danger"
+    ? "inline-flex h-9 w-9 items-center justify-center rounded-full border border-brick/15 bg-brick/5 text-brick transition hover:bg-brick/10"
+    : "inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white text-ink transition hover:bg-black/5";
+}
+
 export function ExpensesScreen({
   expenses,
   categories,
@@ -109,6 +118,13 @@ export function ExpensesScreen({
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState<ExpenseCategoryRecord | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState("");
+  const [editCategoryError, setEditCategoryError] = useState<string | null>(null);
+  const [deletingCategory, setDeletingCategory] = useState<ExpenseCategoryRecord | null>(null);
+  const [deleteCategoryError, setDeleteCategoryError] = useState<string | null>(null);
   const [recurringError, setRecurringError] = useState<string | null>(null);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [busyTarget, setBusyTarget] = useState<string | null>(null);
@@ -276,6 +292,27 @@ export function ExpensesScreen({
     [recurringExpenses],
   );
 
+  const categorySummary = useMemo(() => {
+    const expenseUsage = expenses.reduce<Record<string, number>>((acc, item) => {
+      acc[item.categoryId] = (acc[item.categoryId] ?? 0) + 1;
+      return acc;
+    }, {});
+    const recurringUsage = recurringExpenses.reduce<Record<string, number>>((acc, item) => {
+      acc[item.categoryId] = (acc[item.categoryId] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      total: categories.length,
+      custom: categories.filter((category) => !category.isDefault).length,
+      default: categories.filter((category) => category.isDefault).length,
+      usageByCategory: categories.reduce<Record<string, number>>((acc, category) => {
+        acc[category.id] = (expenseUsage[category.id] ?? 0) + (recurringUsage[category.id] ?? 0);
+        return acc;
+      }, {}),
+    };
+  }, [categories, expenses, recurringExpenses]);
+
   const handleExpenseSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     startTransition(async () => {
@@ -307,6 +344,116 @@ export function ExpensesScreen({
         router.refresh();
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "No se pudo crear el gasto.");
+      } finally {
+        setBusyTarget(null);
+      }
+    });
+  };
+
+  const handleCategorySubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    startTransition(async () => {
+      try {
+        setCategoryError(null);
+        setBusyTarget("category:new");
+        const createdCategory = await apiFetch<ExpenseCategoryRecord>("/api/expense-categories", {
+          method: "POST",
+          body: JSON.stringify({
+            name: categoryName,
+          }),
+        });
+        setCategoryName("");
+        setForm((prev) => ({ ...prev, categoryId: createdCategory.id }));
+        setRecurringForm((prev) => ({ ...prev, categoryId: createdCategory.id }));
+        router.refresh();
+      } catch (submitError) {
+        setCategoryError(submitError instanceof Error ? submitError.message : "No se pudo crear la categoría.");
+      } finally {
+        setBusyTarget(null);
+      }
+    });
+  };
+
+  const openEditCategoryModal = (category: ExpenseCategoryRecord) => {
+    setEditingCategory(category);
+    setEditCategoryName(category.name);
+    setEditCategoryError(null);
+  };
+
+  const closeEditCategoryModal = () => {
+    setEditingCategory(null);
+    setEditCategoryName("");
+    setEditCategoryError(null);
+  };
+
+  const handleEditCategorySubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editingCategory) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        setEditCategoryError(null);
+        setBusyTarget(`category:edit:${editingCategory.id}`);
+        await apiFetch(`/api/expense-categories/${editingCategory.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            name: editCategoryName,
+          }),
+        });
+        closeEditCategoryModal();
+        router.refresh();
+      } catch (submitError) {
+        setEditCategoryError(
+          submitError instanceof Error ? submitError.message : "No se pudo actualizar la categoría.",
+        );
+      } finally {
+        setBusyTarget(null);
+      }
+    });
+  };
+
+  const openDeleteCategoryModal = (category: ExpenseCategoryRecord) => {
+    setDeletingCategory(category);
+    setDeleteCategoryError(null);
+  };
+
+  const closeDeleteCategoryModal = () => {
+    setDeletingCategory(null);
+    setDeleteCategoryError(null);
+  };
+
+  const handleDeleteCategory = () => {
+    if (!deletingCategory) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        setDeleteCategoryError(null);
+        setBusyTarget(`category:delete:${deletingCategory.id}`);
+        await apiFetch(`/api/expense-categories/${deletingCategory.id}`, {
+          method: "DELETE",
+        });
+        if (form.categoryId === deletingCategory.id) {
+          setForm((prev) => ({ ...prev, categoryId: categories.find((item) => item.id !== deletingCategory.id)?.id ?? "" }));
+        }
+        if (recurringForm.categoryId === deletingCategory.id) {
+          setRecurringForm((prev) => ({
+            ...prev,
+            categoryId: categories.find((item) => item.id !== deletingCategory.id)?.id ?? "",
+          }));
+        }
+        if (categoryFilter === deletingCategory.id) {
+          setCategoryFilter("");
+        }
+        closeDeleteCategoryModal();
+        router.refresh();
+      } catch (submitError) {
+        setDeleteCategoryError(
+          submitError instanceof Error ? submitError.message : "No se pudo eliminar la categoría.",
+        );
       } finally {
         setBusyTarget(null);
       }
@@ -408,6 +555,111 @@ export function ExpensesScreen({
 
       {activeTab === "ledger" ? (
         <div className="space-y-6">
+          <Card>
+            <div className="grid gap-6 xl:grid-cols-[0.95fr,1.25fr]">
+              <form className="space-y-4" onSubmit={handleCategorySubmit}>
+                <div>
+                  <h2 className="font-display text-2xl text-ink">Categorías de gastos</h2>
+                  <p className="mt-1 text-sm text-ink/55">
+                    Ordená el mapa de egresos antes de cargar movimientos. Crear, editar o depurar categorías vive acá.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-[1rem] border border-black/10 bg-white/75 px-4 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Total</div>
+                    <div className="mt-1 font-display text-2xl text-ink">{categorySummary.total}</div>
+                  </div>
+                  <div className="rounded-[1rem] border border-black/10 bg-white/75 px-4 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Base</div>
+                    <div className="mt-1 font-display text-2xl text-cobalt">{categorySummary.default}</div>
+                  </div>
+                  <div className="rounded-[1rem] border border-black/10 bg-white/75 px-4 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Custom</div>
+                    <div className="mt-1 font-display text-2xl text-emerald-950">{categorySummary.custom}</div>
+                  </div>
+                </div>
+
+                <div className="rounded-[1.35rem] border border-black/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.94),rgba(238,247,255,0.88))] p-4">
+                  <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Nueva categoría</label>
+                  <Input
+                    className="mt-3"
+                    placeholder="Ej: Licencias IA, Honorarios legales"
+                    value={categoryName}
+                    onChange={(event) => setCategoryName(event.target.value)}
+                  />
+                  <p className="mt-3 text-xs text-ink/55">
+                    Va a quedar disponible tanto para gastos reales como para plantillas recurrentes.
+                  </p>
+                </div>
+
+                {categoryError ? <p className="text-sm text-brick">{categoryError}</p> : null}
+
+                <Button type="submit" disabled={isPending || demoMode || categoryName.trim().length < 2}>
+                  {demoMode ? "Requiere DATABASE_URL" : isPending && busyTarget === "category:new" ? "Guardando…" : "Crear categoría"}
+                </Button>
+              </form>
+
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-display text-2xl text-ink">Catálogo activo</h3>
+                  <p className="mt-1 text-sm text-ink/55">
+                    Editá nombres al vuelo y eliminá solo categorías sin uso. Las que ya tienen movimientos quedan protegidas.
+                  </p>
+                </div>
+
+                {categories.length === 0 ? (
+                  <EmptyState
+                    title="Sin categorías"
+                    description="Creá la primera categoría para empezar a clasificar egresos."
+                  />
+                ) : (
+                  <DataTable headers={["Categoría", "Origen", "Uso", "Acciones"]} scrollAfter={6} maxHeightClassName="max-h-[22rem]">
+                    {categories.map((category) => (
+                      <tr key={category.id}>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-ink">{category.name}</div>
+                          <div className="text-xs uppercase tracking-[0.16em] text-ink/45">ID corto · {category.id.slice(0, 8)}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge tone={category.isDefault ? "neutral" : "success"}>
+                            {category.isDefault ? "Base" : "Custom"}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-ink">{categorySummary.usageByCategory[category.id] ?? 0}</div>
+                          <div className="text-xs text-ink/55">gastos o plantillas</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              aria-label={`Editar ${category.name}`}
+                              className={actionButtonClass()}
+                              onClick={() => openEditCategoryModal(category)}
+                              title="Editar categoría"
+                              type="button"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              aria-label={`Eliminar ${category.name}`}
+                              className={actionButtonClass("danger")}
+                              onClick={() => openDeleteCategoryModal(category)}
+                              title="Eliminar categoría"
+                              type="button"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </DataTable>
+                )}
+              </div>
+            </div>
+          </Card>
+
           <Card>
             <form className="space-y-4" onSubmit={handleExpenseSubmit}>
               <div>
@@ -808,6 +1060,55 @@ export function ExpensesScreen({
         scheduledExpense={payableExpense}
         onClose={() => setPayableExpense(null)}
       />
+
+      <EditEntityModal
+        open={Boolean(editingCategory)}
+        title="Editar categoría"
+        description="Renombrá la categoría sin tocar el histórico. Todos los gastos asociados seguirán apuntando a la misma categoría."
+        submitLabel="Guardar categoría"
+        isPending={isPending}
+        disabled={demoMode}
+        error={editCategoryError}
+        onClose={closeEditCategoryModal}
+        onSubmit={handleEditCategorySubmit}
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Nombre</label>
+            <Input value={editCategoryName} onChange={(event) => setEditCategoryName(event.target.value)} />
+          </div>
+          {demoMode ? <p className="text-sm text-ink/55">La edición persistente requiere `DATABASE_URL`.</p> : null}
+        </div>
+      </EditEntityModal>
+
+      <ConfirmActionModal
+        open={Boolean(deletingCategory)}
+        title="Eliminar categoría"
+        description="La categoría solo puede eliminarse si no tiene gastos reales ni plantillas recurrentes vinculadas."
+        confirmLabel="Eliminar categoría"
+        isPending={isPending}
+        disabled={demoMode}
+        error={deleteCategoryError}
+        onClose={closeDeleteCategoryModal}
+        onConfirm={handleDeleteCategory}
+      >
+        {deletingCategory ? (
+          <div className="space-y-2 text-sm text-ink/70">
+            <p>
+              Categoría: <span className="font-semibold text-ink">{deletingCategory.name}</span>.
+            </p>
+            <p>
+              Uso detectado: <span className="font-semibold text-ink">{categorySummary.usageByCategory[deletingCategory.id] ?? 0}</span> movimiento(s) o plantilla(s).
+            </p>
+            {deletingCategory.isDefault ? (
+              <p className="text-ink/60">Es una categoría base del sistema, pero igual puede eliminarse si no está en uso.</p>
+            ) : (
+              <p className="text-ink/60">Si no tiene referencias, la baja se va a ejecutar de forma definitiva.</p>
+            )}
+            {demoMode ? <p>La eliminación persistente requiere `DATABASE_URL`.</p> : null}
+          </div>
+        ) : null}
+      </ConfirmActionModal>
     </div>
   );
 }
