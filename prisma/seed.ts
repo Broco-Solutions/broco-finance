@@ -202,7 +202,7 @@ function parseMoney(row: SheetRow): ParsedMoney | null {
   };
 }
 
-function normalizeProjectStatus(value: unknown, fallback: ProjectStatus = ProjectStatus.active) {
+function normalizeProjectStatus(value: unknown, fallback: ProjectStatus = ProjectStatus.ACTIVE) {
   const text = cleanText(value)?.toLowerCase();
 
   if (!text) {
@@ -210,14 +210,14 @@ function normalizeProjectStatus(value: unknown, fallback: ProjectStatus = Projec
   }
 
   if (text.includes("final")) {
-    return ProjectStatus.finished;
+    return ProjectStatus.COMPLETED;
   }
 
   if (text.includes("cancel")) {
-    return ProjectStatus.cancelled;
+    return ProjectStatus.CANCELLED;
   }
 
-  return ProjectStatus.active;
+  return ProjectStatus.ACTIVE;
 }
 
 function isRecurringIncomeSource(value: unknown, notes: string | null) {
@@ -446,7 +446,10 @@ async function main() {
         date,
         clientName,
         projectName,
-        projectStatus: normalizeProjectStatus(row["Estado del proyecto"], rawClientName ? ProjectStatus.active : ProjectStatus.finished),
+        projectStatus: normalizeProjectStatus(
+          row["Estado del proyecto"],
+          rawClientName ? ProjectStatus.ACTIVE : ProjectStatus.COMPLETED,
+        ),
         isRecurring: isRecurringIncomeSource(row["Tipo de Ingreso"], notes),
         notes,
         money,
@@ -518,7 +521,7 @@ async function main() {
       projectSeeds.set(buildProjectKey(INTERNAL_CLIENT_NAME, expense.projectName), {
         clientName: INTERNAL_CLIENT_NAME,
         projectName: expense.projectName,
-        status: ProjectStatus.active,
+        status: ProjectStatus.ACTIVE,
       });
       clientNames.add(INTERNAL_CLIENT_NAME);
     }

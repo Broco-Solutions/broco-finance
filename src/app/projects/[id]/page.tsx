@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatIncomeStatus, formatShortDate, formatUsd } from "@/lib/utils";
+import { formatIncomeStatus, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { getProjectDetail } from "@/server/services/finance";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +17,16 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
       <PageHeader
         eyebrow="Proyecto"
         title={detail.project.name}
-        description={`Cliente: ${detail.project.clientName}. ${detail.project.notes ?? "Sin notas operativas."}`}
+        description={`Cliente: ${detail.project.clientName}. Estado: ${formatProjectStatus(detail.project.status)}. ${detail.project.notes ?? "Sin notas operativas."}`}
         demoMode={!process.env.DATABASE_URL}
       />
+      {detail.project.pendingIncomeCount > 0 && detail.project.status !== "ACTIVE" ? (
+        <Card className="border-coral/25 bg-coral/10">
+          <div className="text-sm text-brick">
+            Este proyecto tiene {detail.project.pendingIncomeCount} ingreso(s) `PENDING` todavía abiertos. Revisalos antes de cerrar la cobranza.
+          </div>
+        </Card>
+      ) : null}
       <Card>
         <div className="grid gap-6 lg:grid-cols-[1fr,1.2fr]">
           <div>

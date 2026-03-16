@@ -8,9 +8,9 @@ datasource db {
 }
 
 enum ProjectStatus {
-  active
-  finished
-  cancelled
+  ACTIVE
+  COMPLETED
+  CANCELLED
 }
 
 enum IncomeStatus {
@@ -48,12 +48,15 @@ enum ScheduledExpenseStatus {
 }
 
 model Client {
-  id        String    @id @default(uuid()) @db.Uuid
-  name      String    @unique
-  notes     String?
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  projects  Project[]
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String    @unique
+  contactName  String?   @map("contact_name")
+  contactEmail String?   @map("contact_email")
+  contactPhone String?   @map("contact_phone")
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  projects     Project[]
 
   @@map("clients")
 }
@@ -62,7 +65,7 @@ model Project {
   id               String              @id @default(uuid()) @db.Uuid
   clientId         String              @map("client_id") @db.Uuid
   name             String
-  status           ProjectStatus       @default(active)
+  status           ProjectStatus       @default(ACTIVE)
   totalBudgetUsd   Decimal?            @map("total_budget_usd") @db.Decimal(12, 2)
   notes            String?
   createdAt        DateTime            @default(now()) @map("created_at")

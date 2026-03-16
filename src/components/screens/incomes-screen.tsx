@@ -4,7 +4,7 @@ import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { IncomeRecord, IncomeStatus, ProjectRecord } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
-import { formatArs, formatIncomeStatus, formatShortDate, formatUsd } from "@/lib/utils";
+import { formatArs, formatIncomeStatus, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -20,6 +20,10 @@ function statusChip(status: IncomeStatus) {
   return status === "PAID"
     ? "border-emerald-900/20 bg-emerald-50 text-emerald-950"
     : "border-amber-900/20 bg-amber-50 text-amber-950";
+}
+
+function isClosedProject(status: ProjectRecord["status"]) {
+  return status === "COMPLETED" || status === "CANCELLED";
 }
 
 export function IncomesScreen({
@@ -66,6 +70,11 @@ export function IncomesScreen({
     }),
     [visibleIncomes],
   );
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === form.projectId) ?? null,
+    [projects, form.projectId],
+  );
+  const pendingIncomeBlocked = form.status === "PENDING" && Boolean(selectedProject && isClosedProject(selectedProject.status));
 
   const resetForm = () => {
     setEditingIncomeId(null);
@@ -212,11 +221,18 @@ export function IncomesScreen({
 
             <Select value={form.projectId} onChange={(event) => setForm((prev) => ({ ...prev, projectId: event.target.value }))}>
               {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.clientName} · {project.name}
+                <option key={project.id} disabled={form.status === "PENDING" && isClosedProject(project.status)} value={project.id}>
+                  {project.clientName} · {project.name} · {formatProjectStatus(project.status)}
                 </option>
               ))}
             </Select>
+
+            {pendingIncomeBlocked ? (
+              <div className="rounded-[1.2rem] border border-coral/25 bg-coral/10 px-4 py-3 text-sm text-brick">
+                El proyecto seleccionado está {formatProjectStatus(selectedProject?.status).toLowerCase()}.
+                Para evitar deuda abierta sobre proyectos cerrados, los ingresos `PENDING` quedan deshabilitados.
+              </div>
+            ) : null}
 
             <Input
               type="date"
@@ -257,7 +273,7 @@ export function IncomesScreen({
             {error ? <p className="text-sm text-brick">{error}</p> : null}
 
             <div className="flex flex-wrap gap-3">
-              <Button type="submit" disabled={isPending || demoMode}>
+              <Button type="submit" disabled={isPending || demoMode || pendingIncomeBlocked}>
                 {demoMode
                   ? "Requiere DATABASE_URL"
                   : isPending

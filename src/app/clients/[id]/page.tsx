@@ -2,7 +2,7 @@ import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-b
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatIncomeStatus, formatShortDate, formatUsd } from "@/lib/utils";
+import { formatIncomeStatus, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { getClientDetail } from "@/server/services/finance";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,11 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
       <PageHeader
         eyebrow="Cliente"
         title={detail.client.name}
-        description={detail.client.notes ?? "Relación comercial activa en Broco Finance."}
+        description={
+          [detail.client.contactName, detail.client.contactEmail, detail.client.contactPhone, detail.client.notes]
+            .filter(Boolean)
+            .join(" · ") || "Relación comercial activa en Broco Finance."
+        }
         demoMode={!process.env.DATABASE_URL}
       />
       <div className="grid gap-4 md:grid-cols-3">
@@ -41,7 +45,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
             {detail.projects.map((project) => (
               <tr key={project.id}>
                 <td className="px-4 py-3">{project.name}</td>
-                <td className="px-4 py-3 uppercase">{project.status}</td>
+                <td className="px-4 py-3">{formatProjectStatus(project.status)}</td>
                 <td className="px-4 py-3">{formatUsd(project.totalCollectedUsd)}</td>
                 <td className="px-4 py-3">{project.totalBudgetUsd ? formatUsd(project.totalBudgetUsd) : "—"}</td>
               </tr>

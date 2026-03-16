@@ -1,4 +1,4 @@
-export type ProjectStatus = "active" | "finished" | "cancelled";
+export type ProjectStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
 export type IncomeStatus = "PAID" | "PENDING";
 export type ContractFrequency = "monthly" | "quarterly" | "biannual" | "annual";
 export type ScheduledPaymentStatus = "pending" | "paid" | "overdue" | "cancelled";
@@ -15,6 +15,9 @@ export type MonetaryFields = {
 export type ClientRecord = {
   id: string;
   name: string;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
   notes: string | null;
   totalInvoicedUsd: number;
   totalReceivableUsd: number;
@@ -30,6 +33,7 @@ export type ProjectRecord = {
   status: ProjectStatus;
   totalBudgetUsd: number | null;
   notes: string | null;
+  pendingIncomeCount: number;
   totalCollectedUsd: number;
   nextPaymentDate: string | null;
 };

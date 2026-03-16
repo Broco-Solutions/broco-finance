@@ -76,6 +76,22 @@ export function formatIncomeStatus(value: string | null | undefined) {
   return "—";
 }
 
+export function formatProjectStatus(value: string | null | undefined) {
+  if (value === "ACTIVE") {
+    return "Activo";
+  }
+
+  if (value === "COMPLETED") {
+    return "Completado";
+  }
+
+  if (value === "CANCELLED") {
+    return "Cancelado";
+  }
+
+  return "—";
+}
+
 export function toFixedCurrencyInput(value: NumericLike) {
   const numericValue = toCurrencyNumber(value);
   return numericValue === null ? "" : roundCurrency(numericValue).toFixed(2);

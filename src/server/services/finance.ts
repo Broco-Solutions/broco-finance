@@ -71,7 +71,20 @@ function isPendingIncomeStatus(status: IncomeStatus | string) {
   return status === IncomeStatus.PENDING;
 }
 
-const projectStatusSchema = z.enum(["active", "finished", "cancelled"]);
+function isActiveProjectStatus(status: ProjectStatus | string) {
+  return status === ProjectStatus.ACTIVE;
+}
+
+function isClosedProjectStatus(status: ProjectStatus | string) {
+  return status === ProjectStatus.COMPLETED || status === ProjectStatus.CANCELLED;
+}
+
+function normalizeOptionalText(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+const projectStatusSchema = z.enum(["ACTIVE", "COMPLETED", "CANCELLED"]);
 const incomeStatusSchema = z.enum(["PAID", "PENDING"]);
 const expenseTypeSchema = z.enum(["fixed", "variable"]);
 const contractFrequencySchema = z.enum(["monthly", "quarterly", "biannual", "annual"]);
@@ -99,14 +112,17 @@ const baseMoneySchema = z
   });
 
 export const clientInputSchema = z.object({
-  name: z.string().min(2, "El nombre es obligatorio."),
+  name: z.string().trim().min(2, "El nombre es obligatorio."),
+  contactName: z.string().trim().min(2, "El contacto debe tener al menos 2 caracteres.").nullable().optional(),
+  contactEmail: z.string().trim().email("Email inválido.").nullable().optional(),
+  contactPhone: z.string().trim().min(3, "Teléfono inválido.").nullable().optional(),
   notes: z.string().trim().nullable().optional(),
 });
 
 export const projectInputSchema = z.object({
   clientId: z.string().uuid("Cliente inválido."),
-  name: z.string().min(2, "El nombre es obligatorio."),
-  status: projectStatusSchema.default("active"),
+  name: z.string().trim().min(2, "El nombre es obligatorio."),
+  status: projectStatusSchema.default("ACTIVE"),
   totalBudgetUsd: z.coerce.number().nonnegative().nullable().optional(),
   notes: z.string().trim().nullable().optional(),
 });
@@ -405,6 +421,31 @@ async function clearPendingScheduledExpenses(db: DbClient, recurringExpenseId: s
   });
 }
 
+async function ensurePendingIncomeAllowed(db: DbClient, projectId: string, status: IncomeStatus | string) {
+  if (!isPendingIncomeStatus(status)) {
+    return;
+  }
+
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    select: {
+      status: true,
+      name: true,
+    },
+  });
+
+  if (!project) {
+    throw new AppError("Proyecto no encontrado.", 404);
+  }
+
+  if (isClosedProjectStatus(project.status)) {
+    throw new AppError(
+      `El proyecto "${project.name}" está ${project.status === ProjectStatus.COMPLETED ? "completado" : "cancelado"} y no admite ingresos pendientes nuevos.`,
+      409,
+    );
+  }
+}
+
 async function syncScheduledPayments(
   db: DbClient,
   contract: {
@@ -559,7 +600,15 @@ function computeDistributionSummary(
 
 function mapDemoClients(search?: string | null) {
   const query = search?.trim().toLowerCase();
-  return query ? demoClients.filter((client) => client.name.toLowerCase().includes(query)) : demoClients;
+  return query
+    ? demoClients.filter((client) =>
+        [client.name, client.contactName, client.contactEmail, client.contactPhone, client.notes]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(query),
+      )
+    : demoClients;
 }
 
 function mapDemoProjects(filters?: { clientId?: string | null; status?: string | null }) {
@@ -682,12 +731,15 @@ function mapClientRecord(client: Prisma.ClientGetPayload<{ include: { projects: 
   return {
     id: client.id,
     name: client.name,
+    contactName: client.contactName,
+    contactEmail: client.contactEmail,
+    contactPhone: client.contactPhone,
     notes: client.notes,
     totalInvoicedUsd: allIncomes.reduce((sum, income) => sum + requireNumber(income.amountUsd), 0),
     totalReceivableUsd:
       sumIncomeUsd(allIncomes, (income) => isPendingIncomeStatus(income.status)) +
       pendingPayments.reduce((sum, payment) => sum + requireNumber(payment.expectedAmountUsd), 0),
-    activeProjects: client.projects.filter((project) => project.status === ProjectStatus.active).length,
+    activeProjects: client.projects.filter((project) => isActiveProjectStatus(project.status)).length,
     totalProjects: client.projects.length,
   };
 }
@@ -711,6 +763,7 @@ function mapProjectRecord(
     status: project.status,
     totalBudgetUsd: toNumber(project.totalBudgetUsd),
     notes: project.notes,
+    pendingIncomeCount: project.incomes.filter((income) => isPendingIncomeStatus(income.status)).length,
     totalCollectedUsd: sumIncomeUsd(project.incomes, (income) => isPaidIncomeStatus(income.status)),
     nextPaymentDate: nextPayment ? dateOnly(nextPayment) : null,
   };
@@ -913,10 +966,32 @@ export async function listClients(search?: string | null) {
   const clients = await prisma.client.findMany({
     where: search
       ? {
-          name: {
-            contains: search,
-            mode: "insensitive",
-          },
+          OR: [
+            {
+              name: {
+                contains: search,
+                mode: "insensitive",
+              },
+            },
+            {
+              contactName: {
+                contains: search,
+                mode: "insensitive",
+              },
+            },
+            {
+              contactEmail: {
+                contains: search,
+                mode: "insensitive",
+              },
+            },
+            {
+              contactPhone: {
+                contains: search,
+                mode: "insensitive",
+              },
+            },
+          ],
         }
       : undefined,
     include: {
@@ -1008,7 +1083,10 @@ export async function createClient(input: z.infer<typeof clientInputSchema>) {
   return prisma.client.create({
     data: {
       name: input.name.trim(),
-      notes: input.notes ?? null,
+      contactName: normalizeOptionalText(input.contactName),
+      contactEmail: normalizeOptionalText(input.contactEmail),
+      contactPhone: normalizeOptionalText(input.contactPhone),
+      notes: normalizeOptionalText(input.notes),
     },
   });
 }
@@ -1020,7 +1098,10 @@ export async function updateClient(id: string, input: z.infer<typeof clientInput
     where: { id },
     data: {
       name: input.name.trim(),
-      notes: input.notes ?? null,
+      contactName: normalizeOptionalText(input.contactName),
+      contactEmail: normalizeOptionalText(input.contactEmail),
+      contactPhone: normalizeOptionalText(input.contactPhone),
+      notes: normalizeOptionalText(input.notes),
     },
   });
 }
@@ -1028,10 +1109,17 @@ export async function updateClient(id: string, input: z.infer<typeof clientInput
 export async function deleteClient(id: string) {
   requireDatabase();
 
-  const projectCount = await prisma.project.count({ where: { clientId: id } });
+  const [activeProjectCount, projectCount] = await Promise.all([
+    prisma.project.count({ where: { clientId: id, status: ProjectStatus.ACTIVE } }),
+    prisma.project.count({ where: { clientId: id } }),
+  ]);
+
+  if (activeProjectCount > 0) {
+    throw new AppError("No podés eliminar un cliente con proyectos activos. Cerrá o cancelá esos proyectos primero.", 409);
+  }
 
   if (projectCount > 0) {
-    throw new AppError("No podés eliminar un cliente con proyectos asociados.", 409);
+    throw new AppError("No podés eliminar un cliente con proyectos asociados. Eliminá o archivá esos proyectos antes.", 409);
   }
 
   await prisma.client.delete({ where: { id } });
@@ -1124,7 +1212,7 @@ export async function createProject(input: z.infer<typeof projectInputSchema>) {
       status: input.status as ProjectStatus,
       totalBudgetUsd:
         typeof input.totalBudgetUsd === "number" ? new Prisma.Decimal(input.totalBudgetUsd.toFixed(2)) : null,
-      notes: input.notes ?? null,
+      notes: normalizeOptionalText(input.notes),
     },
   });
 }
@@ -1140,7 +1228,7 @@ export async function updateProject(id: string, input: z.infer<typeof projectInp
       status: input.status as ProjectStatus,
       totalBudgetUsd:
         typeof input.totalBudgetUsd === "number" ? new Prisma.Decimal(input.totalBudgetUsd.toFixed(2)) : null,
-      notes: input.notes ?? null,
+      notes: normalizeOptionalText(input.notes),
     },
   });
 }
@@ -1148,14 +1236,18 @@ export async function updateProject(id: string, input: z.infer<typeof projectInp
 export async function deleteProject(id: string) {
   requireDatabase();
 
-  const [incomeCount, expenseCount, recurringCount] = await Promise.all([
+  const [incomeCount, expenseCount, recurringCount, scheduledPaymentCount] = await Promise.all([
     prisma.income.count({ where: { projectId: id } }),
     prisma.expense.count({ where: { projectId: id } }),
     prisma.recurringContract.count({ where: { projectId: id } }),
+    prisma.scheduledPayment.count({ where: { projectId: id } }),
   ]);
 
-  if (incomeCount + expenseCount + recurringCount > 0) {
-    throw new AppError("No podés eliminar un proyecto con movimientos asociados.", 409);
+  if (incomeCount + expenseCount + recurringCount + scheduledPaymentCount > 0) {
+    throw new AppError(
+      "No podés eliminar un proyecto con ingresos, gastos o contratos asociados. Cambiá su estado a CANCELLED si querés dejarlo fuera de operación.",
+      409,
+    );
   }
 
   await prisma.project.delete({ where: { id } });
@@ -1187,6 +1279,7 @@ export async function listIncomes(filters?: z.infer<typeof incomeFilterSchema>) 
 
 export async function createIncome(input: z.infer<typeof incomeInputSchema>) {
   requireDatabase();
+  await ensurePendingIncomeAllowed(prisma, input.projectId, input.status);
   const money = normalizeMoney(input);
 
   return prisma.income.create({
@@ -1194,7 +1287,7 @@ export async function createIncome(input: z.infer<typeof incomeInputSchema>) {
       projectId: input.projectId,
       date: parseISO(input.date),
       status: input.status as IncomeStatus,
-      notes: input.notes ?? null,
+      notes: normalizeOptionalText(input.notes),
       ...money,
     },
   });
@@ -1210,6 +1303,7 @@ export async function updateIncome(id: string, input: z.infer<typeof incomeInput
     throw new AppError("Editá el pago programado para ajustar un ingreso conciliado con recurrentes.", 409);
   }
 
+  await ensurePendingIncomeAllowed(prisma, input.projectId, input.status);
   const money = normalizeMoney(input);
 
   return prisma.income.update({
@@ -1218,7 +1312,7 @@ export async function updateIncome(id: string, input: z.infer<typeof incomeInput
       projectId: input.projectId,
       date: parseISO(input.date),
       status: input.status as IncomeStatus,
-      notes: input.notes ?? null,
+      notes: normalizeOptionalText(input.notes),
       ...money,
     },
   });
@@ -2084,7 +2178,7 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
           pendingPayments: 0,
         };
         current.incomeUsd += sumIncomeUsd(project.incomes, (income) => isPaidIncomeStatus(income.status));
-        current.activeProjects += project.status === ProjectStatus.active ? 1 : 0;
+        current.activeProjects += isActiveProjectStatus(project.status) ? 1 : 0;
         current.pendingPayments += project.scheduledPayments.filter((payment) => isOpenScheduledStatus(payment.status)).length;
         current.pendingPayments += project.incomes.filter((income) => isPendingIncomeStatus(income.status)).length;
         acc.set(project.client.name, current);
