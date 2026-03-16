@@ -117,30 +117,16 @@ export type SalaryRecord = MonetaryFields & {
 
 export type ScheduledPaymentRecord = {
   id: string;
-  recurringContractId: string | null;
   projectId: string;
   projectName: string;
   clientName: string;
+  type: IncomeType;
   expectedDate: string;
   expectedAmountUsd: number;
   status: ScheduledPaymentStatus;
   paidAt: string | null;
   actualIncomeId: string | null;
   notes: string | null;
-};
-
-export type RecurringContractRecord = MonetaryFields & {
-  id: string;
-  projectId: string;
-  projectName: string;
-  clientName: string;
-  description: string;
-  frequency: ContractFrequency;
-  startDate: string;
-  endDate: string | null;
-  isActive: boolean;
-  notes: string | null;
-  nextDueDate: string | null;
 };
 
 export type AlertsPayload = {
@@ -194,7 +180,6 @@ export type ClientDetailPayload = {
 export type ProjectDetailPayload = {
   project: ProjectRecord;
   incomes: IncomeRecord[];
-  recurringContracts: RecurringContractRecord[];
   scheduledPayments: ScheduledPaymentRecord[];
   expenses: ExpenseRecord[];
 };

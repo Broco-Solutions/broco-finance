@@ -26,7 +26,6 @@ import type {
   ProjectDetailPayload,
   ProjectRecord,
   RecurringExpenseRecord,
-  RecurringContractRecord,
   SalaryRecord,
   ScheduledExpenseRecord,
   ScheduledPaymentRecord,
@@ -44,7 +43,6 @@ import {
   demoProjectDetails,
   demoProjects,
   demoRecurringExpenses,
-  demoRecurringContracts,
   demoSalaries,
   demoScheduledExpenses,
   demoScheduledPayments,
@@ -55,6 +53,7 @@ import { hasDatabaseConfig, prisma } from "@/server/prisma";
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
 const salaryCategoryName = "Sueldos/Honorarios";
+const maintenanceScheduleHorizonMonths = 12;
 
 function isOpenScheduledStatus(status: ScheduledPaymentStatus) {
   return status === ScheduledPaymentStatus.pending || status === ScheduledPaymentStatus.overdue;
@@ -169,17 +168,6 @@ export const recurringExpenseInputSchema = z.object({
   updatePendingExpenses: z.boolean().optional(),
 });
 
-export const recurringInputSchema = z.object({
-  projectId: z.string().uuid("Proyecto inválido."),
-  description: z.string().min(2, "La descripción es obligatoria."),
-  frequency: contractFrequencySchema,
-  startDate: z.string().min(8, "Fecha inválida."),
-  endDate: z.string().nullable().optional(),
-  isActive: z.boolean().optional(),
-  notes: z.string().trim().nullable().optional(),
-  updatePendingPayments: z.boolean().optional(),
-}).merge(baseMoneySchema);
-
 export const scheduledPaymentInputSchema = z.object({
   action: scheduledActionSchema,
   expectedDate: z.string().nullable().optional(),
@@ -221,14 +209,9 @@ export const salaryFilterSchema = z.object({
   person: z.string().nullable().optional(),
 });
 
-export const recurringFilterSchema = z.object({
-  clientId: z.string().uuid().nullable().optional(),
-  projectId: z.string().uuid().nullable().optional(),
-  active: z.enum(["true", "false"]).nullable().optional(),
-});
-
 export const scheduledFilterSchema = z.object({
   status: z.enum(["pending", "paid", "overdue", "cancelled"]).nullable().optional(),
+  type: incomeTypeSchema.nullable().optional(),
   from: z.string().nullable().optional(),
   to: z.string().nullable().optional(),
   clientId: z.string().uuid().nullable().optional(),
@@ -356,19 +339,6 @@ function frequencyMonths(frequency: ContractFrequency) {
   }
 }
 
-function buildPaymentSchedule(startDate: Date, endDate: Date | null, frequency: ContractFrequency) {
-  const dates: Date[] = [];
-  const limitDate = endDate ?? addMonths(startOfMonth(new Date()), 12);
-  let cursor = startOfDay(startDate);
-
-  while (!isAfter(cursor, limitDate)) {
-    dates.push(cursor);
-    cursor = addMonths(cursor, frequencyMonths(frequency));
-  }
-
-  return dates;
-}
-
 function buildFutureExpenseSchedule(startDate: Date, frequency: ContractFrequency) {
   const dates: Date[] = [];
   const firstDate = startOfDay(startDate);
@@ -401,19 +371,6 @@ async function syncOverduePayments(db: DbClient) {
   });
 }
 
-async function syncOpenEndedContracts(db: DbClient) {
-  const contracts = await db.recurringContract.findMany({
-    where: {
-      isActive: true,
-      endDate: null,
-    },
-  });
-
-  for (const contract of contracts) {
-    await syncScheduledPayments(db, contract, false);
-  }
-}
-
 async function syncOpenRecurringExpenses(db: DbClient) {
   const recurringExpenses = await db.recurringExpense.findMany({
     where: { isActive: true },
@@ -424,13 +381,120 @@ async function syncOpenRecurringExpenses(db: DbClient) {
   }
 }
 
-async function clearPendingScheduledPayments(db: DbClient, contractId: string) {
-  await db.scheduledPayment.deleteMany({
+function buildMaintenanceScheduleDates(referenceDate = new Date()) {
+  const firstDate = startOfMonth(referenceDate);
+  return Array.from({ length: maintenanceScheduleHorizonMonths }, (_, index) => addMonths(firstDate, index));
+}
+
+async function syncProjectMaintenanceSchedule(
+  db: DbClient,
+  project: {
+    id: string;
+    status: ProjectStatus;
+    monthlyFeeUsd: Prisma.Decimal | number | null;
+  },
+  updatePendingPayments: boolean,
+) {
+  const monthlyFeeUsd = toNumber(project.monthlyFeeUsd) ?? 0;
+  const currentMonth = startOfMonth(new Date());
+  const activeSubscription = isActiveProjectStatus(project.status) && monthlyFeeUsd > 0;
+
+  if (!activeSubscription) {
+    await db.scheduledPayment.deleteMany({
+      where: {
+        projectId: project.id,
+        type: IncomeType.MAINTENANCE,
+        status: ScheduledPaymentStatus.pending,
+        expectedDate: { gte: currentMonth },
+      },
+    });
+    return;
+  }
+
+  const existingPayments = await db.scheduledPayment.findMany({
     where: {
-      recurringContractId: contractId,
-      status: ScheduledPaymentStatus.pending,
+      projectId: project.id,
+      type: IncomeType.MAINTENANCE,
     },
   });
+  const scheduleStart =
+    existingPayments
+      .filter((payment) => payment.expectedDate >= currentMonth)
+      .sort((left, right) => left.expectedDate.getTime() - right.expectedDate.getTime())[0]?.expectedDate ?? currentMonth;
+  const scheduleDates = buildMaintenanceScheduleDates(scheduleStart);
+  const latestScheduledDate = scheduleDates[scheduleDates.length - 1];
+  const existingKeys = new Set(existingPayments.map((payment) => dateOnly(payment.expectedDate)));
+  const amountUsd = new Prisma.Decimal(monthlyFeeUsd.toFixed(2));
+
+  await Promise.all(
+    scheduleDates
+      .filter((expectedDate) => !existingKeys.has(dateOnly(expectedDate)))
+      .map((expectedDate) =>
+        db.scheduledPayment.create({
+          data: {
+            projectId: project.id,
+            type: IncomeType.MAINTENANCE,
+            expectedDate,
+            expectedAmountUsd: amountUsd,
+            status: ScheduledPaymentStatus.pending,
+            notes: "Cobro mensual de mantenimiento generado desde el proyecto.",
+          },
+        }),
+      ),
+  );
+
+  if (updatePendingPayments) {
+    await db.scheduledPayment.updateMany({
+      where: {
+        projectId: project.id,
+        type: IncomeType.MAINTENANCE,
+        status: ScheduledPaymentStatus.pending,
+        expectedDate: { gte: scheduleStart },
+      },
+      data: {
+        expectedAmountUsd: amountUsd,
+      },
+    });
+  }
+
+  await db.scheduledPayment.deleteMany({
+    where: {
+      projectId: project.id,
+      type: IncomeType.MAINTENANCE,
+      status: ScheduledPaymentStatus.pending,
+      expectedDate: { gt: latestScheduledDate },
+    },
+  });
+}
+
+async function syncProjectSubscriptions(db: DbClient) {
+  const projects = await db.project.findMany({
+    where: {
+      OR: [
+        {
+          monthlyFeeUsd: {
+            gt: new Prisma.Decimal(0),
+          },
+        },
+        {
+          scheduledPayments: {
+            some: {
+              type: IncomeType.MAINTENANCE,
+            },
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      status: true,
+      monthlyFeeUsd: true,
+    },
+  });
+
+  for (const project of projects) {
+    await syncProjectMaintenanceSchedule(db, project, false);
+  }
 }
 
 async function clearPendingScheduledExpenses(db: DbClient, recurringExpenseId: string) {
@@ -464,63 +528,6 @@ async function ensurePendingIncomeAllowed(db: DbClient, projectId: string, statu
       `El proyecto "${project.name}" está ${project.status === ProjectStatus.COMPLETED ? "completado" : "cancelado"} y no admite ingresos pendientes nuevos.`,
       409,
     );
-  }
-}
-
-async function syncScheduledPayments(
-  db: DbClient,
-  contract: {
-    id: string;
-    projectId: string;
-    amountUsd: Prisma.Decimal;
-    frequency: ContractFrequency;
-    startDate: Date;
-    endDate: Date | null;
-    isActive: boolean;
-  },
-  updatePendingPayments: boolean,
-) {
-  if (!contract.isActive) {
-    return;
-  }
-
-  const dates = buildPaymentSchedule(contract.startDate, contract.endDate, contract.frequency);
-  const existing = await db.scheduledPayment.findMany({
-    where: { recurringContractId: contract.id },
-  });
-
-  const existingKeys = new Set(existing.map((payment) => dateOnly(payment.expectedDate)));
-  const amountUsd = requireNumber(contract.amountUsd);
-
-  await Promise.all(
-    dates
-      .filter((date) => !existingKeys.has(dateOnly(date)))
-      .map((expectedDate) =>
-        db.scheduledPayment.create({
-          data: {
-            recurringContractId: contract.id,
-            projectId: contract.projectId,
-            expectedDate,
-            expectedAmountUsd: amountUsd,
-            status: ScheduledPaymentStatus.pending,
-          },
-        }),
-      ),
-  );
-
-  if (updatePendingPayments) {
-    await db.scheduledPayment.updateMany({
-      where: {
-        recurringContractId: contract.id,
-        status: ScheduledPaymentStatus.pending,
-        expectedDate: {
-          gte: startOfDay(new Date()),
-        },
-      },
-      data: {
-        expectedAmountUsd: amountUsd,
-      },
-    });
   }
 }
 
@@ -687,6 +694,9 @@ function mapDemoScheduledPayments(filters?: z.infer<typeof scheduledFilterSchema
     demoScheduledPayments.filter((payment) => {
       const project = demoProjects.find((candidate) => candidate.id === payment.projectId);
       if (filters?.status && payment.status !== filters.status) {
+        return false;
+      }
+      if (filters?.type && payment.type !== filters.type) {
         return false;
       }
       if (filters?.projectId && payment.projectId !== filters.projectId) {
@@ -895,10 +905,10 @@ function mapScheduledPaymentRecord(
 ): ScheduledPaymentRecord {
   return {
     id: record.id,
-    recurringContractId: record.recurringContractId,
     projectId: record.projectId,
     projectName: record.project.name,
     clientName: record.project.client.name,
+    type: record.type,
     expectedDate: dateOnly(record.expectedDate),
     expectedAmountUsd: requireNumber(record.expectedAmountUsd),
     status: record.status,
@@ -959,42 +969,12 @@ function mapScheduledExpenseRecord(
   };
 }
 
-function mapRecurringRecord(
-  record: Prisma.RecurringContractGetPayload<{
-    include: {
-      project: { include: { client: true } };
-      payments: true;
-    };
-  }>,
-): RecurringContractRecord {
-  const nextDue = record.payments
-    .filter((payment) => isOpenScheduledStatus(payment.status))
-    .sort((a, b) => a.expectedDate.getTime() - b.expectedDate.getTime())[0];
-
-  return {
-    id: record.id,
-    projectId: record.projectId,
-    projectName: record.project.name,
-    clientName: record.project.client.name,
-    description: record.description,
-    amountUsd: requireNumber(record.amountUsd),
-    amountArs: toNumber(record.amountArs),
-    exchangeRate: null,
-    frequency: record.frequency,
-    startDate: dateOnly(record.startDate),
-    endDate: record.endDate ? dateOnly(record.endDate) : null,
-    isActive: record.isActive,
-    notes: record.notes,
-    nextDueDate: nextDue ? dateOnly(nextDue.expectedDate) : null,
-  };
-}
-
 export async function listClients(search?: string | null) {
   if (!hasDatabaseConfig()) {
     return { data: mapDemoClients(search), demoMode: true };
   }
 
-  await syncOpenEndedContracts(prisma);
+  await syncProjectSubscriptions(prisma);
   await syncOverduePayments(prisma);
 
   const clients = await prisma.client.findMany({
@@ -1051,7 +1031,7 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
     return detail;
   }
 
-  await syncOpenEndedContracts(prisma);
+  await syncProjectSubscriptions(prisma);
   await syncOverduePayments(prisma);
 
   const client = await prisma.client.findUnique({
@@ -1164,7 +1144,7 @@ export async function listProjects(filters?: { clientId?: string | null; status?
     return { data: mapDemoProjects(filters), demoMode: true };
   }
 
-  await syncOpenEndedContracts(prisma);
+  await syncProjectSubscriptions(prisma);
   await syncOverduePayments(prisma);
 
   const projects = await prisma.project.findMany({
@@ -1192,7 +1172,7 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
     return detail;
   }
 
-  await syncOpenEndedContracts(prisma);
+  await syncProjectSubscriptions(prisma);
   await syncOverduePayments(prisma);
 
   const project = await prisma.project.findUnique({
@@ -1202,12 +1182,6 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
       incomes: {
         include: { project: { include: { client: true } } },
         orderBy: { date: "desc" },
-      },
-      recurring: {
-        include: {
-          project: { include: { client: true } },
-          payments: true,
-        },
       },
       scheduledPayments: {
         include: { project: { include: { client: true } } },
@@ -1230,7 +1204,6 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
   return {
     project: mapProjectRecord(project),
     incomes: project.incomes.map(mapIncomeRecord),
-    recurringContracts: project.recurring.map(mapRecurringRecord),
     scheduledPayments: project.scheduledPayments.map(mapScheduledPaymentRecord),
     expenses: project.expenses.map(mapExpenseRecord),
   };
@@ -1239,51 +1212,60 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
 export async function createProject(input: z.infer<typeof projectInputSchema>) {
   requireDatabase();
 
-  return prisma.project.create({
-    data: {
-      clientId: input.clientId,
-      name: input.name.trim(),
-      status: input.status as ProjectStatus,
-      devBudgetUsd:
-        typeof input.devBudgetUsd === "number" ? new Prisma.Decimal(input.devBudgetUsd.toFixed(2)) : null,
-      monthlyFeeUsd:
-        typeof input.monthlyFeeUsd === "number" ? new Prisma.Decimal(input.monthlyFeeUsd.toFixed(2)) : null,
-      notes: normalizeOptionalText(input.notes),
-    },
+  return prisma.$transaction(async (tx) => {
+    const project = await tx.project.create({
+      data: {
+        clientId: input.clientId,
+        name: input.name.trim(),
+        status: input.status as ProjectStatus,
+        devBudgetUsd:
+          typeof input.devBudgetUsd === "number" ? new Prisma.Decimal(input.devBudgetUsd.toFixed(2)) : null,
+        monthlyFeeUsd:
+          typeof input.monthlyFeeUsd === "number" ? new Prisma.Decimal(input.monthlyFeeUsd.toFixed(2)) : null,
+        notes: normalizeOptionalText(input.notes),
+      },
+    });
+
+    await syncProjectMaintenanceSchedule(tx, project, true);
+    return project;
   });
 }
 
 export async function updateProject(id: string, input: z.infer<typeof projectInputSchema>) {
   requireDatabase();
 
-  return prisma.project.update({
-    where: { id },
-    data: {
-      clientId: input.clientId,
-      name: input.name.trim(),
-      status: input.status as ProjectStatus,
-      devBudgetUsd:
-        typeof input.devBudgetUsd === "number" ? new Prisma.Decimal(input.devBudgetUsd.toFixed(2)) : null,
-      monthlyFeeUsd:
-        typeof input.monthlyFeeUsd === "number" ? new Prisma.Decimal(input.monthlyFeeUsd.toFixed(2)) : null,
-      notes: normalizeOptionalText(input.notes),
-    },
+  return prisma.$transaction(async (tx) => {
+    const project = await tx.project.update({
+      where: { id },
+      data: {
+        clientId: input.clientId,
+        name: input.name.trim(),
+        status: input.status as ProjectStatus,
+        devBudgetUsd:
+          typeof input.devBudgetUsd === "number" ? new Prisma.Decimal(input.devBudgetUsd.toFixed(2)) : null,
+        monthlyFeeUsd:
+          typeof input.monthlyFeeUsd === "number" ? new Prisma.Decimal(input.monthlyFeeUsd.toFixed(2)) : null,
+        notes: normalizeOptionalText(input.notes),
+      },
+    });
+
+    await syncProjectMaintenanceSchedule(tx, project, true);
+    return project;
   });
 }
 
 export async function deleteProject(id: string) {
   requireDatabase();
 
-  const [incomeCount, expenseCount, recurringCount, scheduledPaymentCount] = await Promise.all([
+  const [incomeCount, expenseCount, scheduledPaymentCount] = await Promise.all([
     prisma.income.count({ where: { projectId: id } }),
     prisma.expense.count({ where: { projectId: id } }),
-    prisma.recurringContract.count({ where: { projectId: id } }),
     prisma.scheduledPayment.count({ where: { projectId: id } }),
   ]);
 
-  if (incomeCount + expenseCount + recurringCount + scheduledPaymentCount > 0) {
+  if (incomeCount + expenseCount + scheduledPaymentCount > 0) {
     throw new AppError(
-      "No podés eliminar un proyecto con ingresos, gastos o contratos asociados. Cambiá su estado a CANCELLED si querés dejarlo fuera de operación.",
+      "No podés eliminar un proyecto con ingresos, gastos o cobros programados asociados. Cambiá su estado a CANCELLED si querés dejarlo fuera de operación.",
       409,
     );
   }
@@ -1792,109 +1774,18 @@ export async function deleteSalary(id: string) {
   await prisma.salaryWithdrawal.delete({ where: { id } });
 }
 
-export async function listRecurring(filters?: z.infer<typeof recurringFilterSchema>) {
-  if (!hasDatabaseConfig()) {
-    let contracts = demoRecurringContracts;
-    if (filters?.clientId) {
-      contracts = contracts.filter((item) => demoProjects.find((project) => project.id === item.projectId)?.clientId === filters.clientId);
-    }
-    if (filters?.projectId) {
-      contracts = contracts.filter((item) => item.projectId === filters.projectId);
-    }
-    if (filters?.active) {
-      const active = filters.active === "true";
-      contracts = contracts.filter((item) => item.isActive === active);
-    }
-    return { data: contracts, demoMode: true };
-  }
-
-  await syncOpenEndedContracts(prisma);
-  await syncOverduePayments(prisma);
-
-  const contracts = await prisma.recurringContract.findMany({
-    where: {
-      projectId: filters?.projectId ?? undefined,
-      isActive: filters?.active ? filters.active === "true" : undefined,
-      project: filters?.clientId ? { clientId: filters.clientId } : undefined,
-    },
-    include: {
-      project: { include: { client: true } },
-      payments: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return { data: contracts.map(mapRecurringRecord), demoMode: false };
-}
-
-export async function createRecurring(input: z.infer<typeof recurringInputSchema>) {
-  requireDatabase();
-
-  return prisma.$transaction(async (tx) => {
-    const money = normalizeMoney(input);
-    const contract = await tx.recurringContract.create({
-      data: {
-        projectId: input.projectId,
-        description: input.description.trim(),
-        frequency: input.frequency as ContractFrequency,
-        startDate: parseISO(input.startDate),
-        endDate: input.endDate ? parseISO(input.endDate) : null,
-        isActive: input.isActive ?? true,
-        notes: input.notes ?? null,
-        amountUsd: money.amountUsd,
-        amountArs: money.amountArs,
-      },
-    });
-
-    if (contract.isActive) {
-      await syncScheduledPayments(tx, contract, true);
-    }
-
-    return contract;
-  });
-}
-
-export async function updateRecurring(id: string, input: z.infer<typeof recurringInputSchema>) {
-  requireDatabase();
-
-  return prisma.$transaction(async (tx) => {
-    const money = normalizeMoney(input);
-    const contract = await tx.recurringContract.update({
-      where: { id },
-      data: {
-        projectId: input.projectId,
-        description: input.description.trim(),
-        frequency: input.frequency as ContractFrequency,
-        startDate: parseISO(input.startDate),
-        endDate: input.endDate ? parseISO(input.endDate) : null,
-        isActive: input.isActive ?? true,
-        notes: input.notes ?? null,
-        amountUsd: money.amountUsd,
-        amountArs: money.amountArs,
-      },
-    });
-
-    if (!contract.isActive) {
-      await clearPendingScheduledPayments(tx, contract.id);
-      return contract;
-    }
-
-    await syncScheduledPayments(tx, contract, input.updatePendingPayments ?? true);
-    return contract;
-  });
-}
-
 export async function listScheduledPayments(filters?: z.infer<typeof scheduledFilterSchema>) {
   if (!hasDatabaseConfig()) {
     return { data: mapDemoScheduledPayments(filters), demoMode: true };
   }
 
-  await syncOpenEndedContracts(prisma);
+  await syncProjectSubscriptions(prisma);
   await syncOverduePayments(prisma);
 
   const items = await prisma.scheduledPayment.findMany({
     where: {
       status: (filters?.status as ScheduledPaymentStatus | undefined) ?? undefined,
+      type: (filters?.type as IncomeType | undefined) ?? undefined,
       projectId: filters?.projectId ?? undefined,
       project: filters?.clientId ? { clientId: filters.clientId } : undefined,
       expectedDate: {
@@ -1957,8 +1848,7 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
 
     let incomeId = input.incomeId ?? null;
     const paidAt = input.paidAt ? parseISO(input.paidAt) : startOfDay(new Date());
-    const inferredIncomeType =
-      payment.recurringContractId ? IncomeType.MAINTENANCE : IncomeType.DEVELOPMENT;
+    const inferredIncomeType = payment.type;
 
     if (!incomeId && input.createIncome) {
       const money = normalizeMoney(input.createIncome);
@@ -2012,7 +1902,7 @@ export async function getAlerts(): Promise<AlertsPayload> {
     return demoAlerts;
   }
 
-  await syncOpenEndedContracts(prisma);
+  await syncProjectSubscriptions(prisma);
   await syncOverduePayments(prisma);
 
   const now = startOfDay(new Date());
@@ -2080,7 +1970,7 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
     };
   }
 
-  await syncOpenEndedContracts(prisma);
+  await syncProjectSubscriptions(prisma);
   await syncOverduePayments(prisma);
   await syncOpenRecurringExpenses(prisma);
 

@@ -1,274 +1,219 @@
 "use client";
 
-import { FormEvent, useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import type { ProjectRecord, RecurringContractRecord, ScheduledPaymentRecord } from "@/lib/types";
-import { apiFetch } from "@/lib/api";
-import { formatShortDate, formatUsd } from "@/lib/utils";
+import { useMemo, useState } from "react";
+import type { ProjectRecord, ScheduledPaymentRecord } from "@/lib/types";
+import { formatMonthLabel, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-button";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
-import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+
+function toMonthKey(value: string) {
+  return value.slice(0, 7);
+}
+
+function compareMonthKeys(a: string, b: string) {
+  return a.localeCompare(b);
+}
 
 export function RecurringScreen({
-  contracts,
   payments,
   projects,
   demoMode,
 }: {
-  contracts: RecurringContractRecord[];
   payments: ScheduledPaymentRecord[];
   projects: ProjectRecord[];
   demoMode: boolean;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [contractError, setContractError] = useState<string | null>(null);
-  const [busyTarget, setBusyTarget] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    projectId: projects[0]?.id ?? "",
-    description: "",
-    amountUsd: "",
-    frequency: "monthly",
-    startDate: new Date().toISOString().slice(0, 10),
-    endDate: "",
-    notes: "",
-  });
-  const [contractDrafts, setContractDrafts] = useState<Record<string, { amountUsd: string; isActive: boolean }>>(() =>
-    Object.fromEntries(
-      contracts.map((contract) => [
-        contract.id,
-        {
-          amountUsd: String(contract.amountUsd),
-          isActive: contract.isActive,
-        },
-      ]),
-    ),
+  const maintenancePayments = useMemo(
+    () => payments.filter((payment) => payment.type === "MAINTENANCE"),
+    [payments],
   );
 
-  useEffect(() => {
-    setContractDrafts(
-      Object.fromEntries(
-        contracts.map((contract) => [
-          contract.id,
-          {
-            amountUsd: String(contract.amountUsd),
-            isActive: contract.isActive,
-          },
-        ]),
-      ),
-    );
-  }, [contracts]);
+  const subscribedProjects = useMemo(
+    () =>
+      projects
+        .filter(
+          (project) =>
+            (project.monthlyFeeUsd ?? 0) > 0 ||
+            maintenancePayments.some((payment) => payment.projectId === project.id),
+        )
+        .sort((left, right) => {
+          const statusDelta = Number(right.status === "ACTIVE") - Number(left.status === "ACTIVE");
+          if (statusDelta !== 0) {
+            return statusDelta;
+          }
+          return (right.monthlyFeeUsd ?? 0) - (left.monthlyFeeUsd ?? 0);
+        }),
+    [maintenancePayments, projects],
+  );
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    startTransition(async () => {
-      try {
-        setError(null);
-        setBusyTarget("new");
-        await apiFetch("/api/recurring", {
-          method: "POST",
-          body: JSON.stringify({
-            projectId: form.projectId,
-            description: form.description,
-            amountUsd: Number(form.amountUsd),
-            frequency: form.frequency,
-            startDate: form.startDate,
-            endDate: form.endDate || null,
-            notes: form.notes || null,
-          }),
-        });
-        setForm((prev) => ({ ...prev, description: "", amountUsd: "", endDate: "", notes: "" }));
-        router.refresh();
-      } catch (submitError) {
-        setError(submitError instanceof Error ? submitError.message : "No se pudo crear el contrato.");
-      } finally {
-        setBusyTarget(null);
-      }
-    });
-  };
+  const monthOptions = useMemo(() => {
+    const keys = new Set<string>();
 
-  const saveContract = (contract: RecurringContractRecord) => {
-    const draft = contractDrafts[contract.id];
-    if (!draft) {
-      return;
+    for (const payment of maintenancePayments) {
+      keys.add(toMonthKey(payment.expectedDate));
     }
 
-    startTransition(async () => {
-      try {
-        setContractError(null);
-        setBusyTarget(contract.id);
-        await apiFetch(`/api/recurring/${contract.id}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            projectId: contract.projectId,
-            description: contract.description,
-            amountUsd: Number(draft.amountUsd),
-            frequency: contract.frequency,
-            startDate: contract.startDate,
-            endDate: contract.endDate,
-            isActive: draft.isActive,
-            notes: contract.notes,
-            updatePendingPayments: true,
-          }),
-        });
-        router.refresh();
-      } catch (submitError) {
-        setContractError(submitError instanceof Error ? submitError.message : "No se pudo actualizar el contrato.");
-      } finally {
-        setBusyTarget(null);
-      }
-    });
-  };
+    if (keys.size === 0) {
+      keys.add(new Date().toISOString().slice(0, 7));
+    }
+
+    return Array.from(keys).sort(compareMonthKeys);
+  }, [maintenancePayments]);
+
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(
+    monthOptions.includes(currentMonthKey) ? currentMonthKey : monthOptions[monthOptions.length - 1],
+  );
+
+  const monthPayments = useMemo(
+    () =>
+      maintenancePayments
+        .filter((payment) => toMonthKey(payment.expectedDate) === selectedMonth)
+        .sort((left, right) => left.expectedDate.localeCompare(right.expectedDate)),
+    [maintenancePayments, selectedMonth],
+  );
+
+  const summary = useMemo(
+    () => ({
+      activeSubscriptions: subscribedProjects.filter(
+        (project) => project.status === "ACTIVE" && (project.monthlyFeeUsd ?? 0) > 0,
+      ).length,
+      monthlyRecurringRevenueUsd: subscribedProjects.reduce(
+        (sum, project) => sum + (project.status === "ACTIVE" ? project.monthlyFeeUsd ?? 0 : 0),
+        0,
+      ),
+      pendingMonthUsd: monthPayments
+        .filter((payment) => payment.status === "pending" || payment.status === "overdue")
+        .reduce((sum, payment) => sum + payment.expectedAmountUsd, 0),
+      collectedMonthUsd: monthPayments
+        .filter((payment) => payment.status === "paid")
+        .reduce((sum, payment) => sum + payment.expectedAmountUsd, 0),
+    }),
+    [monthPayments, subscribedProjects],
+  );
 
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Recurrentes"
-        title="Contratos como plantilla, pagos programados como verdad operativa"
-        description="Cada contrato genera un horizonte de cobros. Los estados viven en `scheduled_payments`, no en el contrato."
+        title="Cobranza de mantenimientos"
+        description="La suscripción ya no es un contrato suelto: vive en cada proyecto. Si un proyecto tiene fee mensual, el cronograma MAINTENANCE se genera desde ahí."
         demoMode={demoMode}
       />
-      <div className="space-y-6">
+
+      <div className="grid gap-4 lg:grid-cols-4">
+        <Card className="border-emerald-950/35 bg-gradient-to-br from-emerald-950 via-emerald-900 to-lime-700 text-white">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-50/80">Suscripciones activas</div>
+          <div className="mt-3 font-display text-4xl text-white">{summary.activeSubscriptions}</div>
+          <p className="mt-2 text-sm text-emerald-50/88">Proyectos activos con `monthlyFeeUsd` vigente.</p>
+        </Card>
         <Card>
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <h2 className="font-display text-2xl text-ink">Nuevo contrato recurrente</h2>
-            <Select value={form.projectId} onChange={(event) => setForm((prev) => ({ ...prev, projectId: event.target.value }))}>
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.clientName} · {project.name}
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cobalt">MRR actual</div>
+          <div className="mt-3 font-display text-4xl text-ink">{formatUsd(summary.monthlyRecurringRevenueUsd)}</div>
+          <p className="mt-2 text-sm text-ink/60">Ingreso mensual teórico consolidado desde proyectos activos.</p>
+        </Card>
+        <Card>
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-950">Pendiente del mes</div>
+          <div className="mt-3 font-display text-4xl text-ink">{formatUsd(summary.pendingMonthUsd)}</div>
+          <p className="mt-2 text-sm text-ink/60">Cobros de mantenimiento todavía abiertos en el mes filtrado.</p>
+        </Card>
+        <Card>
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-950">Cobrado del mes</div>
+          <div className="mt-3 font-display text-4xl text-ink">{formatUsd(summary.collectedMonthUsd)}</div>
+          <p className="mt-2 text-sm text-ink/60">Pagos de mantenimiento ya registrados como caja real.</p>
+        </Card>
+      </div>
+
+      <Card className="space-y-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="font-display text-2xl text-ink">Dashboard de suscripciones</h2>
+            <p className="mt-1 text-sm text-ink/55">
+              Crear o editar el fee mensual ocurre desde Proyectos. Esta vista solo opera la cobranza mensual.
+            </p>
+          </div>
+          <div className="w-full max-w-xs">
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-ink/50">
+              Mes de cobranza
+            </label>
+            <Select value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
+              {monthOptions.map((monthKey) => (
+                <option key={monthKey} value={monthKey}>
+                  {formatMonthLabel(`${monthKey}-01`)}
                 </option>
               ))}
             </Select>
-            <Input placeholder="Descripción" value={form.description} onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))} />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input
-                type="number"
-                min="0"
-                placeholder="Monto USD"
-                value={form.amountUsd}
-                onChange={(event) => setForm((prev) => ({ ...prev, amountUsd: event.target.value }))}
-              />
-              <Select value={form.frequency} onChange={(event) => setForm((prev) => ({ ...prev, frequency: event.target.value }))}>
-                <option value="monthly">monthly</option>
-                <option value="quarterly">quarterly</option>
-                <option value="biannual">biannual</option>
-                <option value="annual">annual</option>
-              </Select>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Input type="date" value={form.startDate} onChange={(event) => setForm((prev) => ({ ...prev, startDate: event.target.value }))} />
-              <Input type="date" value={form.endDate} onChange={(event) => setForm((prev) => ({ ...prev, endDate: event.target.value }))} />
-            </div>
-            <Textarea placeholder="Notas" value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} />
-            {error ? <p className="text-sm text-brick">{error}</p> : null}
-            <Button type="submit" disabled={isPending || demoMode}>
-              {demoMode ? "Requiere DATABASE_URL" : isPending && busyTarget === "new" ? "Guardando…" : "Crear contrato"}
-            </Button>
-          </form>
-        </Card>
-
-        <div className="space-y-6">
-          <Card>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="font-display text-2xl text-ink">Contratos recurrentes</h2>
-                <p className="mt-1 text-sm text-ink/55">Editar el monto impacta solo en pagos pendientes con fecha de hoy en adelante.</p>
-              </div>
-              {contractError ? <p className="text-sm text-brick">{contractError}</p> : null}
-            </div>
-            <div className="mt-4 space-y-4">
-              {contracts.map((contract) => {
-                const draft = contractDrafts[contract.id] ?? {
-                  amountUsd: String(contract.amountUsd),
-                  isActive: contract.isActive,
-                };
-
-                return (
-                  <div key={contract.id} className="rounded-[1.35rem] border border-black/10 bg-white/70 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.16em] text-ink/45">{contract.clientName}</div>
-                      <div className="mt-1 text-lg font-semibold text-ink">{contract.description}</div>
-                      <p className="mt-2 text-sm text-ink/55">{contract.projectName}</p>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-display text-3xl text-ink">{formatUsd(Number(draft.amountUsd || 0))}</div>
-                      <div className="text-xs uppercase tracking-[0.16em] text-ink/45">{contract.frequency}</div>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-6 text-sm text-ink/60">
-                    <span>Inicio: {formatShortDate(contract.startDate)}</span>
-                    <span>Próximo: {formatShortDate(contract.nextDueDate)}</span>
-                    <span>{draft.isActive ? "Activo" : "Inactivo"}</span>
-                  </div>
-                  <div className="mt-4 grid gap-3 rounded-[1.1rem] border border-black/10 bg-white/80 p-4 md:grid-cols-[minmax(0,220px),auto,auto] md:items-center">
-                    <Input
-                      type="number"
-                      min="0"
-                      placeholder="Monto USD"
-                      value={draft.amountUsd}
-                      onChange={(event) =>
-                        setContractDrafts((prev) => ({
-                          ...prev,
-                          [contract.id]: {
-                            ...draft,
-                            amountUsd: event.target.value,
-                          },
-                        }))
-                      }
-                    />
-                    <Button
-                      type="button"
-                      variant={draft.isActive ? "secondary" : "ghost"}
-                      onClick={() =>
-                        setContractDrafts((prev) => ({
-                          ...prev,
-                          [contract.id]: {
-                            ...draft,
-                            isActive: !draft.isActive,
-                          },
-                        }))
-                      }
-                    >
-                      {draft.isActive ? "Activo" : "Inactivo"}
-                    </Button>
-                    <Button type="button" disabled={isPending || demoMode} onClick={() => saveContract(contract)}>
-                      {demoMode ? "Demo" : isPending && busyTarget === contract.id ? "Actualizando…" : "Guardar cambios"}
-                    </Button>
-                  </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-
-          <Card>
-            <h2 className="font-display text-2xl text-ink">Próximos cobros</h2>
-            <div className="mt-4">
-              <DataTable headers={["Fecha", "Cliente", "Proyecto", "Monto", "Estado", "Acción"]}>
-                {payments.map((payment) => (
-                  <tr key={payment.id}>
-                    <td className="px-4 py-3">{formatShortDate(payment.expectedDate)}</td>
-                    <td className="px-4 py-3">{payment.clientName}</td>
-                    <td className="px-4 py-3">{payment.projectName}</td>
-                    <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
-                    <td className="px-4 py-3 uppercase">{payment.status}</td>
-                    <td className="px-4 py-3">
-                      <MarkPaymentPaidButton paymentId={payment.id} paymentStatus={payment.status} demoMode={demoMode} compact />
-                    </td>
-                  </tr>
-                ))}
-              </DataTable>
-            </div>
-          </Card>
+          </div>
         </div>
-      </div>
+
+        {subscribedProjects.length === 0 ? (
+          <EmptyState
+            title="Sin suscripciones activas"
+            description="Cuando un proyecto tenga `monthlyFeeUsd` mayor a cero, aparecerá automáticamente en este tablero junto a su cronograma de mantenimiento."
+          />
+        ) : (
+          <DataTable headers={["Cliente", "Proyecto", "Estado", "Fee mensual", "Cobrado", "Saldo desarrollo"]} scrollAfter={8}>
+            {subscribedProjects.map((project) => (
+              <tr key={project.id}>
+                <td className="px-4 py-3">{project.clientName}</td>
+                <td className="px-4 py-3">
+                  <div className="font-semibold text-ink">{project.name}</div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-ink/45">Suscripción desde proyecto</div>
+                </td>
+                <td className="px-4 py-3">{formatProjectStatus(project.status)}</td>
+                <td className="px-4 py-3">{formatUsd(project.monthlyFeeUsd)}</td>
+                <td className="px-4 py-3">{formatUsd(project.maintenanceCollectedUsd)}</td>
+                <td className="px-4 py-3">{formatUsd(project.developmentPendingUsd)}</td>
+              </tr>
+            ))}
+          </DataTable>
+        )}
+      </Card>
+
+      <Card className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="font-display text-2xl text-ink">Cobros programados del mes</h2>
+            <p className="mt-1 text-sm text-ink/55">
+              Todos los ítems de esta tabla son `MAINTENANCE` y siempre refieren a su proyecto original.
+            </p>
+          </div>
+          <div className="text-xs uppercase tracking-[0.16em] text-ink/45">
+            {monthPayments.length} cobro{monthPayments.length === 1 ? "" : "s"} en {formatMonthLabel(`${selectedMonth}-01`)}
+          </div>
+        </div>
+
+        {monthPayments.length === 0 ? (
+          <EmptyState
+            title="Sin cobros para este mes"
+            description="No hay pagos de mantenimiento programados en el rango seleccionado."
+          />
+        ) : (
+          <DataTable headers={["Vencimiento", "Cliente", "Proyecto", "Fee", "Estado", "Acción"]} scrollAfter={10}>
+            {monthPayments.map((payment) => (
+              <tr key={payment.id}>
+                <td className="px-4 py-3">{formatShortDate(payment.expectedDate)}</td>
+                <td className="px-4 py-3">{payment.clientName}</td>
+                <td className="px-4 py-3">{payment.projectName}</td>
+                <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
+                <td className="px-4 py-3 uppercase">{payment.status}</td>
+                <td className="px-4 py-3">
+                  <MarkPaymentPaidButton
+                    paymentId={payment.id}
+                    paymentStatus={payment.status}
+                    demoMode={demoMode}
+                    compact
+                  />
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+        )}
+      </Card>
     </div>
   );
 }

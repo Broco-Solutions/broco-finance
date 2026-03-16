@@ -82,10 +82,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         <Card>
           <h2 className="font-display text-2xl text-ink">Pagos programados</h2>
           <div className="mt-4">
-            <DataTable headers={["Fecha", "Monto", "Estado", "Notas"]}>
+            <DataTable headers={["Fecha", "Tipo", "Monto", "Estado", "Notas"]}>
               {detail.scheduledPayments.map((payment) => (
                 <tr key={payment.id}>
                   <td className="px-4 py-3">{formatShortDate(payment.expectedDate)}</td>
+                  <td className="px-4 py-3">{formatIncomeType(payment.type)}</td>
                   <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
                   <td className="px-4 py-3 uppercase">{payment.status}</td>
                   <td className="px-4 py-3">{payment.notes ?? "—"}</td>

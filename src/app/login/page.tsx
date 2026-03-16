@@ -12,7 +12,7 @@ export default function LoginPage() {
             Finanzas operativas sin volver al Excel.
           </h1>
           <p className="max-w-2xl text-lg leading-9 text-ink/62">
-            Dashboard ejecutivo, remanente histórico, capas de distribución, contratos recurrentes y calendario de cobro en una sola aplicación.
+            Dashboard ejecutivo, remanente histórico, capas de distribución, suscripciones por proyecto y calendario de cobro en una sola aplicación.
           </p>
         </div>
         <div className="flex items-center justify-center">

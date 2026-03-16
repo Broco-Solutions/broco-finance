@@ -11,7 +11,6 @@ import type {
   ProjectDetailPayload,
   ProjectRecord,
   RecurringExpenseRecord,
-  RecurringContractRecord,
   SalaryRecord,
   ScheduledExpenseRecord,
   ScheduledPaymentRecord,
@@ -347,32 +346,13 @@ export const demoSalaries: SalaryRecord[] = [
   },
 ];
 
-export const demoRecurringContracts: RecurringContractRecord[] = [
-  {
-    id: "rec-1",
-    projectId: "project-mantenimiento",
-    projectName: "Mantenimiento Web",
-    clientName: "COLEGIO",
-    description: "Mantenimiento mensual sitio web",
-    amountUsd: 950,
-    amountArs: null,
-    exchangeRate: null,
-    frequency: "monthly",
-    startDate: "2025-11-01",
-    endDate: null,
-    isActive: true,
-    notes: "Ajuste trimestral manual",
-    nextDueDate: "2026-03-20",
-  },
-];
-
 export const demoScheduledPayments: ScheduledPaymentRecord[] = [
   {
     id: "pay-1",
-    recurringContractId: "rec-1",
     projectId: "project-mantenimiento",
     projectName: "Mantenimiento Web",
     clientName: "COLEGIO",
+    type: "MAINTENANCE",
     expectedDate: "2026-03-20",
     expectedAmountUsd: 950,
     status: "pending",
@@ -382,10 +362,10 @@ export const demoScheduledPayments: ScheduledPaymentRecord[] = [
   },
   {
     id: "pay-2",
-    recurringContractId: null,
     projectId: "project-whatsapp",
     projectName: "Automatización WhatsApp",
     clientName: "PACSA",
+    type: "DEVELOPMENT",
     expectedDate: "2026-03-18",
     expectedAmountUsd: 2400,
     status: "pending",
@@ -395,10 +375,10 @@ export const demoScheduledPayments: ScheduledPaymentRecord[] = [
   },
   {
     id: "pay-3",
-    recurringContractId: null,
     projectId: "project-analytics",
     projectName: "Tablero Analytics",
     clientName: "PACSA",
+    type: "DEVELOPMENT",
     expectedDate: "2026-03-10",
     expectedAmountUsd: 600,
     status: "overdue",
@@ -502,7 +482,6 @@ export const demoProjectDetails = new Map<string, ProjectDetailPayload>(
     {
       project,
       incomes: demoIncomes.filter((income) => income.projectId === project.id),
-      recurringContracts: demoRecurringContracts.filter((contract) => contract.projectId === project.id),
       scheduledPayments: demoScheduledPayments.filter((payment) => payment.projectId === project.id),
       expenses: demoExpenses.filter((expense) => expense.projectId === project.id),
     },

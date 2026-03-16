@@ -47,7 +47,7 @@ export default async function DashboardPage() {
         <StatCard title="Egresos reales" value={kpis.expensesUsd} detail="Solo pagos ya ejecutados" tone="danger" />
         <StatCard title="Gastos comprometidos (Mes)" value={kpis.committedExpensesMonthUsd} detail="Pendientes hasta fin de mes" tone="warning" />
         <StatCard title="Resultado Neto" value={kpis.netUsd} detail="Cobrado - egresos" tone={kpis.netUsd >= 0 ? "success" : "danger"} />
-        <StatCard title="Por cobrar" value={dashboard.kpis.receivableUsd} detail="Pendientes y recurrentes abiertos" tone="warning" />
+        <StatCard title="Por cobrar" value={dashboard.kpis.receivableUsd} detail="Pendientes y mantenimientos abiertos" tone="warning" />
         <StatCard title="Vencido" value={dashboard.kpis.overdueUsd} detail="Cobranza atrasada" tone="danger" />
         <StatCard title="Remanente" value={kpis.remanenteUsd} detail="Histórico real" tone="neutral" />
       </div>

@@ -2,7 +2,7 @@ import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-b
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatIncomeStatus, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
+import { formatIncomeStatus, formatIncomeType, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { getClientDetail } from "@/server/services/finance";
 
 export const dynamic = "force-dynamic";
@@ -78,11 +78,12 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           <h2 className="font-display text-2xl text-ink">Pagos pendientes</h2>
           <p className="mt-1 text-sm text-ink/55">Estos cobros recién impactan ingresos reales y remanente cuando se marcan como pagados.</p>
           <div className="mt-4">
-            <DataTable headers={["Fecha", "Proyecto", "Monto", "Estado", "Acción"]}>
+            <DataTable headers={["Fecha", "Proyecto", "Tipo", "Monto", "Estado", "Acción"]}>
               {detail.payments.map((payment) => (
                 <tr key={payment.id}>
                   <td className="px-4 py-3">{formatShortDate(payment.expectedDate)}</td>
                   <td className="px-4 py-3">{payment.projectName}</td>
+                  <td className="px-4 py-3">{formatIncomeType(payment.type)}</td>
                   <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
                   <td className="px-4 py-3 uppercase">{payment.status}</td>
                   <td className="px-4 py-3">

@@ -1,7 +1,6 @@
 import path from "node:path";
 import { existsSync, readdirSync } from "node:fs";
 import {
-  ContractFrequency,
   ExpenseType,
   IncomeStatus,
   IncomeType,
@@ -43,29 +42,10 @@ type ParsedExpenseRow = {
 type ParsedRecurringGroup = {
   clientName: string;
   projectName: string;
-  projectStatus: ProjectStatus;
-  description: string;
-  frequency: ContractFrequency;
-  startDate: Date;
   nextDueDate: Date;
   latestAmountUsd: number;
-  latestAmountArs: number | null;
   notes: string | null;
-  endDate: Date | null;
 };
-
-function frequencyStepMonths(frequency: ContractFrequency) {
-  switch (frequency) {
-    case ContractFrequency.quarterly:
-      return 3;
-    case ContractFrequency.biannual:
-      return 6;
-    case ContractFrequency.annual:
-      return 12;
-    default:
-      return 1;
-  }
-}
 
 const prisma = new PrismaClient();
 
@@ -257,14 +237,6 @@ function monthNameToIndex(value: string | null) {
   return MONTHS[value.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "")] ?? null;
 }
 
-function inferFrequency(notes: string | null) {
-  const normalized = notes?.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "") ?? "";
-  if (normalized.includes("anual")) return ContractFrequency.annual;
-  if (normalized.includes("semestral") || normalized.includes("biannual")) return ContractFrequency.biannual;
-  if (normalized.includes("trimestral")) return ContractFrequency.quarterly;
-  return ContractFrequency.monthly;
-}
-
 function parseCoveredUntil(notes: string | null, referenceDate: Date) {
   if (!notes) {
     return null;
@@ -342,31 +314,7 @@ function extractCoverageMonths(notes: string | null, paymentDate: Date) {
   return 1;
 }
 
-function parseContractEndDate(notes: string | null, paymentDate: Date) {
-  if (!notes) {
-    return null;
-  }
-
-  const normalized = notes.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-  if (!/mensual|mantenimiento mensual/.test(normalized)) {
-    return null;
-  }
-
-  return parseCoveredUntil(notes, paymentDate);
-}
-
-function inferRecurringDescription(projectName: string, notes: string | null) {
-  if (notes) {
-    const normalized = notes.trim();
-    if (/mantenimiento/i.test(normalized) || /mensual/i.test(normalized)) {
-      return normalized;
-    }
-  }
-
-  return `Servicio recurrente - ${projectName}`;
-}
-
-function inferNextDueDate(groupRows: ParsedIncomeRow[], frequency: ContractFrequency) {
+function inferNextDueDate(groupRows: ParsedIncomeRow[]) {
   const latest = [...groupRows].sort((a, b) => b.date.getTime() - a.date.getTime())[0];
   const coveredUntil = parseCoveredUntil(latest.notes, latest.date);
   const base =
@@ -375,16 +323,8 @@ function inferNextDueDate(groupRows: ParsedIncomeRow[], frequency: ContractFrequ
       : coveredUntil
         ? startOfMonth(coveredUntil)
         : startOfMonth(latest.date);
-  const monthsStep =
-    frequency === ContractFrequency.annual
-      ? 12
-      : frequency === ContractFrequency.biannual
-        ? 6
-        : frequency === ContractFrequency.quarterly
-          ? 3
-          : 1;
 
-  return addMonths(base, monthsStep);
+  return addMonths(base, 1);
 }
 
 function findWorkbookPath() {
@@ -534,35 +474,32 @@ async function main() {
     recurringByProject.set(key, [...(recurringByProject.get(key) ?? []), income]);
   }
 
-  const recurringContracts: ParsedRecurringGroup[] = Array.from(recurringByProject.values()).map((rows) => {
-    const sorted = [...rows].sort((a, b) => a.date.getTime() - b.date.getTime());
-    const latest = sorted[sorted.length - 1];
-    const frequency = inferFrequency(latest.notes);
-    const coverageMonths = extractCoverageMonths(latest.notes, latest.date);
-    const latestAmountUsd = latest.money.amountUsd / coverageMonths;
-    const latestAmountArs = latest.money.amountArs !== null ? latest.money.amountArs / coverageMonths : null;
+  const recurringContracts = new Map<string, ParsedRecurringGroup>(
+    Array.from(recurringByProject.values()).map((rows) => {
+      const sorted = [...rows].sort((a, b) => a.date.getTime() - b.date.getTime());
+      const latest = sorted[sorted.length - 1];
+      const coverageMonths = extractCoverageMonths(latest.notes, latest.date);
+      const latestAmountUsd = latest.money.amountUsd / coverageMonths;
+      const key = buildProjectKey(latest.clientName, latest.projectName);
 
-    return {
-      clientName: latest.clientName,
-      projectName: latest.projectName,
-      projectStatus: latest.projectStatus,
-      description: inferRecurringDescription(latest.projectName, latest.notes),
-      frequency,
-      startDate: sorted[0].date,
-      nextDueDate: inferNextDueDate(sorted, frequency),
-      latestAmountUsd,
-      latestAmountArs,
-      notes: Array.from(new Set(sorted.map((row) => row.notes).filter(Boolean))).join(" | ") || null,
-      endDate: parseContractEndDate(latest.notes, latest.date),
-    };
-  });
+      return [
+        key,
+        {
+          clientName: latest.clientName,
+          projectName: latest.projectName,
+          nextDueDate: inferNextDueDate(sorted),
+          latestAmountUsd,
+          notes: Array.from(new Set(sorted.map((row) => row.notes).filter(Boolean))).join(" | ") || null,
+        },
+      ];
+    }),
+  );
 
   const categories = Array.from(
     new Set([...DEFAULT_CATEGORIES, ...parsedExpenses.map((expense) => expense.categoryName)]),
   );
 
   await prisma.scheduledPayment.deleteMany();
-  await prisma.recurringContract.deleteMany();
   await prisma.expense.deleteMany();
   await prisma.income.deleteMany();
   await prisma.salaryWithdrawal.deleteMany();
@@ -588,6 +525,8 @@ async function main() {
   const projectMap = new Map<string, string>();
   for (const projectSeed of projectSeeds.values()) {
     const clientId = clientMap.get(projectSeed.clientName)!;
+    const projectKey = buildProjectKey(projectSeed.clientName, projectSeed.projectName);
+    const recurringConfig = recurringContracts.get(projectKey);
     const project = await prisma.project.upsert({
       where: {
         clientId_name: {
@@ -597,14 +536,18 @@ async function main() {
       },
       update: {
         status: projectSeed.status,
+        monthlyFeeUsd: recurringConfig?.latestAmountUsd ?? null,
+        notes: recurringConfig?.notes ?? undefined,
       },
       create: {
         clientId,
         name: projectSeed.projectName,
         status: projectSeed.status,
+        monthlyFeeUsd: recurringConfig?.latestAmountUsd ?? null,
+        notes: recurringConfig?.notes ?? null,
       },
     });
-    projectMap.set(buildProjectKey(projectSeed.clientName, projectSeed.projectName), project.id);
+    projectMap.set(projectKey, project.id);
   }
 
   const categoryMap = new Map<string, string>();
@@ -659,29 +602,16 @@ async function main() {
     });
   }
 
-  for (const contract of recurringContracts) {
-    const recurring = await prisma.recurringContract.create({
-      data: {
-        projectId: projectMap.get(buildProjectKey(contract.clientName, contract.projectName))!,
-        description: contract.description,
-        amountUsd: contract.latestAmountUsd,
-        amountArs: contract.latestAmountArs,
-        frequency: contract.frequency,
-        startDate: contract.startDate,
-        endDate: contract.endDate,
-        isActive: true,
-        notes: contract.notes,
-      },
-    });
-
+  for (const contract of recurringContracts.values()) {
+    const projectId = projectMap.get(buildProjectKey(contract.clientName, contract.projectName))!;
     let generated = 0;
     let cursor = startOfMonth(contract.nextDueDate);
-    while (generated < 12 && (!contract.endDate || cursor <= startOfMonth(contract.endDate))) {
+    while (generated < 12) {
       const expectedDate = cursor;
       await prisma.scheduledPayment.create({
         data: {
-          recurringContractId: recurring.id,
-          projectId: recurring.projectId,
+          projectId,
+          type: IncomeType.MAINTENANCE,
           expectedDate,
           expectedAmountUsd: contract.latestAmountUsd,
           status: expectedDate < startOfMonth(new Date()) ? ScheduledPaymentStatus.overdue : ScheduledPaymentStatus.pending,
@@ -689,7 +619,7 @@ async function main() {
         },
       });
       generated += 1;
-      cursor = addMonths(cursor, frequencyStepMonths(contract.frequency));
+      cursor = addMonths(cursor, 1);
     }
   }
 
@@ -736,7 +666,6 @@ async function main() {
     incomes,
     expenses,
     expenseCategories,
-    recurringCount,
     scheduledPayments,
     distributionCount,
   ] = await Promise.all([
@@ -745,7 +674,6 @@ async function main() {
     prisma.income.count(),
     prisma.expense.count(),
     prisma.expenseCategory.count(),
-    prisma.recurringContract.count(),
     prisma.scheduledPayment.count(),
     prisma.distributionConfig.count(),
   ]);
@@ -757,7 +685,6 @@ async function main() {
     incomes,
     expenses,
     expenseCategories,
-    recurringContracts: recurringCount,
     scheduledPayments,
     distributionConfig: distributionCount,
   };
