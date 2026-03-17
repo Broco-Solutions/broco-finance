@@ -84,6 +84,8 @@ model Project {
 
   @@unique([clientId, name])
   @@index([clientId, status])
+  @@index([status])
+  @@index([status, monthlyFeeEndDate])
   @@map("projects")
 }
 
@@ -104,6 +106,8 @@ model Income {
 
   @@index([projectId, date])
   @@index([status, date])
+  @@index([projectId, status, date])
+  @@index([type, date])
   @@map("incomes")
 }
 
@@ -125,6 +129,7 @@ model ScheduledPayment {
   @@index([projectId, expectedDate])
   @@index([status, expectedDate])
   @@index([type, expectedDate])
+  @@index([projectId, status, expectedDate])
   @@map("scheduled_payments")
 }
 
@@ -160,6 +165,8 @@ model Expense {
 
   @@index([categoryId, date])
   @@index([projectId, date])
+  @@index([expenseType, date])
+  @@index([projectId, expenseType, date])
   @@map("expenses")
 }
 
@@ -194,7 +201,7 @@ model ScheduledExpense {
   recurringExpense   RecurringExpense      @relation(fields: [recurringExpenseId], references: [id], onDelete: Cascade)
   actualExpense      Expense?              @relation(fields: [actualExpenseId], references: [id], onDelete: SetNull)
 
-  @@index([dueDate, status])
+  @@index([status, dueDate])
   @@index([recurringExpenseId, dueDate])
   @@map("scheduled_expenses")
 }

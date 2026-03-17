@@ -30,6 +30,7 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch
                 className={cn(
                   "flex items-center gap-3 rounded-3xl px-4 py-3 text-sm transition",
                   active ? "bg-white text-ink" : "text-paper/72 hover:bg-white/8 hover:text-paper",

@@ -11,6 +11,7 @@ import {
   type PrismaClient,
 } from "@prisma/client";
 import { addDays, addMonths, differenceInCalendarDays, endOfMonth, format, isAfter, isBefore, parseISO, startOfDay, startOfMonth } from "date-fns";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { z } from "zod";
 import type {
   AlertsPayload,
@@ -53,6 +54,119 @@ type DbClient = PrismaClient | Prisma.TransactionClient;
 
 const salaryCategoryName = "Sueldos/Honorarios";
 const maintenanceScheduleHorizonMonths = 12;
+const dashboardTag = "dashboard";
+
+type ClientFinancialProject = {
+  status: ProjectStatus | string;
+  incomes: Array<{ amountUsd: Prisma.Decimal | number; status: IncomeStatus | string }>;
+  scheduledPayments: Array<{ expectedAmountUsd: Prisma.Decimal | number; status: ScheduledPaymentStatus }>;
+};
+
+type ClientFinancialRecord = {
+  id: string;
+  name: string;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  notes: string | null;
+  projects: ClientFinancialProject[];
+};
+
+type ProjectFinancialRecord = {
+  id: string;
+  clientId: string;
+  name: string;
+  status: ProjectStatus;
+  devBudgetUsd: Prisma.Decimal | number | null;
+  monthlyFeeUsd: Prisma.Decimal | number | null;
+  monthlyFeeEndDate: Date | null;
+  notes: string | null;
+  client: { name: string };
+  incomes: Array<{
+    amountUsd: Prisma.Decimal | number;
+    date: Date;
+    status: IncomeStatus | string;
+    type: IncomeType | string;
+  }>;
+  scheduledPayments: Array<{ expectedDate: Date; status: ScheduledPaymentStatus }>;
+};
+
+type IncomeWithProjectRecord = {
+  id: string;
+  projectId: string;
+  date: Date;
+  amountUsd: Prisma.Decimal | number;
+  amountArs: Prisma.Decimal | number | null;
+  exchangeRate: Prisma.Decimal | number | null;
+  status: IncomeStatus;
+  type: IncomeType;
+  notes: string | null;
+  project: {
+    name: string;
+    client: {
+      name: string;
+    };
+  };
+};
+
+type ScheduledPaymentWithProjectRecord = {
+  id: string;
+  projectId: string;
+  type: IncomeType;
+  expectedDate: Date;
+  expectedAmountUsd: Prisma.Decimal | number;
+  status: ScheduledPaymentStatus;
+  paidAt: Date | null;
+  actualIncomeId: string | null;
+  notes: string | null;
+  project: {
+    name: string;
+    client: {
+      name: string;
+    };
+  };
+};
+
+type RecurringExpenseWithScheduleRecord = {
+  id: string;
+  description: string;
+  categoryId: string;
+  amountUsd: Prisma.Decimal;
+  startDate: Date;
+  frequency: ContractFrequency;
+  isActive: boolean;
+  category: { name: string };
+  scheduledExpenses: Array<{ dueDate: Date; status: ScheduledExpenseStatus }>;
+};
+
+type ScheduledExpenseWithRelationsRecord = {
+  id: string;
+  recurringExpenseId: string;
+  dueDate: Date;
+  amountUsd: Prisma.Decimal | number;
+  status: ScheduledExpenseStatus;
+  paidAt: Date | null;
+  actualExpenseId: string | null;
+  recurringExpense: {
+    description: string;
+    categoryId: string;
+    category: {
+      name: string;
+    };
+  };
+};
+
+type DashboardIncomeRow = {
+  amountUsd: number;
+  date: string;
+  clientName: string;
+};
+
+type DashboardExpenseRow = {
+  amountUsd: number;
+  date: string;
+  categoryName: string;
+};
 
 function isOpenScheduledStatus(status: ScheduledPaymentStatus) {
   return status === ScheduledPaymentStatus.pending || status === ScheduledPaymentStatus.overdue;
@@ -263,6 +377,12 @@ function requireDatabase() {
   }
 }
 
+async function withDashboardRevalidation<T>(operation: Promise<T>) {
+  const result = await operation;
+  revalidateTag(dashboardTag);
+  return result;
+}
+
 function dateOnly(value: Date | string) {
   const date = typeof value === "string" ? parseISO(value) : value;
   return date.toISOString().slice(0, 10);
@@ -380,9 +500,7 @@ async function syncOpenRecurringExpenses(db: DbClient) {
     where: { isActive: true },
   });
 
-  for (const recurringExpense of recurringExpenses) {
-    await syncScheduledExpensesForRecurringExpense(db, recurringExpense, false);
-  }
+  await Promise.all(recurringExpenses.map((recurringExpense) => syncScheduledExpensesForRecurringExpense(db, recurringExpense, false)));
 }
 
 function buildMaintenanceScheduleDates(referenceDate = new Date(), endDate: Date | null = null) {
@@ -548,9 +666,7 @@ async function syncProjectSubscriptions(db: DbClient) {
     },
   });
 
-  for (const project of projects) {
-    await syncProjectMaintenanceSchedule(db, project, false);
-  }
+  await Promise.all(projects.map((project) => syncProjectMaintenanceSchedule(db, project, false)));
 }
 
 async function clearPendingScheduledExpenses(db: DbClient, recurringExpenseId: string) {
@@ -811,7 +927,7 @@ function mapDemoScheduledExpenses(filters?: z.infer<typeof scheduledExpenseFilte
   });
 }
 
-function mapClientRecord(client: Prisma.ClientGetPayload<{ include: { projects: { include: { incomes: true; scheduledPayments: true } } } }>): ClientRecord {
+function mapClientRecord(client: ClientFinancialRecord): ClientRecord {
   const allIncomes = client.projects.flatMap((project) => project.incomes);
   const pendingPayments = client.projects.flatMap((project) => project.scheduledPayments).filter((payment) => isOpenScheduledStatus(payment.status));
 
@@ -832,13 +948,7 @@ function mapClientRecord(client: Prisma.ClientGetPayload<{ include: { projects: 
 }
 
 function mapProjectRecord(
-  project: Prisma.ProjectGetPayload<{
-    include: {
-      client: true;
-      incomes: true;
-      scheduledPayments: true;
-    };
-  }>,
+  project: ProjectFinancialRecord,
 ): ProjectRecord {
   const nextPayment = nextReceivableDate(project.incomes, project.scheduledPayments);
   const developmentCollectedUsd = sumIncomeUsd(
@@ -870,9 +980,7 @@ function mapProjectRecord(
 }
 
 function mapIncomeRecord(
-  income: Prisma.IncomeGetPayload<{
-    include: { project: { include: { client: true } } };
-  }>,
+  income: IncomeWithProjectRecord,
 ): IncomeRecord {
   return {
     id: income.id,
@@ -956,9 +1064,7 @@ function mapSalaryRecord(record: Prisma.SalaryWithdrawalGetPayload<object>): Sal
 }
 
 function mapScheduledPaymentRecord(
-  record: Prisma.ScheduledPaymentGetPayload<{
-    include: { project: { include: { client: true } } };
-  }>,
+  record: ScheduledPaymentWithProjectRecord,
 ): ScheduledPaymentRecord {
   return {
     id: record.id,
@@ -976,12 +1082,7 @@ function mapScheduledPaymentRecord(
 }
 
 function mapRecurringExpenseRecord(
-  recurringExpense: Prisma.RecurringExpenseGetPayload<{
-    include: {
-      category: true;
-      scheduledExpenses: true;
-    };
-  }>,
+  recurringExpense: RecurringExpenseWithScheduleRecord,
 ): RecurringExpenseRecord {
   const nextDue = recurringExpense.scheduledExpenses
     .filter((expense) => isOpenScheduledExpenseStatus(expense.status))
@@ -1002,15 +1103,7 @@ function mapRecurringExpenseRecord(
 }
 
 function mapScheduledExpenseRecord(
-  scheduledExpense: Prisma.ScheduledExpenseGetPayload<{
-    include: {
-      recurringExpense: {
-        include: {
-          category: true;
-        };
-      };
-    };
-  }>,
+  scheduledExpense: ScheduledExpenseWithRelationsRecord,
 ): ScheduledExpenseRecord {
   return {
     id: scheduledExpense.id,
@@ -1065,11 +1158,28 @@ export async function listClients(search?: string | null) {
           ],
         }
       : undefined,
-    include: {
+    select: {
+      id: true,
+      name: true,
+      contactName: true,
+      contactEmail: true,
+      contactPhone: true,
+      notes: true,
       projects: {
-        include: {
-          incomes: true,
-          scheduledPayments: true,
+        select: {
+          status: true,
+          incomes: {
+            select: {
+              amountUsd: true,
+              status: true,
+            },
+          },
+          scheduledPayments: {
+            select: {
+              expectedAmountUsd: true,
+              status: true,
+            },
+          },
         },
       },
     },
@@ -1093,12 +1203,43 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
 
   const client = await prisma.client.findUnique({
     where: { id },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      contactName: true,
+      contactEmail: true,
+      contactPhone: true,
+      notes: true,
       projects: {
-        include: {
-          client: true,
-          incomes: true,
-          scheduledPayments: true,
+        select: {
+          id: true,
+          clientId: true,
+          name: true,
+          status: true,
+          devBudgetUsd: true,
+          monthlyFeeUsd: true,
+          monthlyFeeEndDate: true,
+          notes: true,
+          client: {
+            select: {
+              name: true,
+            },
+          },
+          incomes: {
+            select: {
+              amountUsd: true,
+              date: true,
+              status: true,
+              type: true,
+            },
+          },
+          scheduledPayments: {
+            select: {
+              expectedAmountUsd: true,
+              expectedDate: true,
+              status: true,
+            },
+          },
         },
       },
     },
@@ -1112,8 +1253,26 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
 
   const incomes = await prisma.income.findMany({
     where: { project: { clientId: id } },
-    include: {
-      project: { include: { client: true } },
+    select: {
+      id: true,
+      projectId: true,
+      date: true,
+      amountUsd: true,
+      amountArs: true,
+      exchangeRate: true,
+      status: true,
+      type: true,
+      notes: true,
+      project: {
+        select: {
+          name: true,
+          client: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
     },
     orderBy: { date: "desc" },
     take: 12,
@@ -1126,22 +1285,33 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
         in: [ScheduledPaymentStatus.pending, ScheduledPaymentStatus.overdue],
       },
     },
-    include: {
-      project: { include: { client: true } },
+    select: {
+      id: true,
+      projectId: true,
+      type: true,
+      expectedDate: true,
+      expectedAmountUsd: true,
+      status: true,
+      paidAt: true,
+      actualIncomeId: true,
+      notes: true,
+      project: {
+        select: {
+          name: true,
+          client: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
     },
     orderBy: { expectedDate: "asc" },
     take: 12,
   });
 
   return {
-    client: mapClientRecord({
-      ...client,
-      projects: client.projects.map((project) => ({
-        ...project,
-        incomes: project.incomes,
-        scheduledPayments: project.scheduledPayments,
-      })),
-    }),
+    client: mapClientRecord(client),
     projects,
     incomes: incomes.map(mapIncomeRecord),
     payments: payments.map(mapScheduledPaymentRecord),
@@ -1151,7 +1321,7 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
 export async function createClient(input: z.infer<typeof clientInputSchema>) {
   requireDatabase();
 
-  return prisma.client.create({
+  return withDashboardRevalidation(prisma.client.create({
     data: {
       name: input.name.trim(),
       contactName: normalizeOptionalText(input.contactName),
@@ -1159,13 +1329,13 @@ export async function createClient(input: z.infer<typeof clientInputSchema>) {
       contactPhone: normalizeOptionalText(input.contactPhone),
       notes: normalizeOptionalText(input.notes),
     },
-  });
+  }));
 }
 
 export async function updateClient(id: string, input: z.infer<typeof clientInputSchema>) {
   requireDatabase();
 
-  return prisma.client.update({
+  return withDashboardRevalidation(prisma.client.update({
     where: { id },
     data: {
       name: input.name.trim(),
@@ -1174,7 +1344,7 @@ export async function updateClient(id: string, input: z.infer<typeof clientInput
       contactPhone: normalizeOptionalText(input.contactPhone),
       notes: normalizeOptionalText(input.notes),
     },
-  });
+  }));
 }
 
 export async function deleteClient(id: string) {
@@ -1193,7 +1363,7 @@ export async function deleteClient(id: string) {
     throw new AppError("No podés eliminar un cliente con proyectos asociados. Eliminá o archivá esos proyectos antes.", 409);
   }
 
-  await prisma.client.delete({ where: { id } });
+  await withDashboardRevalidation(prisma.client.delete({ where: { id } }));
 }
 
 export async function listProjects(filters?: { clientId?: string | null; status?: string | null }) {
@@ -1209,10 +1379,34 @@ export async function listProjects(filters?: { clientId?: string | null; status?
       clientId: filters?.clientId ?? undefined,
       status: (filters?.status as ProjectStatus | undefined) ?? undefined,
     },
-    include: {
-      client: true,
-      incomes: true,
-      scheduledPayments: true,
+    select: {
+      id: true,
+      clientId: true,
+      name: true,
+      status: true,
+      devBudgetUsd: true,
+      monthlyFeeUsd: true,
+      monthlyFeeEndDate: true,
+      notes: true,
+      client: {
+        select: {
+          name: true,
+        },
+      },
+      incomes: {
+        select: {
+          amountUsd: true,
+          date: true,
+          status: true,
+          type: true,
+        },
+      },
+      scheduledPayments: {
+        select: {
+          expectedDate: true,
+          status: true,
+        },
+      },
     },
     orderBy: [{ status: "asc" }, { name: "asc" }],
   });
@@ -1234,20 +1428,91 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
 
   const project = await prisma.project.findUnique({
     where: { id },
-    include: {
-      client: true,
+    select: {
+      id: true,
+      clientId: true,
+      name: true,
+      status: true,
+      devBudgetUsd: true,
+      monthlyFeeUsd: true,
+      monthlyFeeEndDate: true,
+      notes: true,
+      client: {
+        select: {
+          name: true,
+        },
+      },
       incomes: {
-        include: { project: { include: { client: true } } },
+        select: {
+          id: true,
+          projectId: true,
+          date: true,
+          amountUsd: true,
+          amountArs: true,
+          exchangeRate: true,
+          status: true,
+          type: true,
+          notes: true,
+          project: {
+            select: {
+              name: true,
+              client: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
         orderBy: { date: "desc" },
       },
       scheduledPayments: {
-        include: { project: { include: { client: true } } },
+        select: {
+          id: true,
+          projectId: true,
+          type: true,
+          expectedDate: true,
+          expectedAmountUsd: true,
+          status: true,
+          paidAt: true,
+          actualIncomeId: true,
+          notes: true,
+          project: {
+            select: {
+              name: true,
+              client: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
         orderBy: { expectedDate: "asc" },
       },
       expenses: {
-        include: {
-          category: true,
-          project: true,
+        select: {
+          id: true,
+          date: true,
+          categoryId: true,
+          expenseType: true,
+          projectId: true,
+          amountUsd: true,
+          amountArs: true,
+          exchangeRate: true,
+          description: true,
+          salaryWithdrawalId: true,
+          notes: true,
+          category: {
+            select: {
+              name: true,
+            },
+          },
+          project: {
+            select: {
+              name: true,
+            },
+          },
         },
         orderBy: { date: "desc" },
       },
@@ -1269,7 +1534,7 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
 export async function createProject(input: z.infer<typeof projectInputSchema>) {
   requireDatabase();
 
-  return prisma.$transaction(async (tx) => {
+  return withDashboardRevalidation(prisma.$transaction(async (tx) => {
     const project = await tx.project.create({
       data: {
         clientId: input.clientId,
@@ -1286,13 +1551,13 @@ export async function createProject(input: z.infer<typeof projectInputSchema>) {
 
     await syncProjectMaintenanceSchedule(tx, project, true);
     return project;
-  });
+  }));
 }
 
 export async function updateProject(id: string, input: z.infer<typeof projectInputSchema>) {
   requireDatabase();
 
-  return prisma.$transaction(async (tx) => {
+  return withDashboardRevalidation(prisma.$transaction(async (tx) => {
     const project = await tx.project.update({
       where: { id },
       data: {
@@ -1310,7 +1575,7 @@ export async function updateProject(id: string, input: z.infer<typeof projectInp
 
     await syncProjectMaintenanceSchedule(tx, project, true);
     return project;
-  });
+  }));
 }
 
 export async function deleteProject(id: string) {
@@ -1329,7 +1594,7 @@ export async function deleteProject(id: string) {
     );
   }
 
-  await prisma.project.delete({ where: { id } });
+  await withDashboardRevalidation(prisma.project.delete({ where: { id } }));
 }
 
 export async function listIncomes(filters?: z.infer<typeof incomeFilterSchema>) {
@@ -1347,8 +1612,26 @@ export async function listIncomes(filters?: z.infer<typeof incomeFilterSchema>) 
         lte: filters?.to ? parseISO(filters.to) : undefined,
       },
     },
-    include: {
-      project: { include: { client: true } },
+    select: {
+      id: true,
+      projectId: true,
+      date: true,
+      amountUsd: true,
+      amountArs: true,
+      exchangeRate: true,
+      status: true,
+      type: true,
+      notes: true,
+      project: {
+        select: {
+          name: true,
+          client: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
     },
     orderBy: { date: "desc" },
   });
@@ -1361,7 +1644,7 @@ export async function createIncome(input: z.infer<typeof incomeInputSchema>) {
   await ensurePendingIncomeAllowed(prisma, input.projectId, input.status);
   const money = normalizeMoney(input);
 
-  return prisma.income.create({
+  return withDashboardRevalidation(prisma.income.create({
     data: {
       projectId: input.projectId,
       date: parseISO(input.date),
@@ -1370,7 +1653,7 @@ export async function createIncome(input: z.infer<typeof incomeInputSchema>) {
       notes: normalizeOptionalText(input.notes),
       ...money,
     },
-  });
+  }));
 }
 
 export async function updateIncome(id: string, input: z.infer<typeof incomeInputSchema>) {
@@ -1386,7 +1669,7 @@ export async function updateIncome(id: string, input: z.infer<typeof incomeInput
   await ensurePendingIncomeAllowed(prisma, input.projectId, input.status);
   const money = normalizeMoney(input);
 
-  return prisma.income.update({
+  return withDashboardRevalidation(prisma.income.update({
     where: { id },
     data: {
       projectId: input.projectId,
@@ -1396,7 +1679,7 @@ export async function updateIncome(id: string, input: z.infer<typeof incomeInput
       notes: normalizeOptionalText(input.notes),
       ...money,
     },
-  });
+  }));
 }
 
 export async function deleteIncome(id: string) {
@@ -1410,7 +1693,7 @@ export async function deleteIncome(id: string) {
     throw new AppError("No podés eliminar un ingreso conciliado con un pago programado.", 409);
   }
 
-  await prisma.income.delete({ where: { id } });
+  await withDashboardRevalidation(prisma.income.delete({ where: { id } }));
 }
 
 export async function listExpenseCategories() {
@@ -1428,23 +1711,23 @@ export async function listExpenseCategories() {
 export async function createExpenseCategory(input: z.infer<typeof expenseCategoryInputSchema>) {
   requireDatabase();
 
-  return prisma.expenseCategory.create({
+  return withDashboardRevalidation(prisma.expenseCategory.create({
     data: {
       name: input.name.trim(),
       isDefault: false,
     },
-  });
+  }));
 }
 
 export async function updateExpenseCategory(id: string, input: z.infer<typeof expenseCategoryInputSchema>) {
   requireDatabase();
 
-  return prisma.expenseCategory.update({
+  return withDashboardRevalidation(prisma.expenseCategory.update({
     where: { id },
     data: {
       name: input.name.trim(),
     },
-  });
+  }));
 }
 
 export async function deleteExpenseCategory(id: string) {
@@ -1462,9 +1745,9 @@ export async function deleteExpenseCategory(id: string) {
     );
   }
 
-  await prisma.expenseCategory.delete({
+  await withDashboardRevalidation(prisma.expenseCategory.delete({
     where: { id },
-  });
+  }));
 }
 
 export async function listExpenses(filters?: z.infer<typeof expenseFilterSchema>) {
@@ -1482,9 +1765,28 @@ export async function listExpenses(filters?: z.infer<typeof expenseFilterSchema>
         lte: filters?.to ? parseISO(filters.to) : undefined,
       },
     },
-    include: {
-      category: true,
-      project: true,
+    select: {
+      id: true,
+      date: true,
+      categoryId: true,
+      expenseType: true,
+      projectId: true,
+      amountUsd: true,
+      amountArs: true,
+      exchangeRate: true,
+      description: true,
+      salaryWithdrawalId: true,
+      notes: true,
+      category: {
+        select: {
+          name: true,
+        },
+      },
+      project: {
+        select: {
+          name: true,
+        },
+      },
       scheduledExpense: {
         select: {
           id: true,
@@ -1501,7 +1803,7 @@ export async function createExpense(input: z.infer<typeof expenseInputSchema>) {
   requireDatabase();
   const money = normalizeMoney(input);
 
-  return prisma.expense.create({
+  return withDashboardRevalidation(prisma.expense.create({
     data: {
       date: parseISO(input.date),
       categoryId: input.categoryId,
@@ -1511,7 +1813,7 @@ export async function createExpense(input: z.infer<typeof expenseInputSchema>) {
       notes: input.notes ?? null,
       ...money,
     },
-  });
+  }));
 }
 
 export async function updateExpense(id: string, input: z.infer<typeof expenseInputSchema>) {
@@ -1536,7 +1838,7 @@ export async function updateExpense(id: string, input: z.infer<typeof expenseInp
 
   const money = normalizeMoney(input);
 
-  return prisma.expense.update({
+  return withDashboardRevalidation(prisma.expense.update({
     where: { id },
     data: {
       date: parseISO(input.date),
@@ -1547,7 +1849,7 @@ export async function updateExpense(id: string, input: z.infer<typeof expenseInp
       notes: input.notes ?? null,
       ...money,
     },
-  });
+  }));
 }
 
 export async function deleteExpense(id: string) {
@@ -1570,7 +1872,7 @@ export async function deleteExpense(id: string) {
     throw new AppError("Los gastos creados desde recurrentes se eliminan desde el pago programado.", 409);
   }
 
-  await prisma.expense.delete({ where: { id } });
+  await withDashboardRevalidation(prisma.expense.delete({ where: { id } }));
 }
 
 export async function listRecurringExpenses(filters?: z.infer<typeof recurringExpenseFilterSchema>) {
@@ -1585,9 +1887,25 @@ export async function listRecurringExpenses(filters?: z.infer<typeof recurringEx
       categoryId: filters?.categoryId ?? undefined,
       isActive: filters?.active ? filters.active === "true" : undefined,
     },
-    include: {
-      category: true,
-      scheduledExpenses: true,
+    select: {
+      id: true,
+      description: true,
+      categoryId: true,
+      amountUsd: true,
+      startDate: true,
+      frequency: true,
+      isActive: true,
+      category: {
+        select: {
+          name: true,
+        },
+      },
+      scheduledExpenses: {
+        select: {
+          dueDate: true,
+          status: true,
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -1598,7 +1916,7 @@ export async function listRecurringExpenses(filters?: z.infer<typeof recurringEx
 export async function createRecurringExpense(input: z.infer<typeof recurringExpenseInputSchema>) {
   requireDatabase();
 
-  return prisma.$transaction(async (tx) => {
+  return withDashboardRevalidation(prisma.$transaction(async (tx) => {
     const recurringExpense = await tx.recurringExpense.create({
       data: {
         description: input.description.trim(),
@@ -1615,13 +1933,13 @@ export async function createRecurringExpense(input: z.infer<typeof recurringExpe
     }
 
     return recurringExpense;
-  });
+  }));
 }
 
 export async function updateRecurringExpense(id: string, input: z.infer<typeof recurringExpenseInputSchema>) {
   requireDatabase();
 
-  return prisma.$transaction(async (tx) => {
+  return withDashboardRevalidation(prisma.$transaction(async (tx) => {
     const recurringExpense = await tx.recurringExpense.update({
       where: { id },
       data: {
@@ -1653,7 +1971,7 @@ export async function updateRecurringExpense(id: string, input: z.infer<typeof r
 
     await syncScheduledExpensesForRecurringExpense(tx, recurringExpense, input.updatePendingExpenses ?? true);
     return recurringExpense;
-  });
+  }));
 }
 
 export async function listScheduledExpenses(filters?: z.infer<typeof scheduledExpenseFilterSchema>) {
@@ -1686,10 +2004,23 @@ export async function listScheduledExpenses(filters?: z.infer<typeof scheduledEx
           ? dueDateWhere
           : undefined,
     },
-    include: {
+    select: {
+      id: true,
+      recurringExpenseId: true,
+      dueDate: true,
+      amountUsd: true,
+      status: true,
+      paidAt: true,
+      actualExpenseId: true,
       recurringExpense: {
-        include: {
-          category: true,
+        select: {
+          description: true,
+          categoryId: true,
+          category: {
+            select: {
+              name: true,
+            },
+          },
         },
       },
     },
@@ -1702,7 +2033,7 @@ export async function listScheduledExpenses(filters?: z.infer<typeof scheduledEx
 export async function updateScheduledExpense(id: string, input: z.infer<typeof scheduledExpenseInputSchema>) {
   requireDatabase();
 
-  return prisma.$transaction(async (tx) => {
+  return withDashboardRevalidation(prisma.$transaction(async (tx) => {
     const scheduledExpense = await tx.scheduledExpense.findUnique({
       where: { id },
       include: {
@@ -1744,7 +2075,7 @@ export async function updateScheduledExpense(id: string, input: z.infer<typeof s
         actualExpenseId: createdExpense.id,
       },
     });
-  });
+  }));
 }
 
 export async function getDistributionPage(month?: string | null): Promise<DistributionPagePayload> {
@@ -1783,7 +2114,7 @@ export async function getDistributionPage(month?: string | null): Promise<Distri
 export async function updateDistribution(input: z.infer<typeof distributionInputSchema>) {
   requireDatabase();
 
-  await Promise.all(
+  await withDashboardRevalidation(Promise.all(
     input.layers.map((layer) =>
       prisma.distributionConfig.upsert({
         where: { layer: layer.layer as DistributionLayer },
@@ -1798,7 +2129,7 @@ export async function updateDistribution(input: z.infer<typeof distributionInput
         },
       }),
     ),
-  );
+  ));
 }
 
 export async function listSalary(filters?: z.infer<typeof salaryFilterSchema>) {
@@ -1827,7 +2158,7 @@ export async function listSalary(filters?: z.infer<typeof salaryFilterSchema>) {
 export async function createSalary(input: z.infer<typeof salaryInputSchema>) {
   requireDatabase();
 
-  return prisma.$transaction(async (tx) => {
+  return withDashboardRevalidation(prisma.$transaction(async (tx) => {
     const salaryCategory = await ensureSalaryCategory(tx);
     const money = normalizeMoney(input);
 
@@ -1856,12 +2187,12 @@ export async function createSalary(input: z.infer<typeof salaryInputSchema>) {
     });
 
     return salary;
-  });
+  }));
 }
 
 export async function deleteSalary(id: string) {
   requireDatabase();
-  await prisma.salaryWithdrawal.delete({ where: { id } });
+  await withDashboardRevalidation(prisma.salaryWithdrawal.delete({ where: { id } }));
 }
 
 export async function listScheduledPayments(filters?: z.infer<typeof scheduledFilterSchema>) {
@@ -1883,8 +2214,26 @@ export async function listScheduledPayments(filters?: z.infer<typeof scheduledFi
         lte: filters?.to ? parseISO(filters.to) : undefined,
       },
     },
-    include: {
-      project: { include: { client: true } },
+    select: {
+      id: true,
+      projectId: true,
+      type: true,
+      expectedDate: true,
+      expectedAmountUsd: true,
+      status: true,
+      paidAt: true,
+      actualIncomeId: true,
+      notes: true,
+      project: {
+        select: {
+          name: true,
+          client: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
     },
     orderBy: { expectedDate: "asc" },
   });
@@ -1895,7 +2244,7 @@ export async function listScheduledPayments(filters?: z.infer<typeof scheduledFi
 export async function updateScheduledPayment(id: string, input: z.infer<typeof scheduledPaymentInputSchema>) {
   requireDatabase();
 
-  return prisma.$transaction(async (tx) => {
+  return withDashboardRevalidation(prisma.$transaction(async (tx) => {
     const payment = await tx.scheduledPayment.findUnique({
       where: { id },
       include: {
@@ -1999,16 +2348,14 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
     }
 
     return updatedPayment;
-  });
+  }));
 }
 
-export async function getAlerts(): Promise<AlertsPayload> {
-  if (!hasDatabaseConfig()) {
-    return demoAlerts;
+async function getAlertsFromDatabase({ skipSync = false }: { skipSync?: boolean } = {}): Promise<AlertsPayload> {
+  if (!skipSync) {
+    await syncProjectSubscriptions(prisma);
+    await syncOverduePayments(prisma);
   }
-
-  await syncProjectSubscriptions(prisma);
-  await syncOverduePayments(prisma);
 
   const now = startOfDay(new Date());
   const in7 = addDays(now, 7);
@@ -2021,8 +2368,26 @@ export async function getAlerts(): Promise<AlertsPayload> {
       },
       expectedDate: { lte: in30 },
     },
-    include: {
-      project: { include: { client: true } },
+    select: {
+      id: true,
+      projectId: true,
+      type: true,
+      expectedDate: true,
+      expectedAmountUsd: true,
+      status: true,
+      paidAt: true,
+      actualIncomeId: true,
+      notes: true,
+      project: {
+        select: {
+          name: true,
+          client: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
     },
     orderBy: { expectedDate: "asc" },
   });
@@ -2037,8 +2402,16 @@ export async function getAlerts(): Promise<AlertsPayload> {
         lte: in30,
       },
     },
-    include: {
-      client: true,
+    select: {
+      id: true,
+      name: true,
+      monthlyFeeUsd: true,
+      monthlyFeeEndDate: true,
+      client: {
+        select: {
+          name: true,
+        },
+      },
     },
     orderBy: { monthlyFeeEndDate: "asc" },
   });
@@ -2085,6 +2458,14 @@ export async function getAlerts(): Promise<AlertsPayload> {
   };
 }
 
+export async function getAlerts(): Promise<AlertsPayload> {
+  if (!hasDatabaseConfig()) {
+    return demoAlerts;
+  }
+
+  return getAlertsFromDatabase();
+}
+
 function bucketMonthLabel(date: string | Date) {
   const parsed = typeof date === "string" ? parseISO(date) : date;
   return format(parsed, "MMM yy");
@@ -2098,8 +2479,8 @@ function bucketMonthKey(date: string | Date) {
 type DashboardProjectAggregate = {
   clientName: string;
   status: ProjectStatus | string;
-  incomes: Array<{ amountUsd: number; date: string; status: IncomeStatus | string }>;
-  scheduledPayments: Array<{ expectedDate: string; status: ScheduledPaymentStatus | string }>;
+  incomes: Array<{ status: IncomeStatus | string }>;
+  scheduledPayments: Array<{ status: ScheduledPaymentStatus | string }>;
 };
 
 function buildDashboardPayload({
@@ -2120,9 +2501,9 @@ function buildDashboardPayload({
   allExpenses: Array<{ amountUsd: number }>;
   allIncomes: Array<{ amountUsd: number }>;
   committedExpensesMonthUsd: number;
-  expenses: ExpenseRecord[];
+  expenses: DashboardExpenseRow[];
   filters?: z.infer<typeof dashboardFilterSchema>;
-  incomes: IncomeRecord[];
+  incomes: DashboardIncomeRow[];
   layers: DistributionRecord[];
   operationalPendingIncomes: Array<{ amountUsd: number }>;
   payments: ScheduledPaymentRecord[];
@@ -2256,6 +2637,194 @@ function buildDashboardPayload({
   };
 }
 
+async function getDashboardFromDatabase(filters: z.infer<typeof dashboardFilterSchema>): Promise<DashboardPayload> {
+  const currentMonthStart = startOfMonth(new Date());
+  const currentMonthEnd = endOfMonth(new Date());
+
+  await syncProjectSubscriptions(prisma);
+  await syncOverduePayments(prisma);
+  await syncOpenRecurringExpenses(prisma);
+
+  const incomeWhere: Prisma.IncomeWhereInput = {
+    status: IncomeStatus.PAID,
+    date: {
+      gte: filters?.from ? parseISO(filters.from) : undefined,
+      lte: filters?.to ? parseISO(filters.to) : undefined,
+    },
+    projectId: filters?.projectId ?? undefined,
+    project: filters?.clientId ? { clientId: filters.clientId } : undefined,
+  };
+
+  const operationalPendingIncomeWhere: Prisma.IncomeWhereInput = {
+    status: IncomeStatus.PENDING,
+    date: {
+      lte: currentMonthEnd,
+    },
+    projectId: filters?.projectId ?? undefined,
+    project: filters?.clientId ? { clientId: filters.clientId } : undefined,
+  };
+
+  const expenseWhere: Prisma.ExpenseWhereInput = {
+    date: {
+      gte: filters?.from ? parseISO(filters.from) : undefined,
+      lte: filters?.to ? parseISO(filters.to) : undefined,
+    },
+    projectId: filters?.projectId ?? undefined,
+    project: filters?.clientId ? { clientId: filters.clientId } : undefined,
+  };
+
+  const paymentWhere: Prisma.ScheduledPaymentWhereInput = {
+    projectId: filters?.projectId ?? undefined,
+    project: filters?.clientId ? { clientId: filters.clientId } : undefined,
+  };
+
+  const [incomes, operationalPendingIncomes, expenses, payments, committedExpensesMonth, layers, allIncomes, allExpenses, salaries, projects, alerts] = await Promise.all([
+    prisma.income.findMany({
+      where: incomeWhere,
+      select: {
+        amountUsd: true,
+        date: true,
+        project: {
+          select: {
+            client: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { date: "asc" },
+    }),
+    prisma.income.findMany({
+      where: operationalPendingIncomeWhere,
+      select: { amountUsd: true },
+    }),
+    prisma.expense.findMany({
+      where: expenseWhere,
+      select: {
+        amountUsd: true,
+        date: true,
+        category: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: { date: "asc" },
+    }),
+    prisma.scheduledPayment.findMany({
+      where: paymentWhere,
+      select: {
+        id: true,
+        projectId: true,
+        type: true,
+        expectedDate: true,
+        expectedAmountUsd: true,
+        status: true,
+        paidAt: true,
+        actualIncomeId: true,
+        notes: true,
+        project: {
+          select: {
+            name: true,
+            client: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { expectedDate: "asc" },
+    }),
+    prisma.scheduledExpense.findMany({
+      where: {
+        status: ScheduledExpenseStatus.PENDING,
+        dueDate: {
+          gte: currentMonthStart,
+          lte: currentMonthEnd,
+        },
+      },
+      select: {
+        amountUsd: true,
+      },
+    }),
+    prisma.distributionConfig.findMany({ orderBy: { layer: "asc" } }),
+    prisma.income.findMany({ where: { status: IncomeStatus.PAID }, select: { amountUsd: true } }),
+    prisma.expense.findMany({ select: { amountUsd: true } }),
+    prisma.salaryWithdrawal.findMany({
+      where: { month: currentMonthStart },
+      select: { amountUsd: true },
+    }),
+    prisma.project.findMany({
+      where: {
+        id: filters?.projectId ?? undefined,
+        clientId: filters?.clientId ?? undefined,
+      },
+      select: {
+        status: true,
+        client: {
+          select: {
+            name: true,
+          },
+        },
+        incomes: {
+          select: {
+            status: true,
+          },
+        },
+        scheduledPayments: {
+          select: {
+            status: true,
+          },
+        },
+      },
+    }),
+    getAlertsFromDatabase({ skipSync: true }),
+  ]);
+
+  return buildDashboardPayload({
+    filters,
+    incomes: incomes.map((income) => ({
+      amountUsd: requireNumber(income.amountUsd),
+      date: dateOnly(income.date),
+      clientName: income.project.client.name,
+    })),
+    expenses: expenses.map((expense) => ({
+      amountUsd: requireNumber(expense.amountUsd),
+      date: dateOnly(expense.date),
+      categoryName: expense.category.name,
+    })),
+    payments: payments.map(mapScheduledPaymentRecord),
+    operationalPendingIncomes: operationalPendingIncomes.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
+    committedExpensesMonthUsd: committedExpensesMonth.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
+    layers: layers.map(mapDistributionRecord),
+    allIncomes: allIncomes.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
+    allExpenses: allExpenses.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
+    salariesThisMonthUsd: salaries.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
+    projects: projects.map((project) => ({
+      clientName: project.client.name,
+      status: project.status,
+      incomes: project.incomes.map((income) => ({ status: income.status })),
+      scheduledPayments: project.scheduledPayments.map((payment) => ({ status: payment.status })),
+    })),
+    alerts,
+  });
+}
+
+const getCachedDashboard = unstable_cache(
+  async (serializedFilters: string) => {
+    const filters = dashboardFilterSchema.parse(JSON.parse(serializedFilters));
+    return getDashboardFromDatabase(filters);
+  },
+  ["dashboard-payload"],
+  {
+    tags: [dashboardTag],
+    revalidate: 300,
+  },
+);
+
 export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchema>): Promise<DashboardPayload> {
   const currentMonthStart = startOfMonth(new Date());
   const currentMonthEnd = endOfMonth(new Date());
@@ -2327,125 +2896,6 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
     });
   }
 
-  await syncProjectSubscriptions(prisma);
-  await syncOverduePayments(prisma);
-  await syncOpenRecurringExpenses(prisma);
-
-  const incomeWhere: Prisma.IncomeWhereInput = {
-    status: IncomeStatus.PAID,
-    date: {
-      gte: filters?.from ? parseISO(filters.from) : undefined,
-      lte: filters?.to ? parseISO(filters.to) : undefined,
-    },
-    projectId: filters?.projectId ?? undefined,
-    project: filters?.clientId ? { clientId: filters.clientId } : undefined,
-  };
-
-  const operationalPendingIncomeWhere: Prisma.IncomeWhereInput = {
-    status: IncomeStatus.PENDING,
-    date: {
-      lte: currentMonthEnd,
-    },
-    projectId: filters?.projectId ?? undefined,
-    project: filters?.clientId ? { clientId: filters.clientId } : undefined,
-  };
-
-  const expenseWhere: Prisma.ExpenseWhereInput = {
-    date: {
-      gte: filters?.from ? parseISO(filters.from) : undefined,
-      lte: filters?.to ? parseISO(filters.to) : undefined,
-    },
-    projectId: filters?.projectId ?? undefined,
-    project: filters?.clientId ? { clientId: filters.clientId } : undefined,
-  };
-
-  const paymentWhere: Prisma.ScheduledPaymentWhereInput = {
-    projectId: filters?.projectId ?? undefined,
-    project: filters?.clientId ? { clientId: filters.clientId } : undefined,
-  };
-
-  const [incomes, operationalPendingIncomes, expenses, payments, committedExpensesMonth, layers, allIncomes, allExpenses, salaries, projects] = await Promise.all([
-    prisma.income.findMany({
-      where: incomeWhere,
-      include: { project: { include: { client: true } } },
-      orderBy: { date: "asc" },
-    }),
-    prisma.income.findMany({
-      where: operationalPendingIncomeWhere,
-      select: { amountUsd: true },
-    }),
-    prisma.expense.findMany({
-      where: expenseWhere,
-      include: { category: true, project: true },
-      orderBy: { date: "asc" },
-    }),
-    prisma.scheduledPayment.findMany({
-      where: paymentWhere,
-      include: { project: { include: { client: true } } },
-      orderBy: { expectedDate: "asc" },
-    }),
-    prisma.scheduledExpense.findMany({
-      where: {
-        status: ScheduledExpenseStatus.PENDING,
-        dueDate: {
-          gte: currentMonthStart,
-          lte: currentMonthEnd,
-        },
-      },
-      select: {
-        amountUsd: true,
-      },
-    }),
-    prisma.distributionConfig.findMany({ orderBy: { layer: "asc" } }),
-    prisma.income.findMany({ where: { status: IncomeStatus.PAID }, select: { amountUsd: true } }),
-    prisma.expense.findMany({ select: { amountUsd: true } }),
-    prisma.salaryWithdrawal.findMany({
-      where: {
-        month: currentMonthStart,
-      },
-    }),
-    prisma.project.findMany({
-      where: {
-        id: filters?.projectId ?? undefined,
-        clientId: filters?.clientId ?? undefined,
-      },
-      include: {
-        client: true,
-        incomes: true,
-        scheduledPayments: true,
-      },
-    }),
-  ]);
-
-  const mappedIncomes = incomes.map(mapIncomeRecord);
-  const mappedExpenses = expenses.map(mapExpenseRecord);
-  const mappedPayments = payments.map(mapScheduledPaymentRecord);
-  const alerts = await getAlerts();
-
-  return buildDashboardPayload({
-    filters,
-    incomes: mappedIncomes,
-    expenses: mappedExpenses,
-    payments: mappedPayments,
-    operationalPendingIncomes: operationalPendingIncomes.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
-    committedExpensesMonthUsd: committedExpensesMonth.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
-    layers: layers.map(mapDistributionRecord),
-    allIncomes: allIncomes.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
-    allExpenses: allExpenses.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
-    salariesThisMonthUsd: salaries.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
-    projects: projects.map((project) => ({
-      clientName: project.client.name,
-      status: project.status,
-      incomes: project.incomes.map((income) => ({
-        amountUsd: requireNumber(income.amountUsd),
-        date: dateOnly(income.date),
-        status: income.status,
-      })),
-      scheduledPayments: project.scheduledPayments.map((payment) => ({
-        expectedDate: dateOnly(payment.expectedDate),
-        status: payment.status,
-      })),
-    })),
-    alerts,
-  });
+  const normalizedFilters = dashboardFilterSchema.parse(filters ?? {});
+  return getCachedDashboard(JSON.stringify(normalizedFilters));
 }

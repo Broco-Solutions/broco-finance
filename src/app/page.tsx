@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
+import { DashboardChartCardSkeleton } from "@/components/ui/page-loading";
 import { StatCard } from "@/components/ui/stat-card";
 import { resolveDashboardDateRange } from "@/lib/dashboard-date-range";
 import { formatShortDate, formatUsd, toCurrencyNumber } from "@/lib/utils";
@@ -15,15 +16,15 @@ export const dynamic = "force-dynamic";
 
 const MonthlyPerformanceChart = nextDynamic(
   () => import("@/components/dashboard/charts").then((module) => module.MonthlyPerformanceChart),
-  { ssr: false },
+  { ssr: false, loading: () => <DashboardChartCardSkeleton /> },
 );
 const CategoryBreakdownChart = nextDynamic(
   () => import("@/components/dashboard/charts").then((module) => module.CategoryBreakdownChart),
-  { ssr: false },
+  { ssr: false, loading: () => <DashboardChartCardSkeleton /> },
 );
 const CashflowChart = nextDynamic(
   () => import("@/components/dashboard/charts").then((module) => module.CashflowChart),
-  { ssr: false },
+  { ssr: false, loading: () => <DashboardChartCardSkeleton className="h-[320px]" /> },
 );
 
 function readSearchParam(value: string | string[] | undefined) {

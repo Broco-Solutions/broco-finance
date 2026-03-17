@@ -122,6 +122,7 @@ export function Header() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch
                     className={cn(
                       "flex items-center justify-between rounded-[1.3rem] border px-4 py-3 text-sm transition",
                       active

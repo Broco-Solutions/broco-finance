@@ -39,7 +39,7 @@ export function AlertBanner({ alerts }: { alerts: AlertsPayload }) {
             <p className="mt-2 text-sm text-ink/60">
               {alerts.overdue.count} item{alerts.overdue.count === 1 ? "" : "s"} requieren seguimiento inmediato.
             </p>
-            <Link className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brick" href="/calendar">
+            <Link className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brick" href="/calendar" prefetch>
               Revisar calendario
               <ArrowRight className="h-4 w-4" />
             </Link>
@@ -51,7 +51,7 @@ export function AlertBanner({ alerts }: { alerts: AlertsPayload }) {
             <p className="mt-2 text-sm text-ink/60">
               {alerts.upcoming7Days.count} cobro{alerts.upcoming7Days.count === 1 ? "" : "s"} ya entran en ventana corta.
             </p>
-            <Link className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-cobalt" href="/calendar">
+            <Link className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-cobalt" href="/calendar" prefetch>
               Anticipar cobranza
               <ArrowRight className="h-4 w-4" />
             </Link>
@@ -75,7 +75,7 @@ export function AlertBanner({ alerts }: { alerts: AlertsPayload }) {
             ) : (
               <p className="mt-2 text-sm text-ink/60">No hay contratos próximos a expirar.</p>
             )}
-            <Link className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-950" href="/projects">
+            <Link className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-950" href="/projects" prefetch>
               Renovar contratos
               <ArrowRight className="h-4 w-4" />
             </Link>

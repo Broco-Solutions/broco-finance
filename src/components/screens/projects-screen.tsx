@@ -405,7 +405,7 @@ export function ProjectsScreen({
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
-                        <Link className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold text-cobalt transition hover:bg-cobalt/8" href={`/projects/${project.id}`}>
+                        <Link className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold text-cobalt transition hover:bg-cobalt/8" href={`/projects/${project.id}`} prefetch>
                           Abrir
                         </Link>
                       </div>
