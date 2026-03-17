@@ -7,6 +7,11 @@ import { hasDatabaseConfig, prisma } from "@/server/prisma";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
+const kanbanTransactionOptions = {
+  maxWait: 10_000,
+  timeout: 15_000,
+} as const;
+
 const kanbanColumnDefaults = [
   { name: "Prospeccion / Contactos", color: "#7C3AED", isInitial: true },
   { name: "Presupuesto enviado / Esperando respuesta", color: "#2563EB", isInitial: false },
@@ -431,61 +436,69 @@ async function reorderBoardInDatabase(input: Extract<KanbanBoardAction, { action
     throw new AppError("La estructura del tablero es inválida.", 422);
   }
 
-  await prisma.$transaction(async (tx) => {
-    const nextOrder = [...input.orderedColumnIds, ...inactiveColumns.map((column) => column.id)];
-    await Promise.all(
-      nextOrder.map((columnId, index) =>
-        tx.kanbanColumn.update({
-          where: { id: columnId },
-          data: { position: index },
-        }),
-      ),
-    );
-
-    const uniqueProjectIds = new Set<string>();
-    const knownProjectIds = new Set(
-      (
-        await tx.project.findMany({
-          select: { id: true },
-        })
-      ).map((project) => project.id),
-    );
-
-    for (const column of input.columns) {
-      for (const projectId of column.projectIds) {
-        if (uniqueProjectIds.has(projectId)) {
-          throw new AppError("Hay tarjetas repetidas en el reordenamiento.", 422);
-        }
-
-        if (!knownProjectIds.has(projectId)) {
-          throw new AppError("Hay proyectos inválidos en el reordenamiento.", 422);
-        }
-
-        uniqueProjectIds.add(projectId);
+  const uniqueProjectIds = new Set<string>();
+  for (const column of input.columns) {
+    for (const projectId of column.projectIds) {
+      if (uniqueProjectIds.has(projectId)) {
+        throw new AppError("Hay tarjetas repetidas en el reordenamiento.", 422);
       }
-    }
 
-    await Promise.all(
-      input.columns.flatMap((column) =>
-        column.projectIds.map((projectId, index) =>
-          tx.kanbanProjectPlacement.upsert({
-            where: { projectId },
-            update: {
-              kanbanColumnId: column.columnId,
-              position: index,
-            },
-            create: {
-              projectId,
-              kanbanColumnId: column.columnId,
-              position: index,
-            },
+      uniqueProjectIds.add(projectId);
+    }
+  }
+
+  const projectIds = Array.from(uniqueProjectIds);
+
+  await prisma.$transaction(
+    async (tx) => {
+      const nextOrder = [...input.orderedColumnIds, ...inactiveColumns.map((column) => column.id)];
+      await Promise.all(
+        nextOrder.map((columnId, index) =>
+          tx.kanbanColumn.update({
+            where: { id: columnId },
+            data: { position: index },
           }),
         ),
-      ),
-    );
+      );
 
-    await repairKanbanColumns(tx);
-  });
+      const knownProjectIds = new Set(
+        (
+          await tx.project.findMany({
+            where: {
+              id: {
+                in: projectIds,
+              },
+            },
+            select: { id: true },
+          })
+        ).map((project) => project.id),
+      );
+
+      if (knownProjectIds.size !== projectIds.length) {
+        throw new AppError("Hay proyectos inválidos en el reordenamiento.", 422);
+      }
+
+      await Promise.all(
+        input.columns.flatMap((column) =>
+          column.projectIds.map((projectId, index) =>
+            tx.kanbanProjectPlacement.upsert({
+              where: { projectId },
+              update: {
+                kanbanColumnId: column.columnId,
+                position: index,
+              },
+              create: {
+                projectId,
+                kanbanColumnId: column.columnId,
+                position: index,
+              },
+            }),
+          ),
+        ),
+      );
+    },
+    kanbanTransactionOptions,
+  );
 }
 
 async function createKanbanColumn(input: Extract<KanbanBoardAction, { action: "create_column" }>) {
@@ -519,7 +532,7 @@ async function createKanbanColumn(input: Extract<KanbanBoardAction, { action: "c
     });
 
     await repairKanbanColumns(tx);
-  });
+  }, kanbanTransactionOptions);
 }
 
 async function updateKanbanColumn(input: Extract<KanbanBoardAction, { action: "update_column" }>) {
@@ -560,7 +573,7 @@ async function updateKanbanColumn(input: Extract<KanbanBoardAction, { action: "u
     });
 
     await repairKanbanColumns(tx);
-  });
+  }, kanbanTransactionOptions);
 }
 
 async function deleteKanbanColumn(input: Extract<KanbanBoardAction, { action: "delete_column" }>) {
@@ -631,7 +644,7 @@ async function deleteKanbanColumn(input: Extract<KanbanBoardAction, { action: "d
     });
 
     await repairKanbanColumns(tx);
-  });
+  }, kanbanTransactionOptions);
 }
 
 export async function getKanbanBoard(): Promise<KanbanBoardPayload> {
