@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -46,7 +47,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
       <Card>
         <h2 className="font-display text-2xl text-ink">Proyectos</h2>
         <div className="mt-4">
-          <DataTable headers={["Proyecto", "Estado", "Cobrado", "Desarrollo", "Fee mensual"]}>
+          <DataTable headers={["Proyecto", "Estado", "Cobrado", "Desarrollo", "Fee mensual", "Acción"]} tableClassName="min-w-[58rem] table-fixed">
             {detail.projects.map((project) => (
               <tr key={project.id}>
                 <td className="px-4 py-3">{project.name}</td>
@@ -58,6 +59,15 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
                     : "—"}
                 </td>
                 <td className="px-4 py-3">{formatUsd(project.monthlyFeeUsd)}</td>
+                <td className="px-4 py-3">
+                  <Link
+                    href={`/projects/${project.id}`}
+                    prefetch
+                    className="inline-flex items-center justify-center rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-black/5"
+                  >
+                    Abrir
+                  </Link>
+                </td>
               </tr>
             ))}
           </DataTable>
@@ -68,10 +78,11 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           <h2 className="font-display text-2xl text-ink">Ingresos cobrados</h2>
           <div className="mt-4">
             <DataTable
-              headers={["Fecha", "Proyecto", "Tipo", "Monto", "Notas"]}
-              tableClassName="min-w-[46rem] table-fixed"
+              headers={["Fecha", "Corresponde a", "Proyecto", "Tipo", "Monto", "Notas"]}
+              tableClassName="min-w-[58rem] table-fixed"
               colGroup={
                 <colgroup>
+                  <col className="w-[8.5rem]" />
                   <col className="w-[8.5rem]" />
                   <col className="w-[12rem]" />
                   <col className="w-[9rem]" />
@@ -83,6 +94,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
               {detail.incomes.map((income) => (
                 <tr key={income.id}>
                   <td className="px-4 py-3">{formatShortDate(income.date)}</td>
+                  <td className="px-4 py-3">{formatShortDate(income.correspondsToDate ?? null)}</td>
                   <td className="px-4 py-3">{income.projectName}</td>
                   <td className="px-4 py-3">{formatIncomeType(income.type)}</td>
                   <td className="px-4 py-3">{formatUsd(income.amountUsd)}</td>

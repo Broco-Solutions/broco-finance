@@ -50,6 +50,7 @@ export type IncomeRecord = MonetaryFields & {
   projectName: string;
   clientName: string;
   date: string;
+  correspondsToDate?: string | null;
   status: IncomeStatus;
   type: IncomeType;
   notes: string | null;

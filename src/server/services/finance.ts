@@ -107,6 +107,9 @@ type IncomeWithProjectRecord = {
       name: string;
     };
   };
+  scheduledPayment?: {
+    expectedDate: Date;
+  } | null;
 };
 
 type ScheduledPaymentWithProjectRecord = {
@@ -588,7 +591,7 @@ async function syncProjectMaintenanceSchedule(
             expectedDate,
             expectedAmountUsd: amountUsd,
             status: ScheduledPaymentStatus.pending,
-            notes: "Cobro mensual de mantenimiento generado desde el proyecto.",
+            notes: null,
           },
         }),
       ),
@@ -988,6 +991,7 @@ function mapIncomeRecord(
     projectName: income.project.name,
     clientName: income.project.client.name,
     date: dateOnly(income.date),
+    correspondsToDate: income.scheduledPayment?.expectedDate ? dateOnly(income.scheduledPayment.expectedDate) : null,
     amountUsd: requireNumber(income.amountUsd),
     amountArs: toNumber(income.amountArs),
     exchangeRate: toNumber(income.exchangeRate),
@@ -1284,6 +1288,11 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
           },
         },
       },
+      scheduledPayment: {
+        select: {
+          expectedDate: true,
+        },
+      },
     },
     orderBy: { date: "desc" },
   });
@@ -1459,28 +1468,33 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
           name: true,
         },
       },
-      incomes: {
-        select: {
-          id: true,
-          projectId: true,
-          date: true,
+        incomes: {
+          select: {
+            id: true,
+            projectId: true,
+            date: true,
           amountUsd: true,
           amountArs: true,
           exchangeRate: true,
           status: true,
           type: true,
           notes: true,
-          project: {
-            select: {
-              name: true,
-              client: {
-                select: {
-                  name: true,
+            project: {
+              select: {
+                name: true,
+                client: {
+                  select: {
+                    name: true,
+                  },
                 },
               },
             },
+            scheduledPayment: {
+              select: {
+                expectedDate: true,
+              },
+            },
           },
-        },
         orderBy: { date: "desc" },
       },
       scheduledPayments: {
@@ -2085,7 +2099,7 @@ export async function updateScheduledExpense(id: string, input: z.infer<typeof s
         amountArs: null,
         exchangeRate: null,
         description: scheduledExpense.recurringExpense.description,
-        notes: "Pago registrado desde gasto recurrente.",
+        notes: null,
       },
     });
 
@@ -2324,7 +2338,7 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
           date: parseISO(input.createIncome.date),
           status: IncomeStatus.PAID,
           type: (input.createIncome.type as IncomeType | undefined) ?? inferredIncomeType,
-          notes: input.createIncome.notes ?? null,
+          notes: normalizeOptionalText(input.createIncome.notes),
           ...money,
         },
       });
@@ -2339,7 +2353,7 @@ export async function updateScheduledPayment(id: string, input: z.infer<typeof s
           date: paidAt,
           status: IncomeStatus.PAID,
           type: inferredIncomeType,
-          notes: input.notes ?? payment.notes ?? "Cobro registrado desde pago programado.",
+          notes: normalizeOptionalText(input.notes),
           amountUsd: settledAmountUsd,
           amountArs: null,
           exchangeRate: null,

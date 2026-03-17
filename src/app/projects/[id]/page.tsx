@@ -82,10 +82,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           <h2 className="font-display text-2xl text-ink">Ingresos cobrados</h2>
           <div className="mt-4">
             <DataTable
-              headers={["Fecha", "Tipo", "Monto", "Notas"]}
-              tableClassName="min-w-[38rem] table-fixed"
+              headers={["Fecha", "Corresponde a", "Tipo", "Monto", "Notas"]}
+              tableClassName="min-w-[47rem] table-fixed"
               colGroup={
                 <colgroup>
+                  <col className="w-[8.5rem]" />
                   <col className="w-[8.5rem]" />
                   <col className="w-[9rem]" />
                   <col className="w-[9rem]" />
@@ -96,6 +97,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               {detail.incomes.map((income) => (
                 <tr key={income.id}>
                   <td className="px-4 py-3">{formatShortDate(income.date)}</td>
+                  <td className="px-4 py-3">{formatShortDate(income.correspondsToDate ?? null)}</td>
                   <td className="px-4 py-3">{formatIncomeType(income.type)}</td>
                   <td className="px-4 py-3">{formatUsd(income.amountUsd)}</td>
                   <td className="px-4 py-3">{renderNotesCell(income.notes)}</td>
