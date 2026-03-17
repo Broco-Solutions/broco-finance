@@ -17,9 +17,9 @@ export const metadata: Metadata = {
   title: "Broco Finance",
   description: "Control financiero operativo para Broco Solutions",
   icons: {
-    icon: "/Favicon2.png",
-    shortcut: "/Favicon2.png",
-    apple: "/Favicon2.png",
+    icon: "/Favicon.svg",
+    shortcut: "/Favicon.svg",
+    apple: "/Favicon.svg",
   },
 };
 
