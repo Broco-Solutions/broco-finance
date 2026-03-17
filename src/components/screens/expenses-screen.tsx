@@ -42,7 +42,6 @@ type LedgerRow = {
   amountArs: number | null;
   amountUsd: number;
   status: LedgerStatus;
-  sourceLabel: string;
   scheduledExpense: ScheduledExpenseRecord | null;
 };
 
@@ -207,7 +206,6 @@ export function ExpensesScreen({
         amountArs: null,
         amountUsd: item.amountUsd,
         status: isOverdueExpense(item.dueDate) ? "overdue" : "pending",
-        sourceLabel: "Plantilla recurrente",
         scheduledExpense: item,
       })),
       ...expenses.map<LedgerRow>((expense) => ({
@@ -222,11 +220,6 @@ export function ExpensesScreen({
         amountArs: expense.amountArs,
         amountUsd: expense.amountUsd,
         status: "paid",
-        sourceLabel: expense.salaryWithdrawalId
-          ? "Sincronizado desde distribución"
-          : expense.scheduledExpenseId
-            ? "Pagado desde plantilla recurrente"
-            : "Carga manual",
         scheduledExpense: null,
       })),
     ],
@@ -780,6 +773,20 @@ export function ExpensesScreen({
               />
             ) : (
               <DataTable
+                tableClassName="min-w-[72rem] table-fixed"
+                colGroup={
+                  <colgroup>
+                    <col className="w-[7.5rem]" />
+                    <col className="w-[9rem]" />
+                    <col className="w-[18rem]" />
+                    <col className="w-[11rem]" />
+                    <col className="w-[8.5rem]" />
+                    <col className="w-[8.5rem]" />
+                    <col className="w-[7rem]" />
+                    <col className="w-[7.5rem]" />
+                    <col className="w-[8rem]" />
+                  </colgroup>
+                }
                 footer={
                   <tr>
                     <td className="px-4 py-3 font-semibold text-ink" colSpan={4}>
@@ -800,18 +807,17 @@ export function ExpensesScreen({
               >
                 {visibleLedgerRows.map((row) => (
                   <tr key={`${row.kind}-${row.id}`}>
-                    <td className="px-4 py-3">{formatShortDate(row.date)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{formatShortDate(row.date)}</td>
                     <td className="px-4 py-3">{row.categoryName}</td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-ink">{row.description}</div>
-                      <div className="text-xs uppercase tracking-[0.14em] text-ink/45">{row.sourceLabel}</div>
                     </td>
                     <td className="px-4 py-3">{row.projectName ?? "Operativo"}</td>
-                    <td className="px-4 py-3">{formatArs(row.amountArs)}</td>
-                    <td className="px-4 py-3">{formatUsd(row.amountUsd)}</td>
-                    <td className="px-4 py-3 uppercase">{row.expenseType}</td>
-                    <td className="px-4 py-3">{statusBadge(row.status)}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">{formatArs(row.amountArs)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{formatUsd(row.amountUsd)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap uppercase">{row.expenseType}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{statusBadge(row.status)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {row.kind === "scheduled" && row.scheduledExpense ? (
                         <Button
                           type="button"

@@ -8,6 +8,8 @@ export function DataTable({
   footer,
   scrollAfter = 10,
   maxHeightClassName = "max-h-[34rem]",
+  tableClassName,
+  colGroup,
 }: {
   headers: string[];
   children: React.ReactNode;
@@ -15,6 +17,8 @@ export function DataTable({
   footer?: React.ReactNode;
   scrollAfter?: number;
   maxHeightClassName?: string;
+  tableClassName?: string;
+  colGroup?: React.ReactNode;
 }) {
   const rowCount = Children.toArray(children).length;
   const shouldScroll = rowCount > scrollAfter;
@@ -22,7 +26,8 @@ export function DataTable({
   return (
     <div className={cn("overflow-hidden rounded-[1.35rem] border border-black/10", className)}>
       <div className={cn("overflow-x-auto overscroll-x-contain", shouldScroll && `overflow-y-auto ${maxHeightClassName}`)}>
-        <table className="min-w-max w-full divide-y divide-black/10 text-left text-sm">
+        <table className={cn("min-w-max w-full divide-y divide-black/10 text-left text-sm", tableClassName)}>
+          {colGroup}
           <thead className="bg-ink text-paper">
             <tr>
               {headers.map((header) => (
