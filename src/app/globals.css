@@ -11,6 +11,13 @@
   --lime: #bef264;
   --coral: #f97316;
   --brick: #9f3b23;
+  --skeleton-base: rgba(16, 21, 34, 0.06);
+  --skeleton-edge: rgba(16, 21, 34, 0.035);
+  --skeleton-highlight: rgba(255, 255, 255, 0.74);
+  --skeleton-dark-base: rgba(255, 255, 255, 0.09);
+  --skeleton-dark-edge: rgba(255, 255, 255, 0.035);
+  --skeleton-dark-highlight: rgba(255, 255, 255, 0.28);
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 * {
@@ -41,6 +48,25 @@ a {
 }
 
 @layer utilities {
+  @keyframes skeleton-shimmer {
+    0% {
+      transform: translate3d(-130%, 0, 0);
+    }
+    100% {
+      transform: translate3d(130%, 0, 0);
+    }
+  }
+
+  @keyframes skeleton-breathe {
+    0%,
+    100% {
+      opacity: 0.9;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
   .panel {
     @apply rounded-panel border border-black/10 bg-white/85 shadow-panel backdrop-blur;
   }
@@ -62,5 +88,64 @@ a {
       radial-gradient(circle at 80% 0%, rgba(29, 78, 216, 0.05) 0.5px, transparent 0.5px);
     background-size: 22px 22px;
     pointer-events: none;
+  }
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    border: 1px solid transparent;
+    background: linear-gradient(180deg, var(--skeleton-edge), var(--skeleton-base));
+    animation: skeleton-breathe 2.8s var(--ease-out-strong) infinite;
+  }
+
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translate3d(-130%, 0, 0);
+    background: linear-gradient(
+      110deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.06) 30%,
+      var(--skeleton-highlight) 48%,
+      rgba(255, 255, 255, 0.12) 62%,
+      transparent 100%
+    );
+    animation: skeleton-shimmer 2.25s linear infinite;
+    pointer-events: none;
+  }
+
+  .skeleton-dark {
+    background: linear-gradient(180deg, var(--skeleton-dark-edge), var(--skeleton-dark-base));
+  }
+
+  .skeleton-dark::after {
+    background: linear-gradient(
+      110deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.05) 30%,
+      var(--skeleton-dark-highlight) 48%,
+      rgba(255, 255, 255, 0.08) 62%,
+      transparent 100%
+    );
+  }
+
+  .skeleton-soft {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      0 1px 1px rgba(16, 21, 34, 0.02);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+
+  .skeleton::after {
+    animation: none;
+    opacity: 0.4;
+    transform: translate3d(0, 0, 0);
   }
 }
