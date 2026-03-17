@@ -4,7 +4,7 @@ import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { IncomeRecord, IncomeStatus, IncomeType, ProjectRecord } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
-import { formatArs, formatIncomeStatus, formatIncomeType, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
+import { cn, formatArs, formatIncomeStatus, formatIncomeType, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -14,8 +14,15 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-const incomeStatuses: IncomeStatus[] = ["PAID", "PENDING"];
-const incomeTypes: IncomeType[] = ["DEVELOPMENT", "MAINTENANCE"];
+const statusSegments: Array<{ value: IncomeStatus; label: string; hint: string }> = [
+  { value: "PAID", label: "Inmediato", hint: "Entra hoy en caja" },
+  { value: "PENDING", label: "Pendiente", hint: "Queda por cobrar" },
+];
+
+const typeSegments: Array<{ value: IncomeType; label: string; hint: string }> = [
+  { value: "DEVELOPMENT", label: "Desarrollo", hint: "Impacta el avance del build" },
+  { value: "MAINTENANCE", label: "Mantenimiento", hint: "Se toma como fee operativo" },
+];
 
 function statusChip(status: IncomeStatus) {
   return status === "PAID"
@@ -31,6 +38,63 @@ function typeChip(type: IncomeType) {
 
 function isClosedProject(status: ProjectRecord["status"]) {
   return status === "COMPLETED" || status === "CANCELLED";
+}
+
+function SegmentedControl<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  activeToneClassName,
+}: {
+  label: string;
+  value: T;
+  options: Array<{ value: T; label: string; hint?: string }>;
+  onChange: (nextValue: T) => void;
+  activeToneClassName: string;
+}) {
+  const activeIndex = Math.max(
+    0,
+    options.findIndex((option) => option.value === value),
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/45">{label}</div>
+      <div className="rounded-[1.4rem] border border-white/65 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(248,250,252,0.68))] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+        <div className="relative grid grid-cols-2 gap-1">
+          <div
+            aria-hidden="true"
+            className={cn(
+              "pointer-events-none absolute inset-y-0 left-0 w-[calc(50%-0.125rem)] rounded-[1rem] shadow-[0_14px_24px_rgba(15,23,42,0.12)] transition-transform duration-300 ease-out",
+              activeToneClassName,
+              activeIndex === 1 && "translate-x-[calc(100%+0.25rem)]",
+            )}
+          />
+          {options.map((option) => {
+            const selected = option.value === value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={selected}
+                className={cn(
+                  "relative z-10 rounded-[1rem] px-4 py-3 text-left transition-colors duration-200",
+                  selected ? "text-white" : "text-ink/72 hover:text-ink",
+                )}
+                onClick={() => onChange(option.value)}
+              >
+                <div className="text-sm font-semibold tracking-[0.01em]">{option.label}</div>
+                {option.hint ? (
+                  <div className={cn("mt-1 text-[11px] leading-4", selected ? "text-white/78" : "text-ink/46")}>{option.hint}</div>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 type IncomeFormState = {
@@ -237,58 +301,21 @@ export function IncomesScreen({
               </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              {incomeStatuses.map((status) => {
-                const selected = form.status === status;
-                return (
-                  <button
-                    key={status}
-                    type="button"
-                    className={`rounded-[1.2rem] border px-4 py-4 text-left transition ${
-                      selected
-                        ? status === "PAID"
-                          ? "border-emerald-900/20 bg-emerald-50 text-emerald-950"
-                          : "border-amber-900/20 bg-amber-50 text-amber-950"
-                        : "border-black/10 bg-white/75 text-ink hover:bg-black/5"
-                    }`}
-                    onClick={() => setForm((prev) => ({ ...prev, status }))}
-                  >
-                    <div className="text-xs font-semibold uppercase tracking-[0.16em]">
-                      {status === "PAID" ? "Cobro inmediato" : "Pendiente a futuro"}
-                    </div>
-                    <div className="mt-2 text-sm">
-                      {status === "PAID" ? "Entra hoy en caja." : "Queda abierto como cuenta por cobrar."}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              {incomeTypes.map((type) => {
-                const selected = form.type === type;
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    className={`rounded-[1.2rem] border px-4 py-4 text-left transition ${
-                      selected
-                        ? type === "DEVELOPMENT"
-                          ? "border-cobalt/20 bg-cobalt/10 text-cobalt"
-                          : "border-emerald-900/20 bg-emerald-50 text-emerald-950"
-                        : "border-black/10 bg-white/75 text-ink hover:bg-black/5"
-                    }`}
-                    onClick={() => setForm((prev) => ({ ...prev, type }))}
-                  >
-                    <div className="text-xs font-semibold uppercase tracking-[0.16em]">{formatIncomeType(type)}</div>
-                    <div className="mt-2 text-sm">
-                      {type === "DEVELOPMENT"
-                        ? "Descuenta saldo del presupuesto fijo."
-                        : "Se trata como mensualidad o fee operativo."}
-                    </div>
-                  </button>
-                );
-              })}
+            <div className="grid gap-4 lg:grid-cols-2">
+              <SegmentedControl
+                label="Temporalidad"
+                value={form.status}
+                options={statusSegments}
+                activeToneClassName={form.status === "PAID" ? "bg-emerald-700" : "bg-amber-700"}
+                onChange={(status) => setForm((prev) => ({ ...prev, status }))}
+              />
+              <SegmentedControl
+                label="Naturaleza"
+                value={form.type}
+                options={typeSegments}
+                activeToneClassName={form.type === "DEVELOPMENT" ? "bg-cobalt" : "bg-emerald-700"}
+                onChange={(type) => setForm((prev) => ({ ...prev, type }))}
+              />
             </div>
 
             <Select value={form.projectId} onChange={(event) => setForm((prev) => ({ ...prev, projectId: event.target.value }))}>
