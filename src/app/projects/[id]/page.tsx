@@ -1,10 +1,20 @@
+import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatIncomeStatus, formatIncomeType, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
+import { formatIncomeType, formatScheduledPaymentStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { getProjectDetail } from "@/server/services/finance";
 
 export const dynamic = "force-dynamic";
+
+function renderNotesCell(notes: string | null, widthClassName = "max-w-[15rem]") {
+  const value = notes?.trim() || "—";
+  return (
+    <span className={`block truncate ${widthClassName}`} title={value === "—" ? undefined : value}>
+      {value}
+    </span>
+  );
+}
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
   const detail = await getProjectDetail(params.id);
@@ -24,7 +34,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
       {detail.project.pendingIncomeCount > 0 && detail.project.status !== "ACTIVE" ? (
         <Card className="border-coral/25 bg-coral/10">
           <div className="text-sm text-brick">
-            Este proyecto tiene {detail.project.pendingIncomeCount} ingreso(s) `PENDING` todavía abiertos. Revisalos antes de cerrar la cobranza.
+            Este proyecto tiene {detail.project.pendingIncomeCount} ingreso(s) pendientes todavía abiertos. Revisalos antes de cerrar la cobranza.
           </div>
         </Card>
       ) : null}
@@ -69,32 +79,67 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
-          <h2 className="font-display text-2xl text-ink">Ingresos</h2>
+          <h2 className="font-display text-2xl text-ink">Ingresos cobrados</h2>
           <div className="mt-4">
-            <DataTable headers={["Fecha", "Tipo", "USD", "Estado", "Notas"]}>
+            <DataTable
+              headers={["Fecha", "Tipo", "Monto", "Notas"]}
+              tableClassName="min-w-[38rem] table-fixed"
+              colGroup={
+                <colgroup>
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[9rem]" />
+                  <col className="w-[9rem]" />
+                  <col className="w-[15rem]" />
+                </colgroup>
+              }
+            >
               {detail.incomes.map((income) => (
                 <tr key={income.id}>
                   <td className="px-4 py-3">{formatShortDate(income.date)}</td>
                   <td className="px-4 py-3">{formatIncomeType(income.type)}</td>
                   <td className="px-4 py-3">{formatUsd(income.amountUsd)}</td>
-                  <td className="px-4 py-3 uppercase">{formatIncomeStatus(income.status)}</td>
-                  <td className="px-4 py-3">{income.notes ?? "—"}</td>
+                  <td className="px-4 py-3">{renderNotesCell(income.notes)}</td>
                 </tr>
               ))}
             </DataTable>
           </div>
         </Card>
         <Card>
-          <h2 className="font-display text-2xl text-ink">Pagos programados</h2>
+          <h2 className="font-display text-2xl text-ink">Pagos pendientes</h2>
+          <p className="mt-1 text-sm text-ink/55">Estos cobros recién impactan ingresos reales y remanente cuando se marcan como pagados.</p>
           <div className="mt-4">
-            <DataTable headers={["Fecha", "Tipo", "Monto", "Estado", "Notas"]}>
+            <DataTable
+              headers={["Fecha", "Tipo", "Monto", "Estado", "Notas", "Acción"]}
+              tableClassName="min-w-[52rem] table-fixed"
+              colGroup={
+                <colgroup>
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[9rem]" />
+                  <col className="w-[9rem]" />
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[15rem]" />
+                  <col className="w-[10rem]" />
+                </colgroup>
+              }
+            >
               {detail.scheduledPayments.map((payment) => (
                 <tr key={payment.id}>
                   <td className="px-4 py-3">{formatShortDate(payment.expectedDate)}</td>
                   <td className="px-4 py-3">{formatIncomeType(payment.type)}</td>
                   <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
-                  <td className="px-4 py-3 uppercase">{payment.status}</td>
-                  <td className="px-4 py-3">{payment.notes ?? "—"}</td>
+                  <td className="px-4 py-3 uppercase">{formatScheduledPaymentStatus(payment.status)}</td>
+                  <td className="px-4 py-3">{renderNotesCell(payment.notes)}</td>
+                  <td className="px-4 py-3">
+                    <MarkPaymentPaidButton
+                      paymentId={payment.id}
+                      paymentStatus={payment.status}
+                      paymentType={payment.type}
+                      expectedAmountUsd={payment.expectedAmountUsd}
+                      projectName={payment.projectName}
+                      demoMode={!process.env.DATABASE_URL}
+                      compact
+                    />
+                  </td>
                 </tr>
               ))}
             </DataTable>

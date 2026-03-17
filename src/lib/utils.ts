@@ -76,6 +76,26 @@ export function formatIncomeStatus(value: string | null | undefined) {
   return "—";
 }
 
+export function formatScheduledPaymentStatus(value: string | null | undefined) {
+  if (value === "paid") {
+    return "Cobrado";
+  }
+
+  if (value === "pending") {
+    return "Pendiente";
+  }
+
+  if (value === "overdue") {
+    return "Vencido";
+  }
+
+  if (value === "cancelled") {
+    return "Cancelado";
+  }
+
+  return "—";
+}
+
 export function formatIncomeType(value: string | null | undefined) {
   if (value === "DEVELOPMENT") {
     return "Desarrollo";

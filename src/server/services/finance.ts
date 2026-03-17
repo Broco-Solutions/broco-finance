@@ -1195,7 +1195,15 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
     if (!detail) {
       throw new AppError("Cliente no encontrado.", 404);
     }
-    return detail;
+    return {
+      ...detail,
+      incomes: detail.incomes
+        .filter((income) => isPaidIncomeStatus(income.status))
+        .sort((left, right) => right.date.localeCompare(left.date)),
+      payments: detail.payments
+        .filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus))
+        .sort((left, right) => left.expectedDate.localeCompare(right.expectedDate)),
+    };
   }
 
   await syncProjectSubscriptions(prisma);
@@ -1252,7 +1260,10 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
   const projects = client.projects.map(mapProjectRecord);
 
   const incomes = await prisma.income.findMany({
-    where: { project: { clientId: id } },
+    where: {
+      project: { clientId: id },
+      status: IncomeStatus.PAID,
+    },
     select: {
       id: true,
       projectId: true,
@@ -1275,7 +1286,6 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
       },
     },
     orderBy: { date: "desc" },
-    take: 12,
   });
 
   const payments = await prisma.scheduledPayment.findMany({
@@ -1307,7 +1317,6 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
       },
     },
     orderBy: { expectedDate: "asc" },
-    take: 12,
   });
 
   return {
@@ -1420,7 +1429,15 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
     if (!detail) {
       throw new AppError("Proyecto no encontrado.", 404);
     }
-    return detail;
+    return {
+      ...detail,
+      incomes: detail.incomes
+        .filter((income) => isPaidIncomeStatus(income.status))
+        .sort((left, right) => right.date.localeCompare(left.date)),
+      scheduledPayments: detail.scheduledPayments
+        .filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus))
+        .sort((left, right) => left.expectedDate.localeCompare(right.expectedDate)),
+    };
   }
 
   await syncProjectSubscriptions(prisma);
@@ -1525,8 +1542,14 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
 
   return {
     project: mapProjectRecord(project),
-    incomes: project.incomes.map(mapIncomeRecord),
-    scheduledPayments: project.scheduledPayments.map(mapScheduledPaymentRecord),
+    incomes: project.incomes
+      .filter((income) => isPaidIncomeStatus(income.status))
+      .map(mapIncomeRecord)
+      .sort((left, right) => right.date.localeCompare(left.date)),
+    scheduledPayments: project.scheduledPayments
+      .filter((payment) => isOpenScheduledStatus(payment.status))
+      .map(mapScheduledPaymentRecord)
+      .sort((left, right) => left.expectedDate.localeCompare(right.expectedDate)),
     expenses: project.expenses.map(mapExpenseRecord),
   };
 }

@@ -2,10 +2,19 @@ import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-b
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatIncomeStatus, formatIncomeType, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
+import { formatIncomeType, formatProjectStatus, formatScheduledPaymentStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { getClientDetail } from "@/server/services/finance";
 
 export const dynamic = "force-dynamic";
+
+function renderNotesCell(notes: string | null, widthClassName = "max-w-[14rem]") {
+  const value = notes?.trim() || "—";
+  return (
+    <span className={`block truncate ${widthClassName}`} title={value === "—" ? undefined : value}>
+      {value}
+    </span>
+  );
+}
 
 export default async function ClientDetailPage({ params }: { params: { id: string } }) {
   const detail = await getClientDetail(params.id);
@@ -56,15 +65,28 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
       </Card>
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
-          <h2 className="font-display text-2xl text-ink">Últimos cobros y pendientes</h2>
+          <h2 className="font-display text-2xl text-ink">Ingresos cobrados</h2>
           <div className="mt-4">
-            <DataTable headers={["Fecha", "Proyecto", "USD", "Estado"]}>
+            <DataTable
+              headers={["Fecha", "Proyecto", "Tipo", "Monto", "Notas"]}
+              tableClassName="min-w-[46rem] table-fixed"
+              colGroup={
+                <colgroup>
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[12rem]" />
+                  <col className="w-[9rem]" />
+                  <col className="w-[9rem]" />
+                  <col className="w-[14rem]" />
+                </colgroup>
+              }
+            >
               {detail.incomes.map((income) => (
                 <tr key={income.id}>
                   <td className="px-4 py-3">{formatShortDate(income.date)}</td>
                   <td className="px-4 py-3">{income.projectName}</td>
+                  <td className="px-4 py-3">{formatIncomeType(income.type)}</td>
                   <td className="px-4 py-3">{formatUsd(income.amountUsd)}</td>
-                  <td className="px-4 py-3 uppercase">{formatIncomeStatus(income.status)}</td>
+                  <td className="px-4 py-3">{renderNotesCell(income.notes)}</td>
                 </tr>
               ))}
             </DataTable>
@@ -74,14 +96,14 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           <h2 className="font-display text-2xl text-ink">Pagos pendientes</h2>
           <p className="mt-1 text-sm text-ink/55">Estos cobros recién impactan ingresos reales y remanente cuando se marcan como pagados.</p>
           <div className="mt-4">
-            <DataTable headers={["Fecha", "Proyecto", "Tipo", "Monto", "Estado", "Acción"]}>
+            <DataTable headers={["Fecha", "Proyecto", "Tipo", "Monto", "Estado", "Acción"]} tableClassName="min-w-[50rem] table-fixed">
               {detail.payments.map((payment) => (
                 <tr key={payment.id}>
                   <td className="px-4 py-3">{formatShortDate(payment.expectedDate)}</td>
                   <td className="px-4 py-3">{payment.projectName}</td>
                   <td className="px-4 py-3">{formatIncomeType(payment.type)}</td>
                   <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
-                  <td className="px-4 py-3 uppercase">{payment.status}</td>
+                  <td className="px-4 py-3 uppercase">{formatScheduledPaymentStatus(payment.status)}</td>
                   <td className="px-4 py-3">
                     <MarkPaymentPaidButton
                       paymentId={payment.id}
