@@ -263,8 +263,8 @@ export function IncomesScreen({
     <div className="space-y-8">
       <PageHeader
         eyebrow="Ingresos"
-        title="Caja real con origen claro: desarrollo o mantenimiento"
-        description="Todo ingreso suma caja, pero ahora cada cobro se clasifica para no descontar mensualidades del saldo pendiente del desarrollo."
+        title="Ingresos"
+        description=""
         demoMode={demoMode}
       />
 

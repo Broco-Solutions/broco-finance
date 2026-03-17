@@ -1,10 +1,13 @@
 import nextDynamic from "next/dynamic";
+import { DashboardDateRangeControls } from "@/components/dashboard/date-range-controls";
 import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-button";
 import { AlertBanner } from "@/components/ui/alert-banner";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
+import { resolveDashboardDateRange } from "@/lib/dashboard-date-range";
 import { formatShortDate, formatUsd, toCurrencyNumber } from "@/lib/utils";
 import { getDashboard } from "@/server/services/finance";
 
@@ -23,8 +26,24 @@ const CashflowChart = nextDynamic(
   { ssr: false },
 );
 
-export default async function DashboardPage() {
-  const dashboard = await getDashboard();
+function readSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
+  const dateRange = resolveDashboardDateRange({
+    preset: readSearchParam(searchParams?.preset),
+    startDate: readSearchParam(searchParams?.startDate),
+    endDate: readSearchParam(searchParams?.endDate),
+  });
+  const dashboard = await getDashboard({
+    from: dateRange.startDate,
+    to: dateRange.endDate,
+  });
   const demoMode = !process.env.DATABASE_URL;
   const kpis = {
     incomesUsd: toCurrencyNumber(dashboard.kpis.incomesUsd) ?? 0,
@@ -35,11 +54,19 @@ export default async function DashboardPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
-        eyebrow="Overview"
-        title="El tablero financiero que mira caja, cobranza y remanente real"
-        description="Los filtros operativos distinguen caja real de cuentas por cobrar. Desarrollo y mantenimiento se separan a nivel operativo, pero ambos siguen sumando caja, resultado neto y remanente."
+        eyebrow="Dashboard"
+        title="Dashboard"
+        description=""
+        meta={<Badge tone="neutral">{dateRange.label}</Badge>}
+        actions={
+          <DashboardDateRangeControls
+            endDate={dateRange.endDate}
+            preset={dateRange.preset}
+            startDate={dateRange.startDate}
+          />
+        }
         demoMode={demoMode}
       />
 

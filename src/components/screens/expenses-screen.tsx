@@ -524,8 +524,8 @@ export function ExpensesScreen({
     <div className="space-y-8">
       <PageHeader
         eyebrow={header.eyebrow}
-        title={header.title}
-        description={header.description}
+        title={activeTab === "ledger" ? "Gastos" : "Recurrentes"}
+        description=""
         demoMode={demoMode}
       />
 

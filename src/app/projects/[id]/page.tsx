@@ -17,7 +17,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
       <PageHeader
         eyebrow="Proyecto"
         title={detail.project.name}
-        description={`Cliente: ${detail.project.clientName}. Estado: ${formatProjectStatus(detail.project.status)}. ${detail.project.notes ?? "Sin notas operativas."}`}
+        description=""
         demoMode={!process.env.DATABASE_URL}
       />
 

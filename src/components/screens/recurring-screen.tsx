@@ -108,8 +108,8 @@ export function RecurringScreen({
     <div className="space-y-8">
       <PageHeader
         eyebrow="Recurrentes"
-        title="Cobranza de mantenimientos"
-        description="La suscripción ya no es un contrato suelto: vive en cada proyecto. Si un proyecto tiene fee mensual, el cronograma MAINTENANCE se genera desde ahí."
+        title="Recurrentes"
+        description=""
         demoMode={demoMode}
       />
 

@@ -181,8 +181,8 @@ export function ClientsScreen({
     <div className="space-y-8">
       <PageHeader
         eyebrow="Clientes"
-        title="Relación comercial y cuentas por cobrar"
-        description="Ahora podés administrar alta, edición y baja lógica de clientes sin perder el contexto del listado."
+        title="Clientes"
+        description=""
         demoMode={demoMode}
       />
 

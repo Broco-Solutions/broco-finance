@@ -35,7 +35,6 @@ import {
   demoCategories,
   demoClientDetails,
   demoClients,
-  demoDashboard,
   demoDistributionPage,
   demoExpenses,
   demoIncomes,
@@ -2088,28 +2087,249 @@ export async function getAlerts(): Promise<AlertsPayload> {
 
 function bucketMonthLabel(date: string | Date) {
   const parsed = typeof date === "string" ? parseISO(date) : date;
-  return format(parsed, "MMM");
+  return format(parsed, "MMM yy");
+}
+
+function bucketMonthKey(date: string | Date) {
+  const parsed = typeof date === "string" ? parseISO(date) : date;
+  return format(parsed, "yyyy-MM");
+}
+
+type DashboardProjectAggregate = {
+  clientName: string;
+  status: ProjectStatus | string;
+  incomes: Array<{ amountUsd: number; date: string; status: IncomeStatus | string }>;
+  scheduledPayments: Array<{ expectedDate: string; status: ScheduledPaymentStatus | string }>;
+};
+
+function buildDashboardPayload({
+  alerts,
+  allExpenses,
+  allIncomes,
+  committedExpensesMonthUsd,
+  expenses,
+  filters,
+  incomes,
+  layers,
+  operationalPendingIncomes,
+  payments,
+  projects,
+  salariesThisMonthUsd,
+}: {
+  alerts: AlertsPayload;
+  allExpenses: Array<{ amountUsd: number }>;
+  allIncomes: Array<{ amountUsd: number }>;
+  committedExpensesMonthUsd: number;
+  expenses: ExpenseRecord[];
+  filters?: z.infer<typeof dashboardFilterSchema>;
+  incomes: IncomeRecord[];
+  layers: DistributionRecord[];
+  operationalPendingIncomes: Array<{ amountUsd: number }>;
+  payments: ScheduledPaymentRecord[];
+  projects: DashboardProjectAggregate[];
+  salariesThisMonthUsd: number;
+}): DashboardPayload {
+  const summary = computeDistributionSummary(
+    allIncomes.map((item) => ({ amountUsd: item.amountUsd })),
+    allExpenses.map((item) => ({ amountUsd: item.amountUsd })),
+    layers.map((item) => ({ currentAmountUsd: item.currentAmountUsd })),
+  );
+
+  const monthlyMap = new Map<string, { month: string; monthKey: string; incomeUsd: number; expenseUsd: number; netUsd: number }>();
+  for (const income of incomes) {
+    const monthKey = bucketMonthKey(income.date);
+    const bucket = monthlyMap.get(monthKey) ?? {
+      month: bucketMonthLabel(income.date),
+      monthKey,
+      incomeUsd: 0,
+      expenseUsd: 0,
+      netUsd: 0,
+    };
+    bucket.incomeUsd += income.amountUsd;
+    bucket.netUsd += income.amountUsd;
+    monthlyMap.set(monthKey, bucket);
+  }
+
+  for (const expense of expenses) {
+    const monthKey = bucketMonthKey(expense.date);
+    const bucket = monthlyMap.get(monthKey) ?? {
+      month: bucketMonthLabel(expense.date),
+      monthKey,
+      incomeUsd: 0,
+      expenseUsd: 0,
+      netUsd: 0,
+    };
+    bucket.expenseUsd += expense.amountUsd;
+    bucket.netUsd -= expense.amountUsd;
+    monthlyMap.set(monthKey, bucket);
+  }
+
+  const monthlyPerformance = Array.from(monthlyMap.values())
+    .sort((left, right) => left.monthKey.localeCompare(right.monthKey))
+    .map(({ monthKey: _, ...item }) => item);
+
+  let cumulative = 0;
+  const cumulativeCashflow = monthlyPerformance.map((item) => {
+    cumulative += item.netUsd;
+    return {
+      month: item.month,
+      valueUsd: cumulative,
+    };
+  });
+
+  const categoryBreakdown = Array.from(
+    expenses.reduce((acc, item) => {
+      acc.set(item.categoryName, (acc.get(item.categoryName) ?? 0) + item.amountUsd);
+      return acc;
+    }, new Map<string, number>()),
+  )
+    .map(([category, amountUsd]) => ({ category, amountUsd }))
+    .sort((left, right) => right.amountUsd - left.amountUsd);
+
+  const topClientsMap = projects.reduce(
+    (acc, project) => {
+      const current = acc.get(project.clientName) ?? {
+        clientName: project.clientName,
+        incomeUsd: 0,
+        activeProjects: 0,
+        pendingPayments: 0,
+      };
+      current.activeProjects += isActiveProjectStatus(project.status) ? 1 : 0;
+      current.pendingPayments += project.scheduledPayments.filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus)).length;
+      current.pendingPayments += project.incomes.filter((income) => isPendingIncomeStatus(income.status)).length;
+      acc.set(project.clientName, current);
+      return acc;
+    },
+    new Map<string, { clientName: string; incomeUsd: number; activeProjects: number; pendingPayments: number }>(),
+  );
+
+  for (const income of incomes) {
+    const current = topClientsMap.get(income.clientName) ?? {
+      clientName: income.clientName,
+      incomeUsd: 0,
+      activeProjects: 0,
+      pendingPayments: 0,
+    };
+    current.incomeUsd += income.amountUsd;
+    topClientsMap.set(income.clientName, current);
+  }
+
+  const currentMonthEnd = endOfMonth(new Date());
+  const receivableUsd =
+    payments
+      .filter(
+        (payment) =>
+          isOpenScheduledStatus(payment.status as ScheduledPaymentStatus) &&
+          !isAfter(parseISO(payment.expectedDate), currentMonthEnd),
+      )
+      .reduce((sum, item) => sum + item.expectedAmountUsd, 0) +
+    operationalPendingIncomes.reduce((sum, item) => sum + item.amountUsd, 0);
+
+  return {
+    filters: {
+      from: filters?.from ?? null,
+      to: filters?.to ?? null,
+      clientId: filters?.clientId ?? null,
+      projectId: filters?.projectId ?? null,
+    },
+    kpis: {
+      incomesUsd: incomes.reduce((sum, item) => sum + item.amountUsd, 0),
+      expensesUsd: expenses.reduce((sum, item) => sum + item.amountUsd, 0),
+      netUsd: incomes.reduce((sum, item) => sum + item.amountUsd, 0) - expenses.reduce((sum, item) => sum + item.amountUsd, 0),
+      remanenteUsd: summary.remanenteUsd,
+      receivableUsd,
+      overdueUsd: payments
+        .filter((payment) => payment.status === "overdue")
+        .reduce((sum, item) => sum + item.expectedAmountUsd, 0),
+      committedExpensesMonthUsd,
+      salariesThisMonthUsd,
+    },
+    charts: {
+      monthlyPerformance,
+      categoryBreakdown,
+      cumulativeCashflow,
+      topClients: Array.from(topClientsMap.values()).sort((a, b) => b.incomeUsd - a.incomeUsd).slice(0, 5),
+    },
+    upcomingPayments: payments.filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus)).slice(0, 10),
+    distribution: layers,
+    alerts,
+  };
 }
 
 export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchema>): Promise<DashboardPayload> {
+  const currentMonthStart = startOfMonth(new Date());
+  const currentMonthEnd = endOfMonth(new Date());
+
   if (!hasDatabaseConfig()) {
-    return {
-      ...demoDashboard,
-      filters: {
+    const demoProjectsScope = demoProjects.filter((project) => {
+      if (filters?.projectId && project.id !== filters.projectId) {
+        return false;
+      }
+
+      if (filters?.clientId && project.clientId !== filters.clientId) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return buildDashboardPayload({
+      filters,
+      incomes: mapDemoIncomes({
+        projectId: filters?.projectId ?? null,
+        clientId: filters?.clientId ?? null,
+        status: "PAID",
         from: filters?.from ?? null,
         to: filters?.to ?? null,
-        clientId: filters?.clientId ?? null,
+      }),
+      expenses: mapDemoExpenses({
         projectId: filters?.projectId ?? null,
-      },
-    };
+        from: filters?.from ?? null,
+        to: filters?.to ?? null,
+      }),
+      payments: mapDemoScheduledPayments({
+        projectId: filters?.projectId ?? null,
+        clientId: filters?.clientId ?? null,
+      }),
+      operationalPendingIncomes: mapDemoIncomes({
+        projectId: filters?.projectId ?? null,
+        clientId: filters?.clientId ?? null,
+        status: "PENDING",
+        to: dateOnly(currentMonthEnd),
+      }).map((item) => ({ amountUsd: item.amountUsd })),
+      committedExpensesMonthUsd: mapDemoScheduledExpenses({
+        status: "PENDING",
+        currentMonth: true,
+        includeOverdue: true,
+      }).reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
+      layers: demoLayers,
+      allIncomes: demoIncomes.filter((item) => item.status === "PAID").map((item) => ({ amountUsd: item.amountUsd })),
+      allExpenses: demoExpenses.map((item) => ({ amountUsd: item.amountUsd })),
+      salariesThisMonthUsd: demoSalaries
+        .filter((item) => item.month === dateOnly(currentMonthStart))
+        .reduce((sum, item) => sum + item.amountUsd, 0),
+      projects: demoProjectsScope.map((project) => ({
+        clientName: project.clientName,
+        status: project.status,
+        incomes: demoIncomes.filter((income) => income.projectId === project.id).map((income) => ({
+          amountUsd: income.amountUsd,
+          date: income.date,
+          status: income.status,
+        })),
+        scheduledPayments: demoScheduledPayments
+          .filter((payment) => payment.projectId === project.id)
+          .map((payment) => ({
+            expectedDate: payment.expectedDate,
+            status: payment.status,
+          })),
+      })),
+      alerts: demoAlerts,
+    });
   }
 
   await syncProjectSubscriptions(prisma);
   await syncOverduePayments(prisma);
   await syncOpenRecurringExpenses(prisma);
-
-  const currentMonthStart = startOfMonth(new Date());
-  const currentMonthEnd = endOfMonth(new Date());
 
   const incomeWhere: Prisma.IncomeWhereInput = {
     status: IncomeStatus.PAID,
@@ -2121,11 +2341,10 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
     project: filters?.clientId ? { clientId: filters.clientId } : undefined,
   };
 
-  const pendingIncomeWhere: Prisma.IncomeWhereInput = {
+  const operationalPendingIncomeWhere: Prisma.IncomeWhereInput = {
     status: IncomeStatus.PENDING,
     date: {
-      gte: filters?.from ? parseISO(filters.from) : undefined,
-      lte: filters?.to ? parseISO(filters.to) : undefined,
+      lte: currentMonthEnd,
     },
     projectId: filters?.projectId ?? undefined,
     project: filters?.clientId ? { clientId: filters.clientId } : undefined,
@@ -2145,14 +2364,14 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
     project: filters?.clientId ? { clientId: filters.clientId } : undefined,
   };
 
-  const [incomes, pendingIncomes, expenses, payments, committedExpensesMonth, layers, allIncomes, allExpenses, salaries, projects] = await Promise.all([
+  const [incomes, operationalPendingIncomes, expenses, payments, committedExpensesMonth, layers, allIncomes, allExpenses, salaries, projects] = await Promise.all([
     prisma.income.findMany({
       where: incomeWhere,
       include: { project: { include: { client: true } } },
       orderBy: { date: "asc" },
     }),
     prisma.income.findMany({
-      where: pendingIncomeWhere,
+      where: operationalPendingIncomeWhere,
       select: { amountUsd: true },
     }),
     prisma.expense.findMany({
@@ -2186,6 +2405,10 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
       },
     }),
     prisma.project.findMany({
+      where: {
+        id: filters?.projectId ?? undefined,
+        clientId: filters?.clientId ?? undefined,
+      },
       include: {
         client: true,
         incomes: true,
@@ -2197,99 +2420,32 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
   const mappedIncomes = incomes.map(mapIncomeRecord);
   const mappedExpenses = expenses.map(mapExpenseRecord);
   const mappedPayments = payments.map(mapScheduledPaymentRecord);
-  const summary = computeDistributionSummary(
-    allIncomes.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
-    allExpenses.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
-    layers.map((item) => ({ currentAmountUsd: requireNumber(item.currentAmountUsd) })),
-  );
-
-  const monthlyMap = new Map<string, { month: string; incomeUsd: number; expenseUsd: number; netUsd: number }>();
-  for (const income of mappedIncomes) {
-    const key = bucketMonthLabel(income.date);
-    const bucket = monthlyMap.get(key) ?? { month: key, incomeUsd: 0, expenseUsd: 0, netUsd: 0 };
-    bucket.incomeUsd += income.amountUsd;
-    bucket.netUsd += income.amountUsd;
-    monthlyMap.set(key, bucket);
-  }
-  for (const expense of mappedExpenses) {
-    const key = bucketMonthLabel(expense.date);
-    const bucket = monthlyMap.get(key) ?? { month: key, incomeUsd: 0, expenseUsd: 0, netUsd: 0 };
-    bucket.expenseUsd += expense.amountUsd;
-    bucket.netUsd -= expense.amountUsd;
-    monthlyMap.set(key, bucket);
-  }
-
-  let cumulative = 0;
-  const monthlyPerformance = Array.from(monthlyMap.values());
-  const cumulativeCashflow = monthlyPerformance.map((item) => {
-    cumulative += item.netUsd;
-    return {
-      month: item.month,
-      valueUsd: cumulative,
-    };
-  });
-
-  const categoryBreakdown = Array.from(
-    mappedExpenses.reduce((acc, item) => {
-      acc.set(item.categoryName, (acc.get(item.categoryName) ?? 0) + item.amountUsd);
-      return acc;
-    }, new Map<string, number>()),
-  ).map(([category, amountUsd]) => ({ category, amountUsd }));
-
-  const topClients = projects
-    .reduce(
-      (acc, project) => {
-        const current = acc.get(project.client.name) ?? {
-          clientName: project.client.name,
-          incomeUsd: 0,
-          activeProjects: 0,
-          pendingPayments: 0,
-        };
-        current.incomeUsd += sumIncomeUsd(project.incomes, (income) => isPaidIncomeStatus(income.status));
-        current.activeProjects += isActiveProjectStatus(project.status) ? 1 : 0;
-        current.pendingPayments += project.scheduledPayments.filter((payment) => isOpenScheduledStatus(payment.status)).length;
-        current.pendingPayments += project.incomes.filter((income) => isPendingIncomeStatus(income.status)).length;
-        acc.set(project.client.name, current);
-        return acc;
-      },
-      new Map<string, { clientName: string; incomeUsd: number; activeProjects: number; pendingPayments: number }>(),
-    );
-
   const alerts = await getAlerts();
 
-  return {
-    filters: {
-      from: filters?.from ?? null,
-      to: filters?.to ?? null,
-      clientId: filters?.clientId ?? null,
-      projectId: filters?.projectId ?? null,
-    },
-    kpis: {
-      incomesUsd: mappedIncomes.reduce((sum, item) => sum + item.amountUsd, 0),
-      expensesUsd: mappedExpenses.reduce((sum, item) => sum + item.amountUsd, 0),
-      netUsd:
-        mappedIncomes.reduce((sum, item) => sum + item.amountUsd, 0) -
-        mappedExpenses.reduce((sum, item) => sum + item.amountUsd, 0),
-      remanenteUsd: summary.remanenteUsd,
-      receivableUsd:
-        mappedPayments
-          .filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus))
-          .reduce((sum, item) => sum + item.expectedAmountUsd, 0) +
-        pendingIncomes.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
-      overdueUsd: mappedPayments
-        .filter((payment) => payment.status === "overdue")
-        .reduce((sum, item) => sum + item.expectedAmountUsd, 0),
-      committedExpensesMonthUsd: committedExpensesMonth.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
-      salariesThisMonthUsd: salaries.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
-    },
-    charts: {
-      monthlyPerformance,
-      categoryBreakdown,
-      cumulativeCashflow,
-      topClients: Array.from(topClients.values()).sort((a, b) => b.incomeUsd - a.incomeUsd).slice(0, 5),
-    },
-    upcomingPayments: mappedPayments.filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus)).slice(0, 10),
-    distribution: layers.map(mapDistributionRecord),
+  return buildDashboardPayload({
+    filters,
+    incomes: mappedIncomes,
+    expenses: mappedExpenses,
+    payments: mappedPayments,
+    operationalPendingIncomes: operationalPendingIncomes.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
+    committedExpensesMonthUsd: committedExpensesMonth.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
+    layers: layers.map(mapDistributionRecord),
+    allIncomes: allIncomes.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
+    allExpenses: allExpenses.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
+    salariesThisMonthUsd: salaries.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
+    projects: projects.map((project) => ({
+      clientName: project.client.name,
+      status: project.status,
+      incomes: project.incomes.map((income) => ({
+        amountUsd: requireNumber(income.amountUsd),
+        date: dateOnly(income.date),
+        status: income.status,
+      })),
+      scheduledPayments: project.scheduledPayments.map((payment) => ({
+        expectedDate: dateOnly(payment.expectedDate),
+        status: payment.status,
+      })),
+    })),
     alerts,
-  };
+  });
 }

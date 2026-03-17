@@ -409,8 +409,8 @@ export function CalendarScreen({
     <div className="space-y-8">
       <PageHeader
         eyebrow="Calendario"
-        title="Calendario operativo de ingresos y gastos"
-        description="La vista mensual mezcla compromisos programados, pendientes manuales y movimientos ya conciliados. En desktop vive como grilla tradicional; en mobile cae a una agenda ordenada por día."
+        title="Calendario"
+        description=""
         demoMode={demoMode}
       />
 

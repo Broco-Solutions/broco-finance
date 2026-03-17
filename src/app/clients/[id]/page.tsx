@@ -15,11 +15,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
       <PageHeader
         eyebrow="Cliente"
         title={detail.client.name}
-        description={
-          [detail.client.contactName, detail.client.contactEmail, detail.client.contactPhone, detail.client.notes]
-            .filter(Boolean)
-            .join(" · ") || "Relación comercial activa en Broco Finance."
-        }
+        description=""
         demoMode={!process.env.DATABASE_URL}
       />
       <div className="grid gap-4 md:grid-cols-3">

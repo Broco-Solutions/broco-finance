@@ -208,8 +208,8 @@ export function ProjectsScreen({
     <div className="space-y-8">
       <PageHeader
         eyebrow="Proyectos"
-        title="Desarrollo fijo y mantenimiento recurrente, separados de verdad"
-        description="Cada proyecto distingue el cierre del build inicial del fee mensual operativo. El dashboard sigue viendo todo como caja, pero la gestión ya no mezcla conceptos."
+        title="Proyectos"
+        description=""
         demoMode={demoMode}
       />
 

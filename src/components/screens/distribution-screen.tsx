@@ -124,8 +124,8 @@ export function DistributionScreen({
     <div className="space-y-8">
       <PageHeader
         eyebrow="Distribución"
-        title="Remanente histórico, capas activas y retiros"
-        description="El remanente baja al modificar capas o registrar salarios porque los retiros crean gastos asociados. Nunca se descuenta dos veces."
+        title="Distribución"
+        description=""
         demoMode={demoMode}
       />
 
