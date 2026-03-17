@@ -387,6 +387,68 @@ export function CalendarPageSkeleton() {
   );
 }
 
+export function KanbanPageSkeleton() {
+  return (
+    <div className="space-y-8">
+      <HeaderSkeleton withMeta />
+      <Card>
+        <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <SkeletonBlock className="h-11 rounded-[1rem]" />
+              <SkeletonBlock className="h-11 rounded-[1rem]" />
+              <SkeletonBlock className="h-11 rounded-[1rem]" />
+              <SkeletonBlock className="h-11 rounded-full" />
+            </div>
+            <SkeletonBlock className="h-4 w-72 rounded-full" />
+          </div>
+          <div className="space-y-3">
+            <SkeletonBlock className="h-4 w-36 rounded-full" />
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <SkeletonBlock key={index} className="h-12 w-40 rounded-[1rem]" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+      <div className="overflow-hidden">
+        <div className="flex gap-4 pb-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Card key={index} className="flex min-h-[540px] w-[320px] shrink-0 flex-col p-0">
+              <div className="border-b border-black/6 px-5 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <SkeletonBlock className="h-5 w-40 rounded-full" />
+                  <SkeletonBlock className="h-8 w-8 rounded-full" />
+                </div>
+                <SkeletonBlock className="mt-3 h-3 w-20 rounded-full" />
+              </div>
+              <div className="space-y-3 p-4">
+                {Array.from({ length: 4 }).map((__, cardIndex) => (
+                  <div key={cardIndex} className="rounded-[1.3rem] border border-black/6 bg-white/80 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <SkeletonBlock className="h-4 w-3/4 rounded-full" />
+                        <SkeletonBlock className="h-3 w-1/2 rounded-full" />
+                      </div>
+                      <SkeletonBlock className="h-8 w-8 rounded-full" />
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <SkeletonBlock className="h-6 w-20 rounded-full" />
+                      <SkeletonBlock className="h-6 w-24 rounded-full" />
+                    </div>
+                    <SkeletonBlock className="mt-4 h-9 w-20 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DetailPageSkeleton() {
   return (
     <div className="space-y-8">

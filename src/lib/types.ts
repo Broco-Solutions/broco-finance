@@ -26,6 +26,42 @@ export type ClientRecord = {
   totalProjects: number;
 };
 
+export type KanbanColumnRecord = {
+  id: string;
+  name: string;
+  color: string | null;
+  position: number;
+  isActive: boolean;
+  isInitial: boolean;
+  assignmentCount: number;
+};
+
+export type KanbanProjectCard = {
+  projectId: string;
+  projectName: string;
+  clientId: string;
+  clientName: string;
+  projectStatus: ProjectStatus;
+  monthlyFeeUsd: number | null;
+  devBudgetUsd: number | null;
+  placementColumnId: string | null;
+  displayColumnId: string;
+  displayPosition: number;
+  hasExplicitPlacement: boolean;
+};
+
+export type KanbanBoardColumn = KanbanColumnRecord & {
+  cards: KanbanProjectCard[];
+};
+
+export type KanbanBoardPayload = {
+  columns: KanbanBoardColumn[];
+  clients: Array<{ id: string; name: string }>;
+  demoMode: boolean;
+  persistenceAvailable: boolean;
+  notice: string | null;
+};
+
 export type ProjectRecord = {
   id: string;
   clientId: string;
