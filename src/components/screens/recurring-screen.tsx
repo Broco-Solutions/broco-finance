@@ -164,19 +164,31 @@ export function RecurringScreen({
             description="Cuando un proyecto tenga `monthlyFeeUsd` mayor a cero, aparecerá automáticamente en este tablero junto a su cronograma de mantenimiento."
           />
         ) : (
-          <DataTable headers={["Cliente", "Proyecto", "Estado", "Fee mensual", "Fin", "Cobrado", "Saldo desarrollo"]} scrollAfter={8}>
+          <DataTable
+            headers={["Cliente", "Proyecto", "Estado", "Fee mensual", "Fin", "Cobrado", "Saldo desarrollo"]}
+            scrollAfter={8}
+            tableClassName="min-w-[68rem] table-fixed"
+            colGroup={
+              <colgroup>
+                <col className="w-[11rem]" />
+                <col className="w-[14rem]" />
+                <col className="w-[8.5rem]" />
+                <col className="w-[9rem]" />
+                <col className="w-[8rem]" />
+                <col className="w-[8.5rem]" />
+                <col className="w-[9rem]" />
+              </colgroup>
+            }
+          >
             {subscribedProjects.map((project) => (
               <tr key={project.id}>
                 <td className="px-4 py-3">{project.clientName}</td>
-                <td className="px-4 py-3">
-                  <div className="font-semibold text-ink">{project.name}</div>
-                  <div className="text-xs uppercase tracking-[0.16em] text-ink/45">Suscripción desde proyecto</div>
-                </td>
-                <td className="px-4 py-3">{formatProjectStatus(project.status)}</td>
-                <td className="px-4 py-3">{formatUsd(project.monthlyFeeUsd)}</td>
-                <td className="px-4 py-3">{formatShortDate(project.monthlyFeeEndDate)}</td>
-                <td className="px-4 py-3">{formatUsd(project.maintenanceCollectedUsd)}</td>
-                <td className="px-4 py-3">{formatUsd(project.developmentPendingUsd)}</td>
+                <td className="px-4 py-3 font-semibold text-ink">{project.name}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{formatProjectStatus(project.status)}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{formatUsd(project.monthlyFeeUsd)}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{formatShortDate(project.monthlyFeeEndDate)}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{formatUsd(project.maintenanceCollectedUsd)}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{formatUsd(project.developmentPendingUsd)}</td>
               </tr>
             ))}
           </DataTable>
@@ -202,15 +214,29 @@ export function RecurringScreen({
             description="No hay pagos de mantenimiento programados en el rango seleccionado."
           />
         ) : (
-          <DataTable headers={["Vencimiento", "Cliente", "Proyecto", "Fee", "Estado", "Acción"]} scrollAfter={10}>
+          <DataTable
+            headers={["Vencimiento", "Cliente", "Proyecto", "Fee", "Estado", "Acción"]}
+            scrollAfter={10}
+            tableClassName="min-w-[58rem] table-fixed"
+            colGroup={
+              <colgroup>
+                <col className="w-[8rem]" />
+                <col className="w-[11rem]" />
+                <col className="w-[14rem]" />
+                <col className="w-[8rem]" />
+                <col className="w-[8rem]" />
+                <col className="w-[9rem]" />
+              </colgroup>
+            }
+          >
             {monthPayments.map((payment) => (
               <tr key={payment.id}>
-                <td className="px-4 py-3">{formatShortDate(payment.expectedDate)}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{formatShortDate(payment.expectedDate)}</td>
                 <td className="px-4 py-3">{payment.clientName}</td>
                 <td className="px-4 py-3">{payment.projectName}</td>
-                <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
-                <td className="px-4 py-3 uppercase">{payment.status}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 whitespace-nowrap">{formatUsd(payment.expectedAmountUsd)}</td>
+                <td className="px-4 py-3 whitespace-nowrap uppercase">{payment.status}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
                   <MarkPaymentPaidButton
                     paymentId={payment.id}
                     paymentStatus={payment.status}
