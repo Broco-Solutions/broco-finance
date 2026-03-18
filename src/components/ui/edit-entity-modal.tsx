@@ -10,6 +10,7 @@ export function EditEntityModal({
   title,
   description,
   submitLabel,
+  widthClassName = "max-w-xl",
   isPending,
   disabled = false,
   error,
@@ -21,6 +22,7 @@ export function EditEntityModal({
   title: string;
   description: string;
   submitLabel: string;
+  widthClassName?: string;
   isPending: boolean;
   disabled?: boolean;
   error: string | null;
@@ -61,7 +63,7 @@ export function EditEntityModal({
         onClick={onClose}
         type="button"
       />
-      <div className="relative w-full max-w-xl">
+      <div className={`relative w-full ${widthClassName}`}>
         <Card className="border border-black/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(248,250,252,0.94))] p-0 shadow-[0_24px_80px_rgba(16,21,34,0.18)]">
           <form className="space-y-5 p-6" onSubmit={onSubmit}>
             <div className="flex items-start justify-between gap-4">

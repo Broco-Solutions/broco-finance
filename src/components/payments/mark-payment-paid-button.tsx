@@ -7,6 +7,7 @@ import { ScheduledPaymentSettlementModal } from "@/components/payments/scheduled
 
 export function MarkPaymentPaidButton({
   paymentId,
+  expectedDate,
   paymentStatus,
   paymentType,
   expectedAmountUsd,
@@ -15,6 +16,7 @@ export function MarkPaymentPaidButton({
   compact = false,
 }: {
   paymentId: string;
+  expectedDate: string;
   paymentStatus: ScheduledPaymentStatus;
   paymentType: IncomeType;
   expectedAmountUsd: number;
@@ -47,6 +49,7 @@ export function MarkPaymentPaidButton({
           id: paymentId,
           status: paymentStatus,
           type: paymentType,
+          expectedDate,
           expectedAmountUsd,
           projectName,
         }}

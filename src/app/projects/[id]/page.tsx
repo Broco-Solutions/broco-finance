@@ -134,6 +134,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   <td className="px-4 py-3">
                     <MarkPaymentPaidButton
                       paymentId={payment.id}
+                      expectedDate={payment.expectedDate}
                       paymentStatus={payment.status}
                       paymentType={payment.type}
                       expectedAmountUsd={payment.expectedAmountUsd}
