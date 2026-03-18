@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
 import { formatArs, formatShortDate, formatUsd } from "@/lib/utils";
+import { ExpenseEntryModal } from "@/components/calendar/expense-entry-modal";
 import { PayScheduledExpenseModal } from "@/components/expenses/pay-scheduled-expense-modal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ type LedgerRow = {
   amountArs: number | null;
   amountUsd: number;
   status: LedgerStatus;
+  expense: ExpenseRecord | null;
   scheduledExpense: ScheduledExpenseRecord | null;
 };
 
@@ -95,6 +97,18 @@ function actionButtonClass(tone: "neutral" | "danger" = "neutral") {
     : "inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white text-ink transition hover:bg-black/5";
 }
 
+function getExpenseLockedReason(expense: ExpenseRecord) {
+  if (expense.salaryWithdrawalId) {
+    return "Los gastos creados por salarios se editan desde distribución.";
+  }
+
+  if (expense.scheduledExpenseId) {
+    return "Los gastos creados desde recurrentes se editan desde el pago programado.";
+  }
+
+  return null;
+}
+
 export function ExpensesScreen({
   expenses,
   categories,
@@ -128,6 +142,7 @@ export function ExpensesScreen({
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [busyTarget, setBusyTarget] = useState<string | null>(null);
   const [payableExpense, setPayableExpense] = useState<ScheduledExpenseRecord | null>(null);
+  const [expenseEditor, setExpenseEditor] = useState<{ expense: ExpenseRecord; lockedReason: string | null } | null>(null);
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     categoryId: categories[0]?.id ?? "",
@@ -206,6 +221,7 @@ export function ExpensesScreen({
         amountArs: null,
         amountUsd: item.amountUsd,
         status: isOverdueExpense(item.dueDate) ? "overdue" : "pending",
+        expense: null,
         scheduledExpense: item,
       })),
       ...expenses.map<LedgerRow>((expense) => ({
@@ -220,6 +236,7 @@ export function ExpensesScreen({
         amountArs: expense.amountArs,
         amountUsd: expense.amountUsd,
         status: "paid",
+        expense,
         scheduledExpense: null,
       })),
     ],
@@ -828,6 +845,22 @@ export function ExpensesScreen({
                         >
                           {demoMode ? "Demo" : "Pagar ahora"}
                         </Button>
+                      ) : row.expense ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="px-3 py-1.5 text-xs"
+                          disabled={demoMode}
+                          onClick={() =>
+                            setExpenseEditor({
+                              expense: row.expense!,
+                              lockedReason: getExpenseLockedReason(row.expense!),
+                            })
+                          }
+                        >
+                          <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                          Editar
+                        </Button>
                       ) : (
                         <span className="text-xs uppercase tracking-[0.16em] text-ink/35">—</span>
                       )}
@@ -1065,6 +1098,18 @@ export function ExpensesScreen({
         open={Boolean(payableExpense)}
         scheduledExpense={payableExpense}
         onClose={() => setPayableExpense(null)}
+      />
+
+      <ExpenseEntryModal
+        categories={categories}
+        date={expenseEditor?.expense.date ?? new Date().toISOString().slice(0, 10)}
+        description="Corregí el gasto real y el cambio impacta en los listados, resúmenes y métricas financieras."
+        demoMode={demoMode}
+        expense={expenseEditor?.expense ?? null}
+        lockedReason={expenseEditor?.lockedReason ?? null}
+        open={Boolean(expenseEditor)}
+        projects={projects}
+        onClose={() => setExpenseEditor(null)}
       />
 
       <EditEntityModal

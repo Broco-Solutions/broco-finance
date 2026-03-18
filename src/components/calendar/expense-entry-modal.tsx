@@ -61,6 +61,7 @@ function buildExpenseForm({
 export function ExpenseEntryModal({
   categories,
   date,
+  description,
   demoMode,
   expense,
   lockedReason,
@@ -70,6 +71,7 @@ export function ExpenseEntryModal({
 }: {
   categories: ExpenseCategoryRecord[];
   date: string;
+  description?: string;
   demoMode: boolean;
   expense: ExpenseRecord | null;
   lockedReason?: string | null;
@@ -126,9 +128,11 @@ export function ExpenseEntryModal({
       open={open}
       title={expense ? "Editar gasto" : "Nuevo gasto"}
       description={
-        expense
-          ? "Ajustá el egreso real directamente desde el calendario."
-          : "Registrá un gasto con la fecha del día elegido y dejalo integrado al ledger."
+        description ?? (
+          expense
+            ? "Ajustá el egreso real directamente desde el calendario."
+            : "Registrá un gasto con la fecha del día elegido y dejalo integrado al ledger."
+        )
       }
       submitLabel={expense ? "Guardar gasto" : "Crear gasto"}
       isPending={isPending}
