@@ -64,7 +64,8 @@ La estructura sigue una separación simple y efectiva:
 - `src/server/services/finance.ts`
   - núcleo de reglas de negocio, queries Prisma, validaciones de dominio y sincronizaciones.
 - `src/server/prisma.ts`
-  - singleton de Prisma Client.
+  - singleton de Prisma Client;
+  - normalización runtime de `DATABASE_URL` para Vercel/Prisma Postgres.
 - `src/lib/**`
   - tipos compartidos, auth helpers, utilidades, date range del dashboard, API client.
 - `prisma/schema.prisma`
@@ -705,10 +706,43 @@ Esto permite revisar UI y lógica superficial sin base conectada.
   - path a un `.xlsx` específico para el import inicial;
   - si no existe, el seed busca automáticamente un `.xlsx` en la raíz.
 - `NODE_ENV`
-  - Prisma reduce logs fuera de development;
+  - Prisma mantiene logs `query`, `warn` y `error` para diagnóstico;
   - la cookie se marca `secure` en producción.
 
-### 11.2 Bootstrap recomendado
+### 11.2 Configuración de conexión Prisma aplicada
+
+Archivo responsable:
+
+- `src/server/prisma.ts`
+
+Comportamiento implementado:
+
+- Prisma Client usa patrón singleton sobre `globalThis` para reutilizar la misma instancia en desarrollo, hot reload y reuso de lambdas warm.
+- Se exporta un único cliente compartido como `prisma`.
+- Se habilitan logs de Prisma en runtime con `["query", "warn", "error"]` para diagnóstico en Vercel.
+- Si `DATABASE_URL` apunta a Prisma Postgres por TCP (`db.prisma.io` o `pooled.db.prisma.io`), el runtime garantiza `sslmode=require` si faltara.
+- Si la URL PostgreSQL no define `connect_timeout`, el runtime agrega `connect_timeout=30`.
+- Si el runtime corre en Vercel y la URL usa el host directo `db.prisma.io`, el cliente reescribe internamente a `pooled.db.prisma.io` para preferir pooled TCP en serverless.
+
+Plantilla recomendada para Vercel con Prisma Postgres:
+
+```env
+DATABASE_URL="postgres://<USER>:<PASSWORD>@pooled.db.prisma.io:5432/?sslmode=require&connect_timeout=30"
+```
+
+Plantilla recomendada para uso directo/local si hace falta comparar o diagnosticar reachability:
+
+```env
+DATABASE_URL="postgres://<USER>:<PASSWORD>@db.prisma.io:5432/?sslmode=require&connect_timeout=30"
+```
+
+Decisión tomada sobre adapters:
+
+- No se agregó `@prisma/adapter-pg`.
+- Motivo: este proyecto usa `PrismaClient` estándar con motor Rust y Prisma Postgres TCP.
+- Según la documentación oficial actual, Prisma Postgres para serverless prioriza pooled TCP; el serverless driver propio de Prisma sigue en Early Access y no está recomendado para producción.
+
+### 11.3 Bootstrap recomendado
 
 Instalación:
 
