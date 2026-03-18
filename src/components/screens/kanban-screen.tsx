@@ -420,6 +420,10 @@ export function KanbanScreen({
 
   const summary = useMemo(() => boardSummary(visibleColumns), [visibleColumns]);
   const totalSummary = useMemo(() => boardSummary(boardState.columns), [boardState.columns]);
+  const configuredColumns = useMemo(
+    () => boardState.columns.slice().sort((left, right) => left.position - right.position),
+    [boardState.columns],
+  );
 
   const activeDragCard = activeDragItem?.type === "card"
     ? boardState.columns.flatMap((column) => column.cards).find((card) => card.projectId === activeDragItem.cardId) ?? null
@@ -664,123 +668,135 @@ export function KanbanScreen({
         demoMode={boardState.demoMode}
       />
 
-      <Card className="overflow-hidden">
-        <div className="grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
-          <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div className="relative md:col-span-2">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
-                <Input
-                  className="pl-11"
-                  placeholder="Buscar proyecto…"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-              </div>
-              <Select value={clientFilter} onChange={(event) => setClientFilter(event.target.value)}>
-                <option value="">Todos los clientes</option>
-                {boardState.clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </Select>
-              <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                <option value="">Todos los estados</option>
-                {projectStatusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {formatProjectStatus(status)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                className={cn(
-                  "inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition",
-                  onlyActiveProjects
-                    ? "border-cobalt/20 bg-cobalt/10 text-cobalt"
-                    : "border-black/10 bg-white text-ink/72 hover:bg-black/5 hover:text-ink",
-                )}
-                onClick={() => setOnlyActiveProjects((current) => !current)}
-                type="button"
-              >
-                {onlyActiveProjects ? "Solo proyectos activos" : "Ver todos los proyectos"}
-              </button>
-              <div className="text-sm text-ink/55">
-                {boardState.demoMode ? "La vista opera en demo: podés explorar, pero no persistir cambios." : null}
-                {!boardState.demoMode && !boardState.persistenceAvailable
-                  ? "El tablero quedó en modo lectura hasta aplicar la migración nueva."
-                  : null}
-                {!boardIsReadonly && dragDisabled ? "El drag queda pausado mientras haya filtros activos." : null}
-              </div>
-            </div>
+      <Card className="space-y-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="relative md:col-span-2 xl:col-span-1">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/35" />
+            <Input
+              className="pl-11"
+              placeholder="Buscar proyecto…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
           </div>
+          <Select value={clientFilter} onChange={(event) => setClientFilter(event.target.value)}>
+            <option value="">Todos los clientes</option>
+            {boardState.clients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.name}
+              </option>
+            ))}
+          </Select>
+          <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <option value="">Todos los estados</option>
+            {projectStatusOptions.map((status) => (
+              <option key={status} value={status}>
+                {formatProjectStatus(status)}
+              </option>
+            ))}
+          </Select>
+        </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ink/42">Estados configurados</div>
-                <p className="mt-1 text-sm text-ink/58">Mover una tarjeta sincroniza el `status` operativo del proyecto segun la columna destino.</p>
-              </div>
-              <Button disabled={boardIsReadonly} onClick={openCreateColumn} type="button" variant="secondary">
-                <Plus className="mr-2 h-4 w-4" />
-                Agregar
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2.5">
-              {boardState.columns
-                .slice()
-                .sort((left, right) => left.position - right.position)
-                .map((column) => (
-                  <ColumnCard key={column.id} column={column} onEdit={openEditColumn} />
-                ))}
-            </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            className={cn(
+              "inline-flex items-center rounded-full border px-4 py-2 text-sm font-semibold transition",
+              onlyActiveProjects
+                ? "border-cobalt/20 bg-cobalt/10 text-cobalt"
+                : "border-black/10 bg-white text-ink/72 hover:bg-black/5 hover:text-ink",
+            )}
+            onClick={() => setOnlyActiveProjects((current) => !current)}
+            type="button"
+          >
+            {onlyActiveProjects ? "Solo proyectos activos" : "Ver todos los proyectos"}
+          </button>
+          <div className="text-sm text-ink/55">
+            {boardState.demoMode ? "La vista opera en demo: podés explorar, pero no persistir cambios." : null}
+            {!boardState.demoMode && !boardState.persistenceAvailable
+              ? "El tablero quedó en modo lectura hasta aplicar la migración nueva."
+              : null}
+            {!boardIsReadonly && dragDisabled ? "El drag queda pausado mientras haya filtros activos." : null}
           </div>
         </div>
-        {boardState.notice ? <p className="mt-5 text-sm text-ink/58">{boardState.notice}</p> : null}
-        {screenError ? <p className="mt-5 text-sm text-brick">{screenError}</p> : null}
+
+        {boardState.notice ? <p className="text-sm text-ink/58">{boardState.notice}</p> : null}
+        {screenError ? <p className="text-sm text-brick">{screenError}</p> : null}
       </Card>
 
-      {visibleColumns.length === 0 ? (
-        <EmptyState
-          title="Sin columnas activas"
-          description="Activá al menos una columna desde la configuración del tablero para empezar a ordenar proyectos."
-        />
-      ) : (
-        <div className="overflow-x-auto pb-2">
-          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
-            <SortableContext items={visibleColumns.map((column) => column.id)} strategy={horizontalListSortingStrategy}>
-              <div className="flex min-w-max gap-4">
-                {visibleColumns.map((column) => (
-                  <SortableKanbanColumn key={column.id} column={column} disabled={dragDisabled} onEdit={openEditColumn} />
-                ))}
-              </div>
-            </SortableContext>
-
-            <DragOverlay>
-              {activeDragColumn ? (
-                <div className="w-[312px] rounded-[1.8rem] border border-black/10 bg-white/95 p-5 shadow-[0_24px_60px_rgba(16,21,34,0.18)]">
-                  <div className="flex items-center gap-2">
-                    <span
-                      aria-hidden="true"
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: activeDragColumn.color ?? "#94A3B8" }}
-                    />
-                    <div className="text-sm font-semibold text-ink">{activeDragColumn.name}</div>
-                  </div>
-                </div>
-              ) : null}
-              {activeDragCard ? (
-                <div className="w-[280px] rounded-[1.45rem] border border-black/10 bg-white/95 p-4 shadow-[0_24px_60px_rgba(16,21,34,0.18)]">
-                  <div className="text-sm font-semibold text-ink">{activeDragCard.projectName}</div>
-                  <div className="mt-1 text-xs uppercase tracking-[0.16em] text-ink/45">{activeDragCard.clientName}</div>
-                </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ink/42">Tablero de proyectos</div>
+            <p className="mt-1 text-sm text-ink/58">Arrastrá columnas y tarjetas para reordenar el seguimiento visual del pipeline.</p>
+          </div>
+          <Badge tone={dragDisabled ? "warning" : "success"}>
+            {dragDisabled ? "Drag pausado" : "Drag activo"}
+          </Badge>
         </div>
-      )}
+
+        {visibleColumns.length === 0 ? (
+          <EmptyState
+            title="Sin columnas activas"
+            description="Activá al menos una columna desde la configuración del tablero para empezar a ordenar proyectos."
+          />
+        ) : (
+          <Card className="overflow-hidden p-0">
+            <div className="overflow-x-auto px-4 pb-5 pt-4 md:px-5 md:pb-6 md:pt-5 lg:px-6">
+              <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd} onDragStart={handleDragStart}>
+                <SortableContext items={visibleColumns.map((column) => column.id)} strategy={horizontalListSortingStrategy}>
+                  <div className="flex min-w-max gap-4">
+                    {visibleColumns.map((column) => (
+                      <SortableKanbanColumn key={column.id} column={column} disabled={dragDisabled} onEdit={openEditColumn} />
+                    ))}
+                  </div>
+                </SortableContext>
+
+                <DragOverlay>
+                  {activeDragColumn ? (
+                    <div className="w-[312px] rounded-[1.8rem] border border-black/10 bg-white/95 p-5 shadow-[0_24px_60px_rgba(16,21,34,0.18)]">
+                      <div className="flex items-center gap-2">
+                        <span
+                          aria-hidden="true"
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: activeDragColumn.color ?? "#94A3B8" }}
+                        />
+                        <div className="text-sm font-semibold text-ink">{activeDragColumn.name}</div>
+                      </div>
+                    </div>
+                  ) : null}
+                  {activeDragCard ? (
+                    <div className="w-[280px] rounded-[1.45rem] border border-black/10 bg-white/95 p-4 shadow-[0_24px_60px_rgba(16,21,34,0.18)]">
+                      <div className="text-sm font-semibold text-ink">{activeDragCard.projectName}</div>
+                      <div className="mt-1 text-xs uppercase tracking-[0.16em] text-ink/45">{activeDragCard.clientName}</div>
+                    </div>
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
+            </div>
+          </Card>
+        )}
+      </section>
+
+      <Card className="space-y-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ink/42">Estados configurados</div>
+            <p className="mt-1 max-w-2xl text-sm text-ink/58">
+              Editá el orden visual de las columnas, revisá cuáles están activas y ajustá los estados disponibles del tablero.
+            </p>
+          </div>
+          <Button disabled={boardIsReadonly} onClick={openCreateColumn} type="button" variant="secondary">
+            <Plus className="mr-2 h-4 w-4" />
+            Agregar
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap gap-2.5">
+          {configuredColumns.map((column) => (
+            <ColumnCard key={column.id} column={column} onEdit={openEditColumn} />
+          ))}
+        </div>
+      </Card>
 
       <EditEntityModal
         open={isColumnModalOpen}
