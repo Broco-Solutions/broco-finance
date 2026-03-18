@@ -1,6 +1,8 @@
 import { readJson, withRoute } from "@/server/http";
 import { getKanbanBoard, kanbanBoardActionSchema, mutateKanbanBoard } from "@/server/services/kanban";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   return withRoute(() => getKanbanBoard());
 }
