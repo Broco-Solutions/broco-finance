@@ -28,7 +28,7 @@ export function RecurringScreen({
   demoMode: boolean;
 }) {
   const maintenancePayments = useMemo(
-    () => payments.filter((payment) => payment.type === "MAINTENANCE"),
+    () => payments.filter((payment) => payment.type === "MAINTENANCE" && payment.status !== "cancelled"),
     [payments],
   );
   const todayKey = new Date().toISOString().slice(0, 10);

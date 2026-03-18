@@ -538,14 +538,20 @@ export async function syncProjectMaintenanceSchedule(
   const monthlyFeeUsd = toNumber(project.monthlyFeeUsd) ?? 0;
   const currentMonth = startOfMonth(new Date());
   const activeSubscription = isActiveProjectStatus(project.status) && monthlyFeeUsd > 0;
+  const openMaintenanceStatuses = [ScheduledPaymentStatus.pending, ScheduledPaymentStatus.overdue];
 
   if (!activeSubscription) {
-    await db.scheduledPayment.deleteMany({
+    await db.scheduledPayment.updateMany({
       where: {
         projectId: project.id,
         type: IncomeType.MAINTENANCE,
-        status: ScheduledPaymentStatus.pending,
-        expectedDate: { gte: currentMonth },
+        status: {
+          in: openMaintenanceStatuses,
+        },
+      },
+      data: {
+        status: ScheduledPaymentStatus.cancelled,
+        paidAt: null,
       },
     });
     return;
@@ -565,19 +571,28 @@ export async function syncProjectMaintenanceSchedule(
   const scheduleDates = buildMaintenanceScheduleDates(scheduleStart, contractEndMonth);
 
   if (scheduleDates.length === 0) {
-    await db.scheduledPayment.deleteMany({
+    await db.scheduledPayment.updateMany({
       where: {
         projectId: project.id,
         type: IncomeType.MAINTENANCE,
-        status: ScheduledPaymentStatus.pending,
-        expectedDate: { gte: currentMonth },
+        status: {
+          in: openMaintenanceStatuses,
+        },
+      },
+      data: {
+        status: ScheduledPaymentStatus.cancelled,
+        paidAt: null,
       },
     });
     return;
   }
 
   const latestScheduledDate = scheduleDates[scheduleDates.length - 1];
-  const existingKeys = new Set(existingPayments.map((payment) => dateOnly(payment.expectedDate)));
+  const existingKeys = new Set(
+    existingPayments
+      .filter((payment) => payment.status !== ScheduledPaymentStatus.cancelled)
+      .map((payment) => dateOnly(payment.expectedDate)),
+  );
   const amountUsd = new Prisma.Decimal(monthlyFeeUsd.toFixed(2));
 
   await Promise.all(
@@ -611,12 +626,18 @@ export async function syncProjectMaintenanceSchedule(
     });
   }
 
-  await db.scheduledPayment.deleteMany({
+  await db.scheduledPayment.updateMany({
     where: {
       projectId: project.id,
       type: IncomeType.MAINTENANCE,
-      status: ScheduledPaymentStatus.pending,
+      status: {
+        in: openMaintenanceStatuses,
+      },
       expectedDate: { gt: latestScheduledDate },
+    },
+    data: {
+      status: ScheduledPaymentStatus.cancelled,
+      paidAt: null,
     },
   });
 }
