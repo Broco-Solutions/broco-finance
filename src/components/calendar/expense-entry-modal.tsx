@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ExpenseCategoryRecord, ExpenseRecord, ExpenseType, ProjectRecord } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { EditEntityModal } from "@/components/ui/edit-entity-modal";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -82,6 +83,8 @@ export function ExpenseEntryModal({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [form, setForm] = useState<ExpenseFormState>(() => buildExpenseForm({ expense, date, categories }));
   const lockedExpense = Boolean(lockedReason || expense?.salaryWithdrawalId || expense?.scheduledExpenseId);
 
@@ -91,6 +94,8 @@ export function ExpenseEntryModal({
     }
 
     setError(null);
+    setDeleteError(null);
+    setDeleteDialogOpen(false);
     setForm(buildExpenseForm({ expense, date, categories }));
   }, [categories, date, expense, open]);
 
@@ -123,122 +128,179 @@ export function ExpenseEntryModal({
     });
   };
 
-  return (
-    <EditEntityModal
-      open={open}
-      title={expense ? "Editar gasto" : "Nuevo gasto"}
-      description={
-        description ?? (
-          expense
-            ? "Ajustá el egreso real directamente desde el calendario."
-            : "Registrá un gasto con la fecha del día elegido y dejalo integrado al ledger."
-        )
+  const handleDelete = () => {
+    if (!expense) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        setDeleteError(null);
+        await apiFetch(`/api/expenses/${expense.id}`, { method: "DELETE" });
+        setDeleteDialogOpen(false);
+        onClose();
+        router.refresh();
+      } catch (submitError) {
+        setDeleteError(submitError instanceof Error ? submitError.message : "No se pudo eliminar el gasto.");
       }
-      submitLabel={expense ? "Guardar gasto" : "Crear gasto"}
-      isPending={isPending}
-      disabled={submitDisabled}
-      error={error}
-      onClose={onClose}
-      onSubmit={handleSubmit}
-    >
-      <div className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha</label>
-            <Input type="date" value={form.date} onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))} />
+    });
+  };
+
+  return (
+    <>
+      <EditEntityModal
+        open={open}
+        title={expense ? "Editar gasto" : "Nuevo gasto"}
+        description={
+          description ?? (
+            expense
+              ? "Ajustá el egreso real directamente desde el calendario."
+              : "Registrá un gasto con la fecha del día elegido y dejalo integrado al ledger."
+          )
+        }
+        submitLabel={expense ? "Guardar gasto" : "Crear gasto"}
+        isPending={isPending}
+        disabled={submitDisabled}
+        error={error}
+        onClose={onClose}
+        onSubmit={handleSubmit}
+      >
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha</label>
+              <Input type="date" value={form.date} onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Tipo</label>
+              <Select value={form.expenseType} onChange={(event) => setForm((prev) => ({ ...prev, expenseType: event.target.value as ExpenseType }))}>
+                <option value="fixed">Fijo</option>
+                <option value="variable">Variable</option>
+              </Select>
+            </div>
           </div>
+
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Tipo</label>
-            <Select value={form.expenseType} onChange={(event) => setForm((prev) => ({ ...prev, expenseType: event.target.value as ExpenseType }))}>
-              <option value="fixed">Fijo</option>
-              <option value="variable">Variable</option>
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Categoría</label>
+            <Select value={form.categoryId} onChange={(event) => setForm((prev) => ({ ...prev, categoryId: event.target.value }))}>
+              {categories.length === 0 ? <option value="">Sin categorías disponibles</option> : null}
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
             </Select>
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Categoría</label>
-          <Select value={form.categoryId} onChange={(event) => setForm((prev) => ({ ...prev, categoryId: event.target.value }))}>
-            {categories.length === 0 ? <option value="">Sin categorías disponibles</option> : null}
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Proyecto</label>
-          <Select value={form.projectId} onChange={(event) => setForm((prev) => ({ ...prev, projectId: event.target.value }))}>
-            <option value="">Sin proyecto</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.clientName} · {project.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Descripción</label>
-          <Input value={form.description} onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))} />
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Monto USD</label>
-            <Input
-              min="0"
-              placeholder="0.00"
-              type="number"
-              value={form.amountUsd}
-              onChange={(event) => setForm((prev) => ({ ...prev, amountUsd: event.target.value }))}
-            />
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Proyecto</label>
+            <Select value={form.projectId} onChange={(event) => setForm((prev) => ({ ...prev, projectId: event.target.value }))}>
+              <option value="">Sin proyecto</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.clientName} · {project.name}
+                </option>
+              ))}
+            </Select>
           </div>
+
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Monto ARS</label>
-            <Input
-              min="0"
-              placeholder="0"
-              type="number"
-              value={form.amountArs}
-              onChange={(event) => setForm((prev) => ({ ...prev, amountArs: event.target.value }))}
-            />
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Descripción</label>
+            <Input value={form.description} onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))} />
           </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Monto USD</label>
+              <Input
+                min="0"
+                placeholder="0.00"
+                type="number"
+                value={form.amountUsd}
+                onChange={(event) => setForm((prev) => ({ ...prev, amountUsd: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Monto ARS</label>
+              <Input
+                min="0"
+                placeholder="0"
+                type="number"
+                value={form.amountArs}
+                onChange={(event) => setForm((prev) => ({ ...prev, amountArs: event.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">TC</label>
+              <Input
+                min="0"
+                placeholder="0"
+                type="number"
+                value={form.exchangeRate}
+                onChange={(event) => setForm((prev) => ({ ...prev, exchangeRate: event.target.value }))}
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">TC</label>
-            <Input
-              min="0"
-              placeholder="0"
-              type="number"
-              value={form.exchangeRate}
-              onChange={(event) => setForm((prev) => ({ ...prev, exchangeRate: event.target.value }))}
-            />
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Notas</label>
+            <Textarea value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} />
           </div>
+
+          {lockedExpense ? (
+            <div className="rounded-[1.2rem] border border-black/10 bg-black/5 px-4 py-3 text-sm text-ink/70">
+              {lockedReason ?? "Este gasto fue generado por otro flujo del sistema y no se edita desde acá."}
+            </div>
+          ) : null}
+
+          {categories.length === 0 ? <p className="text-sm text-ink/55">Necesitás al menos una categoría para registrar gastos.</p> : null}
+
+          {expense && !lockedExpense ? (
+            <div className="flex justify-start border-t border-black/8 pt-4">
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-brick hover:bg-brick/10 hover:text-brick"
+                disabled={demoMode || isPending}
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeleteDialogOpen(true);
+                }}
+              >
+                Eliminar gasto
+              </Button>
+            </div>
+          ) : null}
         </div>
+      </EditEntityModal>
 
-        <div className="space-y-2">
-          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Notas</label>
-          <Textarea value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} />
-        </div>
-
-        {lockedExpense ? (
-          <div className="rounded-[1.2rem] border border-black/10 bg-black/5 px-4 py-3 text-sm text-ink/70">
-            {lockedReason ?? "Este gasto fue generado por otro flujo del sistema y no se edita desde acá."}
-          </div>
-        ) : null}
-
-        {categories.length === 0 ? <p className="text-sm text-ink/55">Necesitás al menos una categoría para registrar gastos.</p> : null}
-
+      <ConfirmActionModal
+        open={deleteDialogOpen}
+        title="Eliminar gasto"
+        description="Esta acción borra el gasto real de forma definitiva y recalcula los totales, balances y resúmenes derivados."
+        confirmLabel="Eliminar gasto"
+        isPending={isPending}
+        disabled={demoMode}
+        error={deleteError}
+        onClose={() => {
+          setDeleteError(null);
+          setDeleteDialogOpen(false);
+        }}
+        onConfirm={handleDelete}
+      >
         {expense ? (
-          <div className="flex justify-end border-t border-black/8 pt-4">
-            <Button type="button" variant="ghost" disabled>
-              Gasto real
-            </Button>
+          <div className="space-y-2 text-sm text-ink/70">
+            <p>
+              Gasto: <span className="font-semibold text-ink">{expense.description}</span>.
+            </p>
+            <p>
+              Importe: <span className="font-semibold text-ink">{expense.amountUsd.toFixed(2)} USD</span>.
+            </p>
+            <p className="text-ink/60">Si el gasto proviene de salarios o de un flujo recurrente conciliado, el sistema va a bloquear la eliminación.</p>
+            {demoMode ? <p>La eliminación persistente requiere `DATABASE_URL`.</p> : null}
           </div>
         ) : null}
-      </div>
-    </EditEntityModal>
+      </ConfirmActionModal>
+    </>
   );
 }

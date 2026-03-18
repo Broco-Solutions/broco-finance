@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 import { cn, formatArs, formatIncomeStatus, formatIncomeType, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
@@ -135,6 +136,8 @@ export function IncomesScreen({
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<IncomeFormState>(buildEmptyForm(projects));
 
@@ -179,11 +182,18 @@ export function IncomesScreen({
     () => projects.find((project) => project.id === form.projectId) ?? null,
     [projects, form.projectId],
   );
+  const editingIncome = useMemo(
+    () => incomes.find((income) => income.id === editingIncomeId) ?? null,
+    [editingIncomeId, incomes],
+  );
 
   const pendingIncomeBlocked = form.status === "PENDING" && Boolean(selectedProject && isClosedProject(selectedProject.status));
 
   const resetForm = () => {
     setEditingIncomeId(null);
+    setDeleteDialogOpen(false);
+    setDeleteError(null);
+    setError(null);
     setForm(buildEmptyForm(projects));
   };
 
@@ -218,6 +228,9 @@ export function IncomesScreen({
 
   const handleEdit = (income: IncomeRecord) => {
     setEditingIncomeId(income.id);
+    setDeleteDialogOpen(false);
+    setDeleteError(null);
+    setError(null);
     setForm({
       projectId: income.projectId,
       date: income.date,
@@ -255,6 +268,23 @@ export function IncomesScreen({
         router.refresh();
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "No se pudo registrar el cobro.");
+      }
+    });
+  };
+
+  const handleDelete = () => {
+    if (!editingIncomeId) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        setDeleteError(null);
+        await apiFetch(`/api/incomes/${editingIncomeId}`, { method: "DELETE" });
+        resetForm();
+        router.refresh();
+      } catch (submitError) {
+        setDeleteError(submitError instanceof Error ? submitError.message : "No se pudo eliminar el ingreso.");
       }
     });
   };
@@ -392,6 +422,20 @@ export function IncomesScreen({
                   Cancelar edición
                 </Button>
               ) : null}
+              {editingIncomeId ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-brick hover:bg-brick/10 hover:text-brick"
+                  disabled={isPending || demoMode}
+                  onClick={() => {
+                    setDeleteError(null);
+                    setDeleteDialogOpen(true);
+                  }}
+                >
+                  Eliminar ingreso
+                </Button>
+              ) : null}
             </div>
           </form>
         </Card>
@@ -492,6 +536,41 @@ export function IncomesScreen({
           )}
         </Card>
       </div>
+
+      <ConfirmActionModal
+        open={deleteDialogOpen}
+        title="Eliminar ingreso"
+        description="Esta acción borra el ingreso de forma definitiva y recalcula el dashboard, los totales y los acumulados que dependan de él."
+        confirmLabel="Eliminar ingreso"
+        isPending={isPending}
+        disabled={demoMode}
+        error={deleteError}
+        onClose={() => {
+          setDeleteError(null);
+          setDeleteDialogOpen(false);
+        }}
+        onConfirm={handleDelete}
+      >
+        {editingIncome ? (
+          <div className="space-y-2 text-sm text-ink/70">
+            <p>
+              Proyecto: <span className="font-semibold text-ink">{editingIncome.clientName} · {editingIncome.projectName}</span>.
+            </p>
+            <p>
+              Tipo y estado:{" "}
+              <span className="font-semibold text-ink">
+                {formatIncomeType(editingIncome.type)} · {formatIncomeStatus(editingIncome.status)}
+              </span>
+              .
+            </p>
+            <p>
+              Importe: <span className="font-semibold text-ink">{formatUsd(editingIncome.amountUsd)}</span>.
+            </p>
+            <p className="text-ink/60">Si el ingreso está conciliado con un pago programado, el sistema va a bloquear la eliminación.</p>
+            {demoMode ? <p>La eliminación persistente requiere `DATABASE_URL`.</p> : null}
+          </div>
+        ) : null}
+      </ConfirmActionModal>
     </div>
   );
 }
