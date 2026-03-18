@@ -721,7 +721,7 @@ export function KanbanScreen({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-ink/42">Estados configurados</div>
-                <p className="mt-1 text-sm text-ink/58">El tablero usa columnas propias y no toca el `status` operativo del proyecto.</p>
+                <p className="mt-1 text-sm text-ink/58">Mover una tarjeta sincroniza el `status` operativo del proyecto segun la columna destino.</p>
               </div>
               <Button disabled={boardIsReadonly} onClick={openCreateColumn} type="button" variant="secondary">
                 <Plus className="mr-2 h-4 w-4" />
@@ -785,7 +785,7 @@ export function KanbanScreen({
       <EditEntityModal
         open={isColumnModalOpen}
         title={editingColumn ? "Editar columna" : "Nueva columna"}
-        description="Las columnas del Kanban son independientes del `status` actual del proyecto. Solo ordenan el seguimiento visual."
+        description="Las columnas ordenan el seguimiento visual y, al mover tarjetas, tambien sincronizan el `status` operativo del proyecto."
         submitLabel={editingColumn ? "Guardar columna" : "Crear columna"}
         isPending={isPending}
         disabled={boardIsReadonly}

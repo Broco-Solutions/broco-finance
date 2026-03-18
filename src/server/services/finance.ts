@@ -525,7 +525,7 @@ function buildMaintenanceScheduleDates(referenceDate = new Date(), endDate: Date
   return dates;
 }
 
-async function syncProjectMaintenanceSchedule(
+export async function syncProjectMaintenanceSchedule(
   db: DbClient,
   project: {
     id: string;

@@ -1,5 +1,5 @@
 import { ZodSchema } from "zod";
-import { AppError, getErrorMessage } from "@/server/errors";
+import { AppError, getErrorMessage, logServerError } from "@/server/errors";
 
 export async function readJson<T>(request: Request, schema: ZodSchema<T>) {
   const payload = await request.json();
@@ -18,6 +18,9 @@ export async function withRoute<T>(handler: () => Promise<T>) {
     return Response.json({ data });
   } catch (error) {
     const status = error instanceof AppError ? error.status : 500;
+    if (!(error instanceof AppError)) {
+      logServerError("api.route", error, { status });
+    }
     return Response.json({ error: getErrorMessage(error) }, { status });
   }
 }

@@ -1,9 +1,11 @@
 import { Prisma, ProjectStatus, type PrismaClient } from "@prisma/client";
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import type { KanbanBoardColumn, KanbanBoardPayload, KanbanColumnRecord, KanbanProjectCard } from "@/lib/types";
 import { demoProjects } from "@/server/demo-data";
-import { AppError } from "@/server/errors";
+import { AppError, logServerError } from "@/server/errors";
 import { hasDatabaseConfig, prisma } from "@/server/prisma";
+import { syncProjectMaintenanceSchedule } from "@/server/services/finance";
 
 type DbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -100,6 +102,59 @@ function toNumber(value: Prisma.Decimal | number | null | undefined) {
 function normalizeOptionalText(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function normalizeColumnName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function resolveProjectStatusForColumn(column: { name: string; isInitial: boolean }) {
+  if (column.isInitial) {
+    return ProjectStatus.ACTIVE;
+  }
+
+  const normalizedName = normalizeColumnName(column.name);
+
+  if (
+    normalizedName.includes("no aprobado")
+    || normalizedName.includes("sin respuesta")
+    || normalizedName.includes("cancel")
+    || normalizedName.includes("rechaz")
+  ) {
+    return ProjectStatus.CANCELLED;
+  }
+
+  if (
+    normalizedName === "completado"
+    || normalizedName === "finalizado"
+    || normalizedName.includes("terminado")
+    || normalizedName.includes("entregado")
+    || normalizedName.includes("cerrado")
+  ) {
+    return ProjectStatus.COMPLETED;
+  }
+
+  return ProjectStatus.ACTIVE;
+}
+
+function resolveDisplayColumnIdForProject({
+  initialColumnId,
+  activeColumnIds,
+  placementColumnId,
+}: {
+  initialColumnId: string;
+  activeColumnIds: Set<string>;
+  placementColumnId: string | null | undefined;
+}) {
+  if (placementColumnId && activeColumnIds.has(placementColumnId)) {
+    return placementColumnId;
+  }
+
+  return initialColumnId;
 }
 
 function mapColumnRecord(column: {
@@ -427,8 +482,15 @@ async function reorderBoardInDatabase(input: Extract<KanbanBoardAction, { action
   });
 
   const activeIds = activeColumns.map((column) => column.id);
+  const activeColumnById = new Map(activeColumns.map((column) => [column.id, column]));
+  const activeColumnIds = new Set(activeIds);
+  const initialColumn = activeColumns.find((column) => column.isInitial) ?? activeColumns[0] ?? null;
   if (activeIds.length !== input.orderedColumnIds.length || activeIds.some((id) => !input.orderedColumnIds.includes(id))) {
     throw new AppError("El tablero cambió mientras estabas reordenando. Recargá la vista y volvé a intentar.", 409);
+  }
+
+  if (!initialColumn) {
+    throw new AppError("El tablero necesita al menos una columna activa.", 409);
   }
 
   const payloadColumnIds = input.columns.map((column) => column.columnId);
@@ -461,22 +523,42 @@ async function reorderBoardInDatabase(input: Extract<KanbanBoardAction, { action
         ),
       );
 
-      const knownProjectIds = new Set(
-        (
-          await tx.project.findMany({
-            where: {
-              id: {
-                in: projectIds,
-              },
-            },
-            select: { id: true },
-          })
-        ).map((project) => project.id),
-      );
+      const knownProjects = await tx.project.findMany({
+        where: {
+          id: {
+            in: projectIds,
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+          monthlyFeeUsd: true,
+          monthlyFeeEndDate: true,
+        },
+      });
+      const knownProjectIds = new Set(knownProjects.map((project) => project.id));
 
       if (knownProjectIds.size !== projectIds.length) {
         throw new AppError("Hay proyectos inválidos en el reordenamiento.", 422);
       }
+
+      const projectsById = new Map(knownProjects.map((project) => [project.id, project]));
+
+      const placementsByProjectId = new Map(
+        (
+          await tx.kanbanProjectPlacement.findMany({
+            where: {
+              projectId: {
+                in: projectIds,
+              },
+            },
+            select: {
+              projectId: true,
+              kanbanColumnId: true,
+            },
+          })
+        ).map((placement) => [placement.projectId, placement.kanbanColumnId]),
+      );
 
       await Promise.all(
         input.columns.flatMap((column) =>
@@ -496,6 +578,48 @@ async function reorderBoardInDatabase(input: Extract<KanbanBoardAction, { action
           ),
         ),
       );
+
+      const movedProjects = input.columns.flatMap((column) => {
+        const targetColumn = activeColumnById.get(column.columnId);
+        if (!targetColumn) {
+          throw new AppError("La columna destino no existe o dejó de estar activa.", 409);
+        }
+
+        return column.projectIds
+          .filter((projectId) => {
+            const currentDisplayColumnId = resolveDisplayColumnIdForProject({
+              initialColumnId: initialColumn.id,
+              activeColumnIds,
+              placementColumnId: placementsByProjectId.get(projectId),
+            });
+
+            return currentDisplayColumnId !== column.columnId;
+          })
+          .map((projectId) => ({
+            projectId,
+            nextStatus: resolveProjectStatusForColumn(targetColumn),
+          }));
+      });
+
+      for (const item of movedProjects) {
+        const project = projectsById.get(item.projectId);
+        if (!project || project.status === item.nextStatus) {
+          continue;
+        }
+
+        const updatedProject = await tx.project.update({
+          where: { id: item.projectId },
+          data: { status: item.nextStatus },
+          select: {
+            id: true,
+            status: true,
+            monthlyFeeUsd: true,
+            monthlyFeeEndDate: true,
+          },
+        });
+
+        await syncProjectMaintenanceSchedule(tx, updatedProject, true);
+      }
     },
     kanbanTransactionOptions,
   );
@@ -637,6 +761,41 @@ async function deleteKanbanColumn(input: Extract<KanbanBoardAction, { action: "d
           }),
         ),
       );
+
+      const nextStatus = resolveProjectStatusForColumn(targetColumn);
+      const sourceProjects = await tx.project.findMany({
+        where: {
+          id: {
+            in: sourcePlacements.map((placement) => placement.projectId),
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+          monthlyFeeUsd: true,
+          monthlyFeeEndDate: true,
+        },
+      });
+
+      for (const project of sourceProjects) {
+
+        if (project.status === nextStatus) {
+          continue;
+        }
+
+        const updatedProject = await tx.project.update({
+          where: { id: project.id },
+          data: { status: nextStatus },
+          select: {
+            id: true,
+            status: true,
+            monthlyFeeUsd: true,
+            monthlyFeeEndDate: true,
+          },
+        });
+
+        await syncProjectMaintenanceSchedule(tx, updatedProject, true);
+      }
     }
 
     await tx.kanbanColumn.delete({
@@ -690,6 +849,22 @@ export async function mutateKanbanBoard(input: KanbanBoardAction): Promise<Kanba
         throw new AppError("Acción de Kanban inválida.", 422);
     }
   } catch (error) {
+    logServerError("kanban.mutate", error, {
+      action: input.action,
+      orderedColumnIds: input.action === "reorder_board" ? input.orderedColumnIds : undefined,
+      columns:
+        input.action === "reorder_board"
+          ? input.columns.map((column) => ({
+              columnId: column.columnId,
+              projectCount: column.projectIds.length,
+              projectIds: column.projectIds,
+            }))
+          : undefined,
+      columnId: "columnId" in input ? input.columnId : undefined,
+      targetColumnId: "targetColumnId" in input ? input.targetColumnId : undefined,
+      name: "name" in input ? input.name : undefined,
+    });
+
     if (isMissingKanbanTableError(error)) {
       throw new AppError("Aplicá la migración de Kanban antes de persistir cambios.", 503);
     }
@@ -697,5 +872,6 @@ export async function mutateKanbanBoard(input: KanbanBoardAction): Promise<Kanba
     throw error;
   }
 
+  revalidateTag("dashboard");
   return fetchKanbanBoardFromDatabase();
 }
