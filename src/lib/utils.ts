@@ -116,6 +116,30 @@ export function formatScheduledPaymentStatus(value: string | null | undefined) {
   return "—";
 }
 
+export function formatRecurringSeriesStatus(value: string | null | undefined) {
+  if (value === "ACTIVE") {
+    return "Activa";
+  }
+
+  if (value === "FINALIZED") {
+    return "Finalizada";
+  }
+
+  return "—";
+}
+
+export function formatRecurringIncomeSource(value: string | null | undefined) {
+  if (value === "PROJECT") {
+    return "Proyecto";
+  }
+
+  if (value === "MANUAL") {
+    return "Manual";
+  }
+
+  return "—";
+}
+
 export function formatIncomeType(value: string | null | undefined) {
   if (value === "DEVELOPMENT") {
     return "Desarrollo";
@@ -123,6 +147,18 @@ export function formatIncomeType(value: string | null | undefined) {
 
   if (value === "MAINTENANCE") {
     return "Mantenimiento";
+  }
+
+  return "—";
+}
+
+export function formatExpenseType(value: string | null | undefined) {
+  if (value === "fixed") {
+    return "Fijo";
+  }
+
+  if (value === "variable") {
+    return "Variable";
   }
 
   return "—";

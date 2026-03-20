@@ -1,13 +1,28 @@
 import { RecurringScreen } from "@/components/screens/recurring-screen";
-import { listProjects, listScheduledPayments } from "@/server/services/finance";
+import {
+  listExpenseCategories,
+  listProjects,
+  listRecurringExpenses,
+  listRecurringIncomes,
+} from "@/server/services/finance";
 
 export const dynamic = "force-dynamic";
 
 export default async function RecurringPage() {
-  const [{ data: payments, demoMode }, { data: projects }] = await Promise.all([
-    listScheduledPayments({ type: "MAINTENANCE" }),
+  const [{ data: recurringIncomes, demoMode }, { data: recurringExpenses }, { data: projects }, { data: categories }] = await Promise.all([
+    listRecurringIncomes(),
+    listRecurringExpenses(),
     listProjects(),
+    listExpenseCategories(),
   ]);
 
-  return <RecurringScreen payments={payments} projects={projects} demoMode={demoMode} />;
+  return (
+    <RecurringScreen
+      recurringIncomes={recurringIncomes}
+      recurringExpenses={recurringExpenses}
+      projects={projects}
+      categories={categories}
+      demoMode={demoMode}
+    />
+  );
 }

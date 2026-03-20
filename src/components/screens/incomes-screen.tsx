@@ -540,13 +540,12 @@ export function IncomesScreen({
             <EmptyState title="Sin ingresos" description="Cargá cobros o pendientes y clasificá si corresponden a desarrollo o mantenimiento." />
           ) : (
             <DataTable
-              headers={["Fecha", "Vence", "Cliente", "Proyecto", "Tipo", "ARS", "USD", "Estado", "Notas", "Acción"]}
+              headers={["Fecha", "Vence", "Cliente", "Proyecto", "Tipo", "USD", "Estado", "Notas", "Acción"]}
               footer={
                 <tr>
                   <td className="px-4 py-3 font-semibold text-ink" colSpan={5}>
                     Total filtrado
                   </td>
-                  <td className="px-4 py-3 font-semibold text-ink">{formatArs(filteredTotals.amountArs)}</td>
                   <td className="px-4 py-3 font-semibold text-emerald-950">{formatUsd(filteredTotals.amountUsd)}</td>
                   <td className="px-4 py-3 text-xs uppercase tracking-[0.16em] text-ink/45">{filteredTotals.count} filas</td>
                   <td className="px-4 py-3 text-ink/45">—</td>
@@ -565,7 +564,6 @@ export function IncomesScreen({
                       {formatIncomeType(income.type)}
                     </span>
                   </td>
-                  <td className="px-4 py-3">{formatArs(income.amountArs)}</td>
                   <td className="px-4 py-3">{formatUsd(income.amountUsd)}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${statusChip(income.displayStatus)}`}>

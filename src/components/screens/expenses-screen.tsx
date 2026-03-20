@@ -680,10 +680,10 @@ export function ExpensesScreen({
             <EmptyState title="Sin gastos" description="Cargá pagos o compromisos y filtrá por estado, tipo o categoría." />
           ) : (
             <DataTable
-              headers={["Fecha", "Categoría", "Descripción", "Tipo", "USD", "Corresponde a", "Proyecto", "Estado", "Acción"]}
+              headers={["Fecha", "Vence", "Categoría", "Descripción", "Tipo", "USD", "Proyecto", "Estado", "Acción"]}
               footer={
                 <tr>
-                  <td className="px-4 py-3 font-semibold text-ink" colSpan={4}>
+                  <td className="px-4 py-3 font-semibold text-ink" colSpan={5}>
                     Total filtrado
                   </td>
                   <td className="px-4 py-3 font-semibold text-rose-950">{formatUsd(filteredTotals.amountUsd)}</td>
@@ -697,6 +697,7 @@ export function ExpensesScreen({
               {visibleExpenses.map((expense) => (
                 <tr key={expense.id} className={statusRowClassName(expense.displayStatus)}>
                   <td className="px-4 py-3">{formatShortDate(expense.date)}</td>
+                  <td className="px-4 py-3">{formatShortDate(expense.dueDate)}</td>
                   <td className="px-4 py-3">{expense.categoryName}</td>
                   <td className="px-4 py-3 text-ink/70">{expense.description || "—"}</td>
                   <td className="px-4 py-3">
@@ -705,7 +706,6 @@ export function ExpensesScreen({
                     </span>
                   </td>
                   <td className="px-4 py-3">{formatUsd(expense.amountUsd)}</td>
-                  <td className="px-4 py-3">{formatShortDate(expense.correspondsToDate)}</td>
                   <td className="px-4 py-3">{expense.projectName ?? "—"}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${statusChip(expense.displayStatus)}`}>

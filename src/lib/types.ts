@@ -4,11 +4,14 @@ export type IncomeLedgerStatus = IncomeStatus | "OVERDUE";
 export type IncomeType = "DEVELOPMENT" | "MAINTENANCE";
 export type ContractFrequency = "monthly" | "quarterly" | "biannual" | "annual";
 export type ScheduledPaymentStatus = "pending" | "paid" | "overdue" | "cancelled";
-export type ScheduledExpenseStatus = "PENDING" | "PAID";
+export type ScheduledExpenseStatus = "PENDING" | "PAID" | "CANCELLED";
 export type ExpenseType = "fixed" | "variable";
 export type ExpenseStatus = "PAID" | "PENDING";
 export type ExpenseLedgerStatus = ExpenseStatus | "OVERDUE";
 export type DistributionLayer = "emergency" | "growth";
+export type RecurrenceScope = "CURRENT_ONLY" | "CURRENT_AND_FUTURE" | "FUTURE_FROM_NEXT";
+export type RecurringSeriesStatus = "ACTIVE" | "FINALIZED";
+export type RecurringIncomeSource = "PROJECT" | "MANUAL";
 
 export type MonetaryFields = {
   amountUsd: number;
@@ -126,11 +129,31 @@ export type RecurringExpenseRecord = {
   description: string;
   categoryId: string;
   categoryName: string;
+  projectId: string | null;
+  projectName: string | null;
   amountUsd: number;
   startDate: string;
+  endDate: string | null;
+  expenseType: ExpenseType;
   frequency: ContractFrequency;
   isActive: boolean;
+  seriesStatus: RecurringSeriesStatus;
   nextDueDate: string | null;
+  pendingCount: number;
+};
+
+export type RecurringIncomeRecord = {
+  id: string;
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  amountUsd: number;
+  startDate: string;
+  endDate: string | null;
+  source: RecurringIncomeSource;
+  isActive: boolean;
+  seriesStatus: RecurringSeriesStatus;
+  nextExpectedDate: string | null;
   pendingCount: number;
 };
 
@@ -165,6 +188,7 @@ export type SalaryRecord = MonetaryFields & {
 export type ScheduledPaymentRecord = {
   id: string;
   projectId: string;
+  recurringIncomeId?: string | null;
   projectName: string;
   clientName: string;
   type: IncomeType;
