@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ArrowUpRight, Pencil, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Pencil } from "lucide-react";
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type {
@@ -141,30 +141,69 @@ function seriesTone(status: RecurringIncomeRecord["seriesStatus"] | RecurringExp
 }
 
 function actionButtonClass() {
-  return "inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white text-ink transition-transform duration-150 ease-out hover:bg-black/5 active:scale-[0.97]";
+  return "inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white text-ink transition-transform duration-150 ease-out hover:bg-black/5 active:scale-[0.97]";
 }
 
-function SectionEyebrow({
-  tone,
+const dateInputClassName = "h-11 min-w-[10.5rem] tabular-nums";
+const dateValueClassName = "whitespace-nowrap text-sm font-medium tabular-nums text-ink/72";
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/42">{children}</label>;
+}
+
+function MetricPill({
   label,
-  description,
+  value,
+  tone = "neutral",
 }: {
-  tone: "income" | "expense";
   label: string;
-  description: string;
+  value: React.ReactNode;
+  tone?: "neutral" | "income" | "expense";
 }) {
   return (
-    <div>
-      <div
-        className={cn(
-          "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]",
-          tone === "income" ? "border-emerald-900/12 bg-emerald-50 text-emerald-950" : "border-rose-900/12 bg-rose-50 text-rose-950",
-        )}
-      >
-        <Sparkles className="h-3.5 w-3.5" />
-        {label}
+    <div
+      className={cn(
+        "rounded-[1rem] border px-3.5 py-3",
+        tone === "neutral" && "border-black/8 bg-white/82",
+        tone === "income" && "border-emerald-900/10 bg-emerald-50/72",
+        tone === "expense" && "border-rose-900/10 bg-rose-50/72",
+      )}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/42">{label}</div>
+      <div className="mt-1 text-xl font-display text-ink">{value}</div>
+    </div>
+  );
+}
+
+function SectionHeader({
+  tone,
+  title,
+  description,
+  stats,
+}: {
+  tone: "income" | "expense";
+  title: string;
+  description: string;
+  stats: Array<{ label: string; value: React.ReactNode; tone?: "neutral" | "income" | "expense" }>;
+}) {
+  return (
+    <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+      <div>
+        <div
+          className={cn(
+            "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]",
+            tone === "income" ? "border-emerald-900/12 bg-emerald-50 text-emerald-950" : "border-rose-900/12 bg-rose-50 text-rose-950",
+          )}
+        >
+          {title}
+        </div>
+        <p className="mt-3 max-w-2xl text-sm text-ink/56">{description}</p>
       </div>
-      <p className="mt-3 max-w-2xl text-sm text-ink/58">{description}</p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {stats.map((stat) => (
+          <MetricPill key={stat.label} label={stat.label} value={stat.value} tone={stat.tone} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -514,75 +553,67 @@ export function RecurringScreen({
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-4">
-        <Card className="border-emerald-950/35 bg-gradient-to-br from-emerald-950 via-emerald-900 to-lime-700 text-white">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-50/78">Ingresos activos</div>
-          <div className="mt-3 font-display text-4xl text-white">{incomeSummary.activeCount}</div>
-          <p className="mt-2 text-sm text-emerald-50/88">Series que siguen generando cobros operativos mensuales.</p>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="border-emerald-900/12 bg-[linear-gradient(135deg,rgba(236,253,245,0.76),rgba(255,255,255,0.96))]">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-950/70">Ingresos recurrentes</div>
+              <div className="mt-2 font-display text-4xl text-ink">{formatUsd(incomeSummary.activeAmountUsd)}</div>
+              <p className="mt-1 text-sm text-ink/56">{incomeSummary.activeCount} series activas.</p>
+            </div>
+            <div className="grid min-w-[18rem] gap-3 sm:grid-cols-3">
+              <MetricPill label="Proyecto" value={incomeSummary.projectManaged} tone="income" />
+              <MetricPill label="Manual" value={incomeSummary.manualManaged} tone="income" />
+              <MetricPill label="Máx. proyecto" value="1" />
+            </div>
+          </div>
         </Card>
-        <Card>
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-950">Ingreso mensual recurrente</div>
-          <div className="mt-3 font-display text-4xl text-ink">{formatUsd(incomeSummary.activeAmountUsd)}</div>
-          <p className="mt-2 text-sm text-ink/60">
-            {incomeSummary.projectManaged} desde Proyecto · {incomeSummary.manualManaged} manuales.
-          </p>
-        </Card>
-        <Card className="border-rose-950/30 bg-gradient-to-br from-rose-950 via-rose-900 to-coral text-white">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-50/80">Gastos activos</div>
-          <div className="mt-3 font-display text-4xl text-white">{expenseSummary.activeCount}</div>
-          <p className="mt-2 text-sm text-rose-50/88">Plantillas mensuales que siguen generando pagos comprometidos.</p>
-        </Card>
-        <Card>
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-950">Compromiso mensual</div>
-          <div className="mt-3 font-display text-4xl text-ink">{formatUsd(expenseSummary.activeAmountUsd)}</div>
-          <p className="mt-2 text-sm text-ink/60">
-            {expenseSummary.fixedCount} fijos · {expenseSummary.variableCount} variables.
-          </p>
+
+        <Card className="border-rose-900/12 bg-[linear-gradient(135deg,rgba(255,241,242,0.76),rgba(255,255,255,0.96))]">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-950/70">Gastos recurrentes</div>
+              <div className="mt-2 font-display text-4xl text-ink">{formatUsd(expenseSummary.activeAmountUsd)}</div>
+              <p className="mt-1 text-sm text-ink/56">{expenseSummary.activeCount} series activas.</p>
+            </div>
+            <div className="grid min-w-[18rem] gap-3 sm:grid-cols-3">
+              <MetricPill label="Fijos" value={expenseSummary.fixedCount} tone="expense" />
+              <MetricPill label="Variables" value={expenseSummary.variableCount} tone="expense" />
+              <MetricPill label="Frecuencia" value="Mensual" />
+            </div>
+          </div>
         </Card>
       </div>
 
-      <Card className="border-emerald-900/10 bg-[linear-gradient(135deg,rgba(236,253,245,0.9),rgba(255,255,255,0.96))]">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <SectionEyebrow
-            tone="income"
-            label="Ingresos recurrentes"
-            description="Acá se administra la serie madre. Las ocurrencias concretas, sus vencimientos y su cobro real siguen operándose en el ledger de Ingresos."
-          />
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-[1rem] border border-black/8 bg-white/80 px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Fuente Proyecto</div>
-              <div className="mt-1 font-display text-2xl text-ink">{incomeSummary.projectManaged}</div>
-            </div>
-            <div className="rounded-[1rem] border border-black/8 bg-white/80 px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Manuales</div>
-              <div className="mt-1 font-display text-2xl text-ink">{incomeSummary.manualManaged}</div>
-            </div>
-            <div className="rounded-[1rem] border border-black/8 bg-white/80 px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Máx. por proyecto</div>
-              <div className="mt-1 font-display text-2xl text-emerald-950">1</div>
-            </div>
-          </div>
-        </div>
-      </Card>
+      <Card className="space-y-6">
+        <SectionHeader
+          tone="income"
+          title="Ingresos recurrentes"
+          description="Administrá la serie madre. El cobro puntual sigue en Ingresos."
+          stats={[
+            { label: "Proyecto", value: incomeSummary.projectManaged, tone: "income" },
+            { label: "Manual", value: incomeSummary.manualManaged, tone: "income" },
+            { label: "Máx. por proyecto", value: "1" },
+          ]}
+        />
 
-      <Card>
-        <div className="grid gap-6 xl:grid-cols-[0.92fr,1.35fr]">
-          <form className="space-y-5" onSubmit={handleCreateIncome}>
+        <div className="grid gap-6 xl:grid-cols-[0.88fr,1.42fr]">
+          <form className="space-y-4" onSubmit={handleCreateIncome}>
             <div>
-              <h2 className="font-display text-2xl text-ink">Nuevo ingreso recurrente manual</h2>
-              <p className="mt-1 text-sm text-ink/55">Siempre mensual, con cliente y proyecto obligatorios. Si el proyecto ya tiene serie activa, queda bloqueado para evitar duplicidad.</p>
+              <h2 className="font-display text-2xl text-ink">Nuevo ingreso manual</h2>
+              <p className="mt-1 text-sm text-ink/54">Mensual, con cliente y proyecto obligatorios.</p>
             </div>
 
             {availableManualIncomeProjects.length === 0 ? (
               <EmptyState
                 title="Sin proyectos disponibles"
-                description="Todos los proyectos activos ya están cubiertos por una serie de ingreso o el proyecto está cerrado."
+                description="Todos los proyectos activos ya tienen una serie o están cerrados."
               />
             ) : (
               <>
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Cliente</label>
+                    <FieldLabel>Cliente</FieldLabel>
                     <Select value={incomeForm.clientId} onChange={(event) => handleIncomeClientChange(event.target.value, "create")}>
                       {incomeClients.map((client) => (
                         <option key={client.clientId} value={client.clientId}>
@@ -592,7 +623,7 @@ export function RecurringScreen({
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Proyecto</label>
+                    <FieldLabel>Proyecto</FieldLabel>
                     <Select value={incomeForm.projectId} onChange={(event) => setIncomeForm((prev) => ({ ...prev, projectId: event.target.value }))}>
                       {createIncomeProjects.map((project) => (
                         <option key={project.id} value={project.id}>
@@ -603,9 +634,9 @@ export function RecurringScreen({
                   </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),10.5rem,10.5rem]">
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Monto mensual USD</label>
+                    <FieldLabel>Monto mensual USD</FieldLabel>
                     <Input
                       min="0"
                       step="0.01"
@@ -615,16 +646,18 @@ export function RecurringScreen({
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Primer ciclo</label>
+                    <FieldLabel>Primer ciclo</FieldLabel>
                     <Input
+                      className={dateInputClassName}
                       type="date"
                       value={incomeForm.startDate}
                       onChange={(event) => setIncomeForm((prev) => ({ ...prev, startDate: event.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha fin</label>
+                    <FieldLabel>Fecha fin</FieldLabel>
                     <Input
+                      className={dateInputClassName}
                       type="date"
                       value={incomeForm.endDate}
                       onChange={(event) => setIncomeForm((prev) => ({ ...prev, endDate: event.target.value }))}
@@ -632,9 +665,7 @@ export function RecurringScreen({
                   </div>
                 </div>
 
-                <div className="rounded-[1.2rem] border border-emerald-900/12 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-950">
-                  Esta serie genera ocurrencias operativas en Ingresos, pero no reemplaza el ledger. Si querés cambiar un cobro puntual, podés hacerlo luego con alcance desde esta misma sección.
-                </div>
+                <p className="text-sm text-ink/52">Genera ocurrencias en el ledger sin duplicarlo.</p>
 
                 {incomeError ? <p className="text-sm text-brick">{incomeError}</p> : null}
 
@@ -652,7 +683,7 @@ export function RecurringScreen({
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h3 className="font-display text-2xl text-ink">Series de ingreso</h3>
-                <p className="mt-1 text-sm text-ink/55">Proyecto sigue siendo source of truth cuando el origen es `Proyecto`. Desde acá podés ajustar el alcance hacia adelante sin tocar históricos cobrados.</p>
+                <p className="mt-1 text-sm text-ink/54">Proyecto sigue siendo source of truth cuando aplica.</p>
               </div>
               <Select className="max-w-[220px]" value={incomeFilter} onChange={(event) => setIncomeFilter(event.target.value as SeriesFilter)}>
                 <option value="ACTIVE">Activas</option>
@@ -662,26 +693,38 @@ export function RecurringScreen({
             </div>
 
             {visibleIncomes.length === 0 ? (
-              <EmptyState title="Sin series visibles" description="Cambiá el filtro o creá una serie manual para empezar a administrar ingresos recurrentes." />
+              <EmptyState title="Sin series visibles" description="Cambiá el filtro o creá una serie manual." />
             ) : (
               <DataTable
-                headers={["Cliente", "Proyecto", "Origen", "Monto mensual", "Próximo ciclo", "Fecha fin", "Estado", "Acciones"]}
+                headers={["Cliente", "Proyecto", "Origen", "Monto USD", "Próx. ciclo", "Fecha fin", "Estado", "Acciones"]}
                 scrollAfter={7}
-                tableClassName="min-w-[72rem]"
+                tableClassName="min-w-[70rem] table-fixed"
+                colGroup={
+                  <colgroup>
+                    <col className="w-[10rem]" />
+                    <col className="w-[15rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[15rem]" />
+                  </colgroup>
+                }
               >
                 {visibleIncomes.map((series) => (
                   <tr key={series.id}>
-                    <td className="px-4 py-3">{series.clientName}</td>
+                    <td className="px-4 py-3 text-ink/72">{series.clientName}</td>
                     <td className="px-4 py-3">
                       <div className="font-semibold text-ink">{series.projectName}</div>
-                      <div className="text-xs text-ink/55">{series.pendingCount} ocurrencia(s) abiertas</div>
+                      <div className="text-xs text-ink/48">{series.pendingCount} abiertas</div>
                     </td>
                     <td className="px-4 py-3">
                       <Badge tone={series.source === "PROJECT" ? "success" : "neutral"}>{formatRecurringIncomeSource(series.source)}</Badge>
                     </td>
-                    <td className="px-4 py-3">{formatUsd(series.amountUsd)}</td>
-                    <td className="px-4 py-3">{formatShortDate(series.nextExpectedDate)}</td>
-                    <td className="px-4 py-3">{formatShortDate(series.endDate)}</td>
+                    <td className="px-4 py-3 font-medium text-ink">{formatUsd(series.amountUsd)}</td>
+                    <td className={cn("px-4 py-3", dateValueClassName)}>{formatShortDate(series.nextExpectedDate)}</td>
+                    <td className={cn("px-4 py-3", dateValueClassName)}>{formatShortDate(series.endDate)}</td>
                     <td className="px-4 py-3">
                       <Badge tone={seriesTone(series.seriesStatus)}>{formatRecurringSeriesStatus(series.seriesStatus)}</Badge>
                     </td>
@@ -696,7 +739,7 @@ export function RecurringScreen({
                           </Button>
                         ) : null}
                         <Link className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-cobalt transition hover:bg-cobalt/8" href={`/projects/${series.projectId}`} prefetch>
-                          Abrir proyecto
+                          Proyecto
                           <ArrowUpRight className="h-3.5 w-3.5" />
                         </Link>
                       </div>
@@ -709,41 +752,28 @@ export function RecurringScreen({
         </div>
       </Card>
 
-      <Card className="border-rose-900/10 bg-[linear-gradient(135deg,rgba(255,241,242,0.92),rgba(255,255,255,0.96))]">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <SectionEyebrow
-            tone="expense"
-            label="Gastos recurrentes"
-            description="Acá viven las plantillas mensuales de egresos. El ledger de Gastos sigue siendo el carril operativo para ver vencidos, pendientes y pagos concretos."
-          />
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-[1rem] border border-black/8 bg-white/80 px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Series activas</div>
-              <div className="mt-1 font-display text-2xl text-ink">{expenseSummary.activeCount}</div>
-            </div>
-            <div className="rounded-[1rem] border border-black/8 bg-white/80 px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Fijos</div>
-              <div className="mt-1 font-display text-2xl text-ink">{expenseSummary.fixedCount}</div>
-            </div>
-            <div className="rounded-[1rem] border border-black/8 bg-white/80 px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink/45">Variables</div>
-              <div className="mt-1 font-display text-2xl text-ink">{expenseSummary.variableCount}</div>
-            </div>
-          </div>
-        </div>
-      </Card>
+      <Card className="space-y-6">
+        <SectionHeader
+          tone="expense"
+          title="Gastos recurrentes"
+          description="Administrá la plantilla madre. El pago puntual sigue en Gastos."
+          stats={[
+            { label: "Activas", value: expenseSummary.activeCount, tone: "expense" },
+            { label: "Fijos", value: expenseSummary.fixedCount, tone: "expense" },
+            { label: "Variables", value: expenseSummary.variableCount, tone: "expense" },
+          ]}
+        />
 
-      <Card>
-        <div className="grid gap-6 xl:grid-cols-[0.92fr,1.35fr]">
-          <form className="space-y-5" onSubmit={handleCreateExpense}>
+        <div className="grid gap-6 xl:grid-cols-[0.88fr,1.42fr]">
+          <form className="space-y-4" onSubmit={handleCreateExpense}>
             <div>
               <h2 className="font-display text-2xl text-ink">Nuevo gasto recurrente</h2>
-              <p className="mt-1 text-sm text-ink/55">Usa el mismo catálogo de categorías que Gastos. El proyecto es opcional, la recurrencia es siempre mensual y el histórico pagado no se reescribe.</p>
+              <p className="mt-1 text-sm text-ink/54">Mensual; categoría obligatoria y proyecto opcional.</p>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Categoría</label>
+                <FieldLabel>Categoría</FieldLabel>
                 <Select value={expenseForm.categoryId} onChange={(event) => setExpenseForm((prev) => ({ ...prev, categoryId: event.target.value }))}>
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
@@ -753,7 +783,7 @@ export function RecurringScreen({
                 </Select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Proyecto</label>
+                <FieldLabel>Proyecto</FieldLabel>
                 <Select value={expenseForm.projectId} onChange={(event) => setExpenseForm((prev) => ({ ...prev, projectId: event.target.value }))}>
                   <option value="">Sin proyecto</option>
                   {projects.map((project) => (
@@ -765,16 +795,16 @@ export function RecurringScreen({
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),minmax(0,1fr),10.5rem,10.5rem]">
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Tipo</label>
+                <FieldLabel>Tipo</FieldLabel>
                 <Select value={expenseForm.expenseType} onChange={(event) => setExpenseForm((prev) => ({ ...prev, expenseType: event.target.value as ExpenseType }))}>
                   <option value="fixed">Fijo</option>
                   <option value="variable">Variable</option>
                 </Select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Monto mensual USD</label>
+                <FieldLabel>Monto mensual USD</FieldLabel>
                 <Input
                   min="0"
                   step="0.01"
@@ -783,29 +813,19 @@ export function RecurringScreen({
                   onChange={(event) => setExpenseForm((prev) => ({ ...prev, amountUsd: event.target.value }))}
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Descripción</label>
-              <Input
-                placeholder="Opcional"
-                value={expenseForm.description}
-                onChange={(event) => setExpenseForm((prev) => ({ ...prev, description: event.target.value }))}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Primer ciclo</label>
+                <FieldLabel>Primer ciclo</FieldLabel>
                 <Input
+                  className={dateInputClassName}
                   type="date"
                   value={expenseForm.startDate}
                   onChange={(event) => setExpenseForm((prev) => ({ ...prev, startDate: event.target.value }))}
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha fin</label>
+                <FieldLabel>Fecha fin</FieldLabel>
                 <Input
+                  className={dateInputClassName}
                   type="date"
                   value={expenseForm.endDate}
                   onChange={(event) => setExpenseForm((prev) => ({ ...prev, endDate: event.target.value }))}
@@ -813,9 +833,16 @@ export function RecurringScreen({
               </div>
             </div>
 
-            <div className="rounded-[1.2rem] border border-rose-900/12 bg-rose-50/75 px-4 py-3 text-sm text-rose-950">
-              Las ocurrencias generadas irán al ledger de Gastos. Desde acá sólo administrás la plantilla madre y cómo se propagan cambios hacia adelante.
+            <div className="space-y-2">
+              <FieldLabel>Descripción</FieldLabel>
+              <Input
+                placeholder="Opcional"
+                value={expenseForm.description}
+                onChange={(event) => setExpenseForm((prev) => ({ ...prev, description: event.target.value }))}
+              />
             </div>
+
+            <p className="text-sm text-ink/52">La serie genera ocurrencias en el ledger sin mostrar cada fila acá.</p>
 
             {expenseError ? <p className="text-sm text-brick">{expenseError}</p> : null}
 
@@ -831,7 +858,7 @@ export function RecurringScreen({
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
                 <h3 className="font-display text-2xl text-ink">Series de gasto</h3>
-                <p className="mt-1 text-sm text-ink/55">No se listan todas las ocurrencias del mes para no duplicar el ledger. La lectura acá es de plantilla, no de operación diaria.</p>
+                <p className="mt-1 text-sm text-ink/54">Vista de plantilla, no de operación diaria.</p>
               </div>
               <Select className="max-w-[220px]" value={expenseFilter} onChange={(event) => setExpenseFilter(event.target.value as SeriesFilter)}>
                 <option value="ACTIVE">Activas</option>
@@ -841,27 +868,40 @@ export function RecurringScreen({
             </div>
 
             {visibleExpenses.length === 0 ? (
-              <EmptyState title="Sin series visibles" description="Cambiá el filtro o cargá una nueva plantilla de gasto recurrente." />
+              <EmptyState title="Sin series visibles" description="Cambiá el filtro o cargá una serie nueva." />
             ) : (
               <DataTable
-                headers={["Categoría", "Descripción", "Proyecto", "Tipo", "Monto mensual", "Próximo ciclo", "Fecha fin", "Estado", "Acciones"]}
+                headers={["Categoría", "Descripción", "Proyecto", "Tipo", "Monto USD", "Próx. ciclo", "Fecha fin", "Estado", "Acciones"]}
                 scrollAfter={7}
-                tableClassName="min-w-[76rem]"
+                tableClassName="min-w-[74rem] table-fixed"
+                colGroup={
+                  <colgroup>
+                    <col className="w-[12rem]" />
+                    <col className="w-[12rem]" />
+                    <col className="w-[12rem]" />
+                    <col className="w-[7rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[15rem]" />
+                  </colgroup>
+                }
               >
                 {visibleExpenses.map((series) => (
                   <tr key={series.id}>
                     <td className="px-4 py-3">
                       <div className="font-semibold text-ink">{series.categoryName}</div>
-                      <div className="text-xs text-ink/55">{series.pendingCount} ocurrencia(s) abiertas</div>
+                      <div className="text-xs text-ink/48">{series.pendingCount} abiertas</div>
                     </td>
-                    <td className="px-4 py-3 text-ink/70">{series.description || "—"}</td>
-                    <td className="px-4 py-3">{series.projectName ?? "—"}</td>
+                    <td className="px-4 py-3 text-ink/68">{series.description || "—"}</td>
+                    <td className="px-4 py-3 text-ink/72">{series.projectName ?? "—"}</td>
                     <td className="px-4 py-3">
                       <Badge tone={series.expenseType === "fixed" ? "neutral" : "danger"}>{formatExpenseType(series.expenseType)}</Badge>
                     </td>
-                    <td className="px-4 py-3">{formatUsd(series.amountUsd)}</td>
-                    <td className="px-4 py-3">{formatShortDate(series.nextDueDate)}</td>
-                    <td className="px-4 py-3">{formatShortDate(series.endDate)}</td>
+                    <td className="px-4 py-3 font-medium text-ink">{formatUsd(series.amountUsd)}</td>
+                    <td className={cn("px-4 py-3", dateValueClassName)}>{formatShortDate(series.nextDueDate)}</td>
+                    <td className={cn("px-4 py-3", dateValueClassName)}>{formatShortDate(series.endDate)}</td>
                     <td className="px-4 py-3">
                       <Badge tone={seriesTone(series.seriesStatus)}>{formatRecurringSeriesStatus(series.seriesStatus)}</Badge>
                     </td>
@@ -877,7 +917,7 @@ export function RecurringScreen({
                         ) : null}
                         {series.projectId ? (
                           <Link className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-cobalt transition hover:bg-cobalt/8" href={`/projects/${series.projectId}`} prefetch>
-                            Abrir proyecto
+                            Proyecto
                             <ArrowUpRight className="h-3.5 w-3.5" />
                           </Link>
                         ) : null}
@@ -894,7 +934,7 @@ export function RecurringScreen({
       <EditEntityModal
         open={Boolean(editingIncome && incomeEditForm)}
         title={editingIncome?.source === "PROJECT" ? "Editar ingreso recurrente desde Proyecto" : "Editar ingreso recurrente manual"}
-        description="Los cambios van siempre hacia adelante según el alcance elegido. Los históricos cobrados no se reescriben."
+        description="Los cambios impactan hacia adelante según el alcance."
         submitLabel="Guardar cambios"
         widthClassName="max-w-3xl"
         isPending={isPending}
@@ -904,24 +944,24 @@ export function RecurringScreen({
         onSubmit={handleEditIncome}
       >
         {editingIncome && incomeEditForm ? (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div className="rounded-[1.2rem] border border-black/8 bg-black/[0.02] p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone={editingIncome.source === "PROJECT" ? "success" : "neutral"}>{formatRecurringIncomeSource(editingIncome.source)}</Badge>
                 <Badge tone={seriesTone(editingIncome.seriesStatus)}>{formatRecurringSeriesStatus(editingIncome.seriesStatus)}</Badge>
               </div>
               <div className="mt-3 text-lg font-semibold text-ink">{editingIncome.clientName} · {editingIncome.projectName}</div>
-              <div className="mt-1 text-sm text-ink/58">Próximo ciclo abierto: {formatShortDate(editingIncome.nextExpectedDate)}</div>
+              <div className={cn("mt-1", dateValueClassName)}>Próx. ciclo: {formatShortDate(editingIncome.nextExpectedDate)}</div>
             </div>
 
             {editingIncome.source === "PROJECT" ? (
               <div className="rounded-[1.2rem] border border-emerald-900/15 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-950">
-                Esta serie nace del fee mensual del proyecto. Si elegís un alcance que toque futuros, se actualizan también `monthlyFeeUsd` y `monthlyFeeEndDate` del proyecto.
+                Si tocás futuros, también se actualiza el fee del proyecto.
               </div>
             ) : null}
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Alcance del cambio</label>
+              <FieldLabel>Alcance del cambio</FieldLabel>
               <Select value={incomeEditForm.scope} onChange={(event) => setIncomeEditForm((prev) => (prev ? { ...prev, scope: event.target.value as RecurrenceScope } : prev))}>
                 {scopeOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -929,13 +969,13 @@ export function RecurringScreen({
                   </option>
                 ))}
               </Select>
-              <p className="text-xs text-ink/55">{scopeOptions.find((option) => option.value === incomeEditForm.scope)?.hint}</p>
+              <p className="text-xs text-ink/50">{scopeOptions.find((option) => option.value === incomeEditForm.scope)?.hint}</p>
             </div>
 
             {editingIncome.source === "MANUAL" ? (
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Cliente</label>
+                  <FieldLabel>Cliente</FieldLabel>
                   <Select
                     disabled={incomeEditIsCurrentOnly}
                     value={incomeEditForm.clientId}
@@ -949,7 +989,7 @@ export function RecurringScreen({
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Proyecto</label>
+                  <FieldLabel>Proyecto</FieldLabel>
                   <Select
                     disabled={incomeEditIsCurrentOnly}
                     value={incomeEditForm.projectId}
@@ -966,19 +1006,19 @@ export function RecurringScreen({
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Cliente</label>
+                  <FieldLabel>Cliente</FieldLabel>
                   <Input disabled value={editingIncome.clientName} />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Proyecto</label>
+                  <FieldLabel>Proyecto</FieldLabel>
                   <Input disabled value={editingIncome.projectName} />
                 </div>
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),10.5rem,10.5rem]">
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Monto mensual USD</label>
+                <FieldLabel>Monto mensual USD</FieldLabel>
                 <Input
                   min="0"
                   step="0.01"
@@ -988,8 +1028,9 @@ export function RecurringScreen({
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Primer ciclo</label>
+                <FieldLabel>Primer ciclo</FieldLabel>
                 <Input
+                  className={dateInputClassName}
                   disabled={editingIncome.source === "PROJECT" || incomeEditIsCurrentOnly}
                   type="date"
                   value={incomeEditForm.startDate}
@@ -997,8 +1038,9 @@ export function RecurringScreen({
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha fin</label>
+                <FieldLabel>Fecha fin</FieldLabel>
                 <Input
+                  className={dateInputClassName}
                   disabled={incomeEditIsCurrentOnly}
                   type="date"
                   value={incomeEditForm.endDate}
@@ -1009,7 +1051,7 @@ export function RecurringScreen({
 
             {incomeEditIsCurrentOnly ? (
               <div className="rounded-[1.2rem] border border-amber-950/15 bg-amber-50/80 px-4 py-3 text-sm text-amber-950">
-                En `Solo esta ocurrencia` el sistema ajusta únicamente el próximo ciclo abierto. Proyecto, inicio y fecha fin de la serie madre no cambian.
+                Solo cambia el próximo ciclo abierto; la serie madre queda igual.
               </div>
             ) : null}
 
@@ -1028,7 +1070,7 @@ export function RecurringScreen({
       <EditEntityModal
         open={Boolean(editingExpense && expenseEditForm)}
         title="Editar gasto recurrente"
-        description="Elegí el alcance y ajustá solo la plantilla madre o también la ocurrencia abierta, siempre hacia adelante."
+        description="Los cambios impactan hacia adelante según el alcance."
         submitLabel="Guardar cambios"
         widthClassName="max-w-3xl"
         isPending={isPending}
@@ -1038,18 +1080,18 @@ export function RecurringScreen({
         onSubmit={handleEditExpense}
       >
         {editingExpense && expenseEditForm ? (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div className="rounded-[1.2rem] border border-black/8 bg-black/[0.02] p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone={editingExpense.expenseType === "fixed" ? "neutral" : "danger"}>{formatExpenseType(editingExpense.expenseType)}</Badge>
                 <Badge tone={seriesTone(editingExpense.seriesStatus)}>{formatRecurringSeriesStatus(editingExpense.seriesStatus)}</Badge>
               </div>
               <div className="mt-3 text-lg font-semibold text-ink">{editingExpense.categoryName}</div>
-              <div className="mt-1 text-sm text-ink/58">Próximo ciclo abierto: {formatShortDate(editingExpense.nextDueDate)}</div>
+              <div className={cn("mt-1", dateValueClassName)}>Próx. ciclo: {formatShortDate(editingExpense.nextDueDate)}</div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Alcance del cambio</label>
+              <FieldLabel>Alcance del cambio</FieldLabel>
               <Select value={expenseEditForm.scope} onChange={(event) => setExpenseEditForm((prev) => (prev ? { ...prev, scope: event.target.value as RecurrenceScope } : prev))}>
                 {scopeOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -1057,12 +1099,12 @@ export function RecurringScreen({
                   </option>
                 ))}
               </Select>
-              <p className="text-xs text-ink/55">{scopeOptions.find((option) => option.value === expenseEditForm.scope)?.hint}</p>
+              <p className="text-xs text-ink/50">{scopeOptions.find((option) => option.value === expenseEditForm.scope)?.hint}</p>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Categoría</label>
+                <FieldLabel>Categoría</FieldLabel>
                 <Select
                   disabled={expenseEditIsCurrentOnly}
                   value={expenseEditForm.categoryId}
@@ -1076,7 +1118,7 @@ export function RecurringScreen({
                 </Select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Proyecto</label>
+                <FieldLabel>Proyecto</FieldLabel>
                 <Select
                   disabled={expenseEditIsCurrentOnly}
                   value={expenseEditForm.projectId}
@@ -1092,9 +1134,9 @@ export function RecurringScreen({
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),minmax(0,1fr),10.5rem,10.5rem]">
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Tipo</label>
+                <FieldLabel>Tipo</FieldLabel>
                 <Select
                   disabled={expenseEditIsCurrentOnly}
                   value={expenseEditForm.expenseType}
@@ -1105,7 +1147,7 @@ export function RecurringScreen({
                 </Select>
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Monto mensual USD</label>
+                <FieldLabel>Monto mensual USD</FieldLabel>
                 <Input
                   min="0"
                   step="0.01"
@@ -1114,21 +1156,10 @@ export function RecurringScreen({
                   onChange={(event) => setExpenseEditForm((prev) => (prev ? { ...prev, amountUsd: event.target.value } : prev))}
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Descripción</label>
-              <Input
-                disabled={expenseEditIsCurrentOnly}
-                value={expenseEditForm.description}
-                onChange={(event) => setExpenseEditForm((prev) => (prev ? { ...prev, description: event.target.value } : prev))}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Primer ciclo</label>
+                <FieldLabel>Primer ciclo</FieldLabel>
                 <Input
+                  className={dateInputClassName}
                   disabled={expenseEditIsCurrentOnly}
                   type="date"
                   value={expenseEditForm.startDate}
@@ -1136,8 +1167,9 @@ export function RecurringScreen({
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha fin</label>
+                <FieldLabel>Fecha fin</FieldLabel>
                 <Input
+                  className={dateInputClassName}
                   disabled={expenseEditIsCurrentOnly}
                   type="date"
                   value={expenseEditForm.endDate}
@@ -1146,9 +1178,18 @@ export function RecurringScreen({
               </div>
             </div>
 
+            <div className="space-y-2">
+              <FieldLabel>Descripción</FieldLabel>
+              <Input
+                disabled={expenseEditIsCurrentOnly}
+                value={expenseEditForm.description}
+                onChange={(event) => setExpenseEditForm((prev) => (prev ? { ...prev, description: event.target.value } : prev))}
+              />
+            </div>
+
             {expenseEditIsCurrentOnly ? (
               <div className="rounded-[1.2rem] border border-amber-950/15 bg-amber-50/80 px-4 py-3 text-sm text-amber-950">
-                En `Solo esta ocurrencia` solo se modifica el monto del próximo gasto abierto. La plantilla madre queda igual.
+                Solo cambia el próximo gasto abierto; la plantilla queda igual.
               </div>
             ) : null}
           </div>
@@ -1158,7 +1199,7 @@ export function RecurringScreen({
       <ConfirmActionModal
         open={Boolean(finalizeTarget)}
         title={finalizeTarget?.kind === "income" ? "Finalizar ingreso recurrente" : "Finalizar gasto recurrente"}
-        description="La serie deja de generar nuevas ocurrencias. Las futuras no cobradas o no pagadas se limpian sin tocar históricos ya conciliados."
+        description="Se detienen los futuros ciclos sin tocar históricos conciliados."
         confirmLabel="Finalizar serie"
         isPending={isPending}
         disabled={demoMode}
