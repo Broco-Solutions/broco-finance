@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { AlertTriangle, ArrowUpRight, Pencil } from "lucide-react";
-import { FormEvent, useMemo, useState, useTransition } from "react";
+import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type {
   ExpenseCategoryRecord,
@@ -144,7 +144,7 @@ function actionButtonClass() {
   return "inline-flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white text-ink transition-transform duration-150 ease-out hover:bg-black/5 active:scale-[0.97]";
 }
 
-const dateInputClassName = "h-11 min-w-[10.5rem] tabular-nums";
+const dateInputClassName = "h-11 min-w-[12rem] tabular-nums";
 const dateValueClassName = "whitespace-nowrap text-sm font-medium tabular-nums text-ink/72";
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -239,7 +239,17 @@ export function RecurringScreen({
     [recurringIncomes],
   );
 
-  const availableManualIncomeProjects = useMemo(
+  const createManualIncomeProjects = useMemo(
+    () =>
+      projects.filter(
+        (project) =>
+          !isClosedProject(project.status) &&
+          !activeIncomeProjectIds.has(project.id),
+      ),
+    [activeIncomeProjectIds, projects],
+  );
+
+  const editableManualIncomeProjects = useMemo(
     () =>
       projects.filter(
         (project) =>
@@ -249,7 +259,7 @@ export function RecurringScreen({
     [activeIncomeProjectIds, editingIncome?.projectId, projects],
   );
 
-  const [incomeForm, setIncomeForm] = useState<ManualIncomeFormState>(() => buildManualIncomeForm(availableManualIncomeProjects));
+  const [incomeForm, setIncomeForm] = useState<ManualIncomeFormState>(() => buildManualIncomeForm(createManualIncomeProjects));
   const [incomeEditForm, setIncomeEditForm] = useState<IncomeEditFormState | null>(null);
   const [expenseForm, setExpenseForm] = useState<ExpenseFormState>(() => buildExpenseForm(categories));
   const [expenseEditForm, setExpenseEditForm] = useState<ExpenseEditFormState | null>(null);
@@ -257,7 +267,7 @@ export function RecurringScreen({
   const incomeClients = useMemo(() => {
     const seen = new Set<string>();
 
-    return availableManualIncomeProjects
+    return createManualIncomeProjects
       .filter((project) => {
         if (seen.has(project.clientId)) {
           return false;
@@ -268,11 +278,27 @@ export function RecurringScreen({
       })
       .map((project) => ({ clientId: project.clientId, clientName: project.clientName }))
       .sort((left, right) => left.clientName.localeCompare(right.clientName));
-  }, [availableManualIncomeProjects]);
+  }, [createManualIncomeProjects]);
+
+  const editIncomeClients = useMemo(() => {
+    const seen = new Set<string>();
+
+    return editableManualIncomeProjects
+      .filter((project) => {
+        if (seen.has(project.clientId)) {
+          return false;
+        }
+
+        seen.add(project.clientId);
+        return true;
+      })
+      .map((project) => ({ clientId: project.clientId, clientName: project.clientName }))
+      .sort((left, right) => left.clientName.localeCompare(right.clientName));
+  }, [editableManualIncomeProjects]);
 
   const createIncomeProjects = useMemo(
-    () => availableManualIncomeProjects.filter((project) => project.clientId === incomeForm.clientId),
-    [availableManualIncomeProjects, incomeForm.clientId],
+    () => createManualIncomeProjects.filter((project) => project.clientId === incomeForm.clientId),
+    [createManualIncomeProjects, incomeForm.clientId],
   );
 
   const editIncomeProjects = useMemo(() => {
@@ -280,8 +306,8 @@ export function RecurringScreen({
       return [];
     }
 
-    return availableManualIncomeProjects.filter((project) => project.clientId === incomeEditForm.clientId);
-  }, [availableManualIncomeProjects, incomeEditForm]);
+    return editableManualIncomeProjects.filter((project) => project.clientId === incomeEditForm.clientId);
+  }, [editableManualIncomeProjects, incomeEditForm]);
 
   const visibleIncomes = useMemo(() => {
     if (incomeFilter === "ALL") {
@@ -320,12 +346,13 @@ export function RecurringScreen({
   );
 
   const resetIncomeForm = () => {
-    setIncomeForm(buildManualIncomeForm(availableManualIncomeProjects));
+    setIncomeForm(buildManualIncomeForm(createManualIncomeProjects));
     setIncomeError(null);
   };
 
   const handleIncomeClientChange = (clientId: string, target: "create" | "edit") => {
-    const nextProjects = availableManualIncomeProjects.filter((project) => project.clientId === clientId);
+    const sourceProjects = target === "create" ? createManualIncomeProjects : editableManualIncomeProjects;
+    const nextProjects = sourceProjects.filter((project) => project.clientId === clientId);
     const nextProject = nextProjects[0] ?? null;
 
     if (target === "create") {
@@ -347,6 +374,56 @@ export function RecurringScreen({
         : prev,
     );
   };
+
+  useEffect(() => {
+    setIncomeForm((prev) => {
+      if (createManualIncomeProjects.length === 0) {
+        return prev.clientId || prev.projectId ? buildManualIncomeForm(createManualIncomeProjects) : prev;
+      }
+
+      const clientExists = createManualIncomeProjects.some((project) => project.clientId === prev.clientId);
+      const nextClientId = clientExists ? prev.clientId : createManualIncomeProjects[0]!.clientId;
+      const nextClientProjects = createManualIncomeProjects.filter((project) => project.clientId === nextClientId);
+      const projectExists = nextClientProjects.some((project) => project.id === prev.projectId);
+      const nextProjectId = projectExists ? prev.projectId : nextClientProjects[0]?.id ?? "";
+
+      if (nextClientId === prev.clientId && nextProjectId === prev.projectId) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        clientId: nextClientId,
+        projectId: nextProjectId,
+      };
+    });
+  }, [createManualIncomeProjects]);
+
+  useEffect(() => {
+    if (!editingIncome || !incomeEditForm || editingIncome.source !== "MANUAL") {
+      return;
+    }
+
+    const clientExists = editableManualIncomeProjects.some((project) => project.clientId === incomeEditForm.clientId);
+    const nextClientId = clientExists ? incomeEditForm.clientId : editableManualIncomeProjects[0]?.clientId ?? "";
+    const nextClientProjects = editableManualIncomeProjects.filter((project) => project.clientId === nextClientId);
+    const projectExists = nextClientProjects.some((project) => project.id === incomeEditForm.projectId);
+    const nextProjectId = projectExists ? incomeEditForm.projectId : nextClientProjects[0]?.id ?? "";
+
+    if (nextClientId === incomeEditForm.clientId && nextProjectId === incomeEditForm.projectId) {
+      return;
+    }
+
+    setIncomeEditForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            clientId: nextClientId,
+            projectId: nextProjectId,
+          }
+        : prev,
+    );
+  }, [editableManualIncomeProjects, editingIncome, incomeEditForm]);
 
   const handleCreateIncome = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -604,7 +681,7 @@ export function RecurringScreen({
               <p className="mt-1 text-sm text-ink/54">Mensual, con cliente y proyecto obligatorios.</p>
             </div>
 
-            {availableManualIncomeProjects.length === 0 ? (
+            {createManualIncomeProjects.length === 0 ? (
               <EmptyState
                 title="Sin proyectos disponibles"
                 description="Todos los proyectos activos ya tienen una serie o están cerrados."
@@ -634,7 +711,7 @@ export function RecurringScreen({
                   </div>
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),10.5rem,10.5rem]">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr),12rem,12rem]">
                   <div className="space-y-2">
                     <FieldLabel>Monto mensual USD</FieldLabel>
                     <Input
@@ -697,7 +774,8 @@ export function RecurringScreen({
             ) : (
               <DataTable
                 headers={["Cliente", "Proyecto", "Origen", "Monto USD", "Próx. ciclo", "Fecha fin", "Estado", "Acciones"]}
-                scrollAfter={7}
+                scrollAfter={5}
+                maxHeightClassName="max-h-[27rem]"
                 tableClassName="min-w-[70rem] table-fixed"
                 colGroup={
                   <colgroup>
@@ -795,7 +873,7 @@ export function RecurringScreen({
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),minmax(0,1fr),10.5rem,10.5rem]">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr),minmax(0,1fr),12rem,12rem]">
               <div className="space-y-2">
                 <FieldLabel>Tipo</FieldLabel>
                 <Select value={expenseForm.expenseType} onChange={(event) => setExpenseForm((prev) => ({ ...prev, expenseType: event.target.value as ExpenseType }))}>
@@ -872,7 +950,8 @@ export function RecurringScreen({
             ) : (
               <DataTable
                 headers={["Categoría", "Descripción", "Proyecto", "Tipo", "Monto USD", "Próx. ciclo", "Fecha fin", "Estado", "Acciones"]}
-                scrollAfter={7}
+                scrollAfter={5}
+                maxHeightClassName="max-h-[27rem]"
                 tableClassName="min-w-[74rem] table-fixed"
                 colGroup={
                   <colgroup>
@@ -981,7 +1060,7 @@ export function RecurringScreen({
                     value={incomeEditForm.clientId}
                     onChange={(event) => handleIncomeClientChange(event.target.value, "edit")}
                   >
-                    {incomeClients.map((client) => (
+                    {editIncomeClients.map((client) => (
                       <option key={client.clientId} value={client.clientId}>
                         {client.clientName}
                       </option>
@@ -1016,7 +1095,7 @@ export function RecurringScreen({
               </div>
             )}
 
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),10.5rem,10.5rem]">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr),12rem,12rem]">
               <div className="space-y-2">
                 <FieldLabel>Monto mensual USD</FieldLabel>
                 <Input
@@ -1134,7 +1213,7 @@ export function RecurringScreen({
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),minmax(0,1fr),10.5rem,10.5rem]">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr),minmax(0,1fr),12rem,12rem]">
               <div className="space-y-2">
                 <FieldLabel>Tipo</FieldLabel>
                 <Select
