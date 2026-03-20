@@ -1,8 +1,10 @@
+import { MarkIncomePaidButton } from "@/components/payments/mark-income-paid-button";
 import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-button";
 import { Card } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { formatIncomeType, formatScheduledPaymentStatus, formatShortDate, formatUsd } from "@/lib/utils";
+import { formatIncomeStatus, formatIncomeType, formatScheduledPaymentStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { getProjectDetail } from "@/server/services/finance";
 
 export const dynamic = "force-dynamic";
@@ -16,11 +18,64 @@ function renderNotesCell(notes: string | null, widthClassName = "max-w-[15rem]")
   );
 }
 
+function sourceChip(source: "MANUAL" | "RECURRENT") {
+  return source === "RECURRENT"
+    ? "border-cobalt/20 bg-cobalt/10 text-cobalt"
+    : "border-black/10 bg-white text-ink/72";
+}
+
+function statusChip(status: "PENDING" | "OVERDUE" | "scheduled-pending" | "scheduled-overdue") {
+  if (status === "OVERDUE" || status === "scheduled-overdue") {
+    return "border-brick/20 bg-rose-50 text-brick";
+  }
+
+  return "border-amber-900/20 bg-amber-50 text-amber-950";
+}
+
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
   const detail = await getProjectDetail(params.id);
   const progress = detail.project.devBudgetUsd
     ? Math.min((detail.project.developmentCollectedUsd / detail.project.devBudgetUsd) * 100, 100)
     : null;
+  const openPayments = [
+    ...detail.pendingIncomes.map((income) => ({
+      id: `income:${income.id}`,
+      dueDate: income.dueDate ?? income.date,
+      source: "MANUAL" as const,
+      type: income.type,
+      amountUsd: income.amountUsd,
+      status: income.displayStatus === "OVERDUE" ? ("OVERDUE" as const) : ("PENDING" as const),
+      notes: income.notes,
+      action: (
+        <MarkIncomePaidButton
+          income={income}
+          demoMode={!process.env.DATABASE_URL}
+          compact
+        />
+      ),
+    })),
+    ...detail.scheduledPayments.map((payment) => ({
+      id: `scheduled:${payment.id}`,
+      dueDate: payment.expectedDate,
+      source: "RECURRENT" as const,
+      type: payment.type,
+      amountUsd: payment.expectedAmountUsd,
+      status: payment.status === "overdue" ? ("scheduled-overdue" as const) : ("scheduled-pending" as const),
+      notes: payment.notes,
+      action: (
+        <MarkPaymentPaidButton
+          paymentId={payment.id}
+          expectedDate={payment.expectedDate}
+          paymentStatus={payment.status}
+          paymentType={payment.type}
+          expectedAmountUsd={payment.expectedAmountUsd}
+          projectName={payment.projectName}
+          demoMode={!process.env.DATABASE_URL}
+          compact
+        />
+      ),
+    })),
+  ].sort((left, right) => left.dueDate.localeCompare(right.dueDate));
 
   return (
     <div className="space-y-8">
@@ -108,44 +163,51 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         </Card>
         <Card>
           <h2 className="font-display text-2xl text-ink">Pagos pendientes</h2>
-          <p className="mt-1 text-sm text-ink/55">Estos cobros recién impactan ingresos reales y remanente cuando se marcan como pagados.</p>
+          <p className="mt-1 text-sm text-ink/55">Acá aparecen los cobros manuales abiertos y las ocurrencias recurrentes del proyecto, ordenados por vencimiento.</p>
           <div className="mt-4">
-            <DataTable
-              headers={["Fecha", "Tipo", "Monto", "Estado", "Notas", "Acción"]}
-              tableClassName="min-w-[52rem] table-fixed"
-              colGroup={
-                <colgroup>
-                  <col className="w-[8.5rem]" />
-                  <col className="w-[9rem]" />
-                  <col className="w-[9rem]" />
-                  <col className="w-[8.5rem]" />
-                  <col className="w-[15rem]" />
-                  <col className="w-[10rem]" />
-                </colgroup>
-              }
-            >
-              {detail.scheduledPayments.map((payment) => (
-                <tr key={payment.id}>
-                  <td className="px-4 py-3">{formatShortDate(payment.expectedDate)}</td>
-                  <td className="px-4 py-3">{formatIncomeType(payment.type)}</td>
-                  <td className="px-4 py-3">{formatUsd(payment.expectedAmountUsd)}</td>
-                  <td className="px-4 py-3 uppercase">{formatScheduledPaymentStatus(payment.status)}</td>
-                  <td className="px-4 py-3">{renderNotesCell(payment.notes)}</td>
-                  <td className="px-4 py-3">
-                    <MarkPaymentPaidButton
-                      paymentId={payment.id}
-                      expectedDate={payment.expectedDate}
-                      paymentStatus={payment.status}
-                      paymentType={payment.type}
-                      expectedAmountUsd={payment.expectedAmountUsd}
-                      projectName={payment.projectName}
-                      demoMode={!process.env.DATABASE_URL}
-                      compact
-                    />
-                  </td>
-                </tr>
-              ))}
-            </DataTable>
+            {openPayments.length === 0 ? (
+              <EmptyState title="Sin cobros abiertos" description="No hay pendientes ni vencidos para este proyecto." />
+            ) : (
+              <DataTable
+                headers={["Vence", "Origen", "Tipo", "Monto", "Estado", "Notas", "Acción"]}
+                tableClassName="min-w-[58rem] table-fixed"
+                colGroup={
+                  <colgroup>
+                    <col className="w-[8rem]" />
+                    <col className="w-[8rem]" />
+                    <col className="w-[9rem]" />
+                    <col className="w-[9rem]" />
+                    <col className="w-[8.5rem]" />
+                    <col className="w-[15rem]" />
+                    <col className="w-[11rem]" />
+                  </colgroup>
+                }
+              >
+                {openPayments.map((payment) => (
+                  <tr key={payment.id}>
+                    <td className="px-4 py-3">{formatShortDate(payment.dueDate)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${sourceChip(payment.source)}`}>
+                        {payment.source === "RECURRENT" ? "Recurrente" : "Manual"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">{formatIncomeType(payment.type)}</td>
+                    <td className="px-4 py-3">{formatUsd(payment.amountUsd)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${statusChip(payment.status)}`}>
+                        {payment.status === "scheduled-overdue"
+                          ? formatScheduledPaymentStatus("overdue")
+                          : payment.status === "scheduled-pending"
+                            ? formatScheduledPaymentStatus("pending")
+                            : formatIncomeStatus(payment.status)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">{renderNotesCell(payment.notes)}</td>
+                    <td className="px-4 py-3">{payment.action}</td>
+                  </tr>
+                ))}
+              </DataTable>
+            )}
           </div>
         </Card>
       </div>

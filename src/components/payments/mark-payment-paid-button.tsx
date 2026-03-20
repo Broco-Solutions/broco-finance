@@ -39,7 +39,7 @@ export function MarkPaymentPaidButton({
         disabled={demoMode}
         onClick={() => setOpen(true)}
       >
-        {demoMode ? "Demo" : "Marcar como pagado"}
+        {demoMode ? "Demo" : "Marcar cobrado"}
       </Button>
 
       <ScheduledPaymentSettlementModal

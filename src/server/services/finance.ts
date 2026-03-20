@@ -115,7 +115,9 @@ type IncomeWithProjectRecord = {
     };
   };
   scheduledPayment?: {
+    id: string;
     expectedDate: Date;
+    recurringIncomeId: string | null;
   } | null;
 };
 
@@ -680,19 +682,23 @@ function buildRecurringScheduleDates(
   frequency: ContractFrequency,
   endDate: Date | null = null,
   horizonOccurrences = 12,
+  includeHistoricalOpenCycles = false,
 ) {
   const dates: Date[] = [];
   const intervalMonths = frequencyMonths(frequency);
-  let cursor = startOfDay(startDate);
+  const firstCycle = startOfDay(startDate);
+  let cursor = firstCycle;
   const today = startOfDay(new Date());
-
-  while (isBefore(cursor, today)) {
-    cursor = addMonths(cursor, intervalMonths);
+  if (!includeHistoricalOpenCycles) {
+    while (isBefore(cursor, today)) {
+      cursor = addMonths(cursor, intervalMonths);
+    }
   }
 
-  const limitDate = endDate ? startOfDay(endDate) : addMonths(cursor, intervalMonths * (horizonOccurrences - 1));
+  const scheduleAnchor = isAfter(cursor, today) ? cursor : today;
+  const limitDate = endDate ? startOfDay(endDate) : addMonths(scheduleAnchor, intervalMonths * (horizonOccurrences - 1));
 
-  while (dates.length < horizonOccurrences && !isAfter(cursor, limitDate)) {
+  while (!isAfter(cursor, limitDate) && (includeHistoricalOpenCycles || dates.length < horizonOccurrences)) {
     dates.push(cursor);
     cursor = addMonths(cursor, intervalMonths);
   }
@@ -705,7 +711,7 @@ function buildFutureExpenseSchedule(startDate: Date, frequency: ContractFrequenc
 }
 
 function buildManualIncomeScheduleDates(startDate: Date, endDate: Date | null = null) {
-  return buildRecurringScheduleDates(startDate, ContractFrequency.monthly, endDate);
+  return buildRecurringScheduleDates(startDate, ContractFrequency.monthly, endDate, 12, true);
 }
 
 function nextCycleDate(currentDate: Date, frequency: ContractFrequency = ContractFrequency.monthly) {
@@ -1520,6 +1526,9 @@ function mapIncomeRecord(
     date: dateOnly(income.date),
     dueDate,
     correspondsToDate: income.scheduledPayment?.expectedDate ? dateOnly(income.scheduledPayment.expectedDate) : null,
+    origin: income.scheduledPayment ? "RECURRENT" : "MANUAL",
+    scheduledPaymentId: income.scheduledPayment?.id ?? null,
+    recurringIncomeId: income.scheduledPayment?.recurringIncomeId ?? null,
     amountUsd: requireNumber(income.amountUsd),
     amountArs: toNumber(income.amountArs),
     exchangeRate: toNumber(income.exchangeRate),
@@ -1751,6 +1760,9 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
       incomes: detail.incomes
         .filter((income) => isPaidIncomeStatus(income.status))
         .sort((left, right) => right.date.localeCompare(left.date)),
+      pendingIncomes: detail.pendingIncomes
+        .filter((income) => isPendingIncomeStatus(income.status))
+        .sort((left, right) => (left.dueDate ?? left.date).localeCompare(right.dueDate ?? right.date)),
       payments: detail.payments
         .filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus))
         .sort((left, right) => left.expectedDate.localeCompare(right.expectedDate)),
@@ -1840,11 +1852,50 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
       },
       scheduledPayment: {
         select: {
+          id: true,
           expectedDate: true,
+          recurringIncomeId: true,
         },
       },
     },
     orderBy: { date: "desc" },
+  });
+
+  const pendingIncomes = await prisma.income.findMany({
+    where: {
+      project: { clientId: id },
+      status: IncomeStatus.PENDING,
+    },
+    select: {
+      id: true,
+      projectId: true,
+      date: true,
+      dueDate: true,
+      amountUsd: true,
+      amountArs: true,
+      exchangeRate: true,
+      status: true,
+      type: true,
+      notes: true,
+      project: {
+        select: {
+          name: true,
+          client: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+      scheduledPayment: {
+        select: {
+          id: true,
+          expectedDate: true,
+          recurringIncomeId: true,
+        },
+      },
+    },
+    orderBy: [{ dueDate: "asc" }, { date: "asc" }],
   });
 
   const payments = await prisma.scheduledPayment.findMany({
@@ -1883,6 +1934,7 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
     client: mapClientRecord(client),
     projects,
     incomes: incomes.map(mapIncomeRecord),
+    pendingIncomes: pendingIncomes.map(mapIncomeRecord).sort((left, right) => (left.dueDate ?? left.date).localeCompare(right.dueDate ?? right.date)),
     payments: payments.map(mapScheduledPaymentRecord),
   };
 }
@@ -1996,6 +2048,9 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
       incomes: detail.incomes
         .filter((income) => isPaidIncomeStatus(income.status))
         .sort((left, right) => right.date.localeCompare(left.date)),
+      pendingIncomes: detail.pendingIncomes
+        .filter((income) => isPendingIncomeStatus(income.status))
+        .sort((left, right) => (left.dueDate ?? left.date).localeCompare(right.dueDate ?? right.date)),
       scheduledPayments: detail.scheduledPayments
         .filter((payment) => isOpenScheduledStatus(payment.status as ScheduledPaymentStatus))
         .sort((left, right) => left.expectedDate.localeCompare(right.expectedDate)),
@@ -2046,7 +2101,9 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
           },
           scheduledPayment: {
             select: {
+              id: true,
               expectedDate: true,
+              recurringIncomeId: true,
             },
           },
         },
@@ -2123,6 +2180,10 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
       .filter((income) => isPaidIncomeStatus(income.status))
       .map(mapIncomeRecord)
       .sort((left, right) => right.date.localeCompare(left.date)),
+    pendingIncomes: project.incomes
+      .filter((income) => isPendingIncomeStatus(income.status))
+      .map(mapIncomeRecord)
+      .sort((left, right) => (left.dueDate ?? left.date).localeCompare(right.dueDate ?? right.date)),
     scheduledPayments: project.scheduledPayments
       .filter((payment) => isOpenScheduledStatus(payment.status))
       .map(mapScheduledPaymentRecord)
@@ -2205,6 +2266,10 @@ export async function listIncomes(filters?: z.infer<typeof incomeFilterSchema>) 
     return { data: mapDemoIncomes(filters), demoMode: true };
   }
 
+  await syncProjectSubscriptions(prisma);
+  await syncOpenRecurringIncomes(prisma);
+  await syncOverduePayments(prisma);
+
   const persistedStatusFilter =
     filters?.status === "OVERDUE" || filters?.status === "PENDING"
       ? IncomeStatus.PENDING
@@ -2240,6 +2305,13 @@ export async function listIncomes(filters?: z.infer<typeof incomeFilterSchema>) 
               name: true,
             },
           },
+        },
+      },
+      scheduledPayment: {
+        select: {
+          id: true,
+          expectedDate: true,
+          recurringIncomeId: true,
         },
       },
     },

@@ -2,9 +2,18 @@
 
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { IncomeLedgerStatus, IncomeRecord, IncomeStatus, IncomeType, ProjectRecord } from "@/lib/types";
+import type {
+  IncomeLedgerStatus,
+  IncomeOrigin,
+  IncomeRecord,
+  IncomeStatus,
+  IncomeType,
+  ProjectRecord,
+  ScheduledPaymentRecord,
+} from "@/lib/types";
 import { apiFetch } from "@/lib/api";
 import { cn, formatArs, formatIncomeStatus, formatIncomeType, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
+import { MarkPaymentPaidButton } from "@/components/payments/mark-payment-paid-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
@@ -25,6 +34,39 @@ const typeSegments: Array<{ value: IncomeType; label: string; hint: string }> = 
   { value: "MAINTENANCE", label: "Mantenimiento", hint: "Se toma como fee operativo" },
 ];
 
+type IncomeFormState = {
+  projectId: string;
+  date: string;
+  dueDate: string;
+  status: IncomeStatus;
+  type: IncomeType;
+  amountUsd: string;
+  amountArs: string;
+  exchangeRate: string;
+  notes: string;
+};
+
+type LedgerIncomeRow = {
+  id: string;
+  rowKey: string;
+  rowKind: "INCOME" | "SCHEDULED";
+  origin: IncomeOrigin;
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  date: string;
+  dueDate: string | null;
+  amountUsd: number;
+  amountArs: number | null;
+  exchangeRate: number | null;
+  status: IncomeStatus;
+  displayStatus: IncomeLedgerStatus;
+  type: IncomeType;
+  notes: string | null;
+  income: IncomeRecord | null;
+  scheduledPayment: ScheduledPaymentRecord | null;
+};
+
 function statusChip(status: IncomeLedgerStatus) {
   if (status === "PAID") {
     return "border-emerald-900/20 bg-emerald-50 text-emerald-950";
@@ -35,6 +77,12 @@ function statusChip(status: IncomeLedgerStatus) {
   }
 
   return "border-amber-900/20 bg-amber-50 text-amber-950";
+}
+
+function originChip(origin: IncomeOrigin) {
+  return origin === "RECURRENT"
+    ? "border-cobalt/20 bg-cobalt/10 text-cobalt"
+    : "border-black/10 bg-white text-ink/72";
 }
 
 function statusRowClassName(status: IncomeLedgerStatus) {
@@ -57,6 +105,46 @@ function typeChip(type: IncomeType) {
 
 function isClosedProject(status: ProjectRecord["status"]) {
   return status === "COMPLETED" || status === "CANCELLED";
+}
+
+function isOpenScheduledPayment(payment: ScheduledPaymentRecord) {
+  return payment.status === "pending" || payment.status === "overdue";
+}
+
+function mapScheduledPaymentStatus(status: ScheduledPaymentRecord["status"]): IncomeLedgerStatus {
+  return status === "overdue" ? "OVERDUE" : "PENDING";
+}
+
+function formatOrigin(origin: IncomeOrigin) {
+  return origin === "RECURRENT" ? "Recurrente" : "Manual";
+}
+
+function buildEmptyForm(projects: ProjectRecord[]): IncomeFormState {
+  return {
+    projectId: projects[0]?.id ?? "",
+    date: new Date().toISOString().slice(0, 10),
+    dueDate: "",
+    status: "PAID",
+    type: "DEVELOPMENT",
+    amountUsd: "",
+    amountArs: "",
+    exchangeRate: "",
+    notes: "",
+  };
+}
+
+function buildIncomePayload(form: IncomeFormState, editingIncomeId: string | null) {
+  return {
+    projectId: form.projectId,
+    date: form.date,
+    dueDate: editingIncomeId ? (form.dueDate || null) : form.status === "PENDING" ? form.dueDate || null : null,
+    status: form.status,
+    type: form.type,
+    amountUsd: form.amountUsd ? Number(form.amountUsd) : undefined,
+    amountArs: form.amountArs ? Number(form.amountArs) : null,
+    exchangeRate: form.exchangeRate ? Number(form.exchangeRate) : null,
+    notes: form.notes || null,
+  };
 }
 
 function SegmentedControl<T extends string>({
@@ -116,52 +204,39 @@ function SegmentedControl<T extends string>({
   );
 }
 
-type IncomeFormState = {
-  projectId: string;
-  date: string;
-  dueDate: string;
-  status: IncomeStatus;
-  type: IncomeType;
-  amountUsd: string;
-  amountArs: string;
-  exchangeRate: string;
-  notes: string;
-};
+function sortLedgerRows(rows: LedgerIncomeRow[]) {
+  return [...rows].sort((left, right) => {
+    const leftOpen = left.displayStatus !== "PAID";
+    const rightOpen = right.displayStatus !== "PAID";
 
-function buildEmptyForm(projects: ProjectRecord[]): IncomeFormState {
-  return {
-    projectId: projects[0]?.id ?? "",
-    date: new Date().toISOString().slice(0, 10),
-    dueDate: "",
-    status: "PAID",
-    type: "DEVELOPMENT",
-    amountUsd: "",
-    amountArs: "",
-    exchangeRate: "",
-    notes: "",
-  };
-}
+    if (leftOpen !== rightOpen) {
+      return leftOpen ? -1 : 1;
+    }
 
-function buildIncomePayload(form: IncomeFormState, editingIncomeId: string | null) {
-  return {
-    projectId: form.projectId,
-    date: form.date,
-    dueDate: editingIncomeId ? (form.dueDate || null) : form.status === "PENDING" ? form.dueDate || null : null,
-    status: form.status,
-    type: form.type,
-    amountUsd: form.amountUsd ? Number(form.amountUsd) : undefined,
-    amountArs: form.amountArs ? Number(form.amountArs) : null,
-    exchangeRate: form.exchangeRate ? Number(form.exchangeRate) : null,
-    notes: form.notes || null,
-  };
+    if (leftOpen && rightOpen) {
+      const byDue = (left.dueDate ?? left.date).localeCompare(right.dueDate ?? right.date);
+      if (byDue !== 0) {
+        return byDue;
+      }
+    }
+
+    const byDate = right.date.localeCompare(left.date);
+    if (byDate !== 0) {
+      return byDate;
+    }
+
+    return left.projectName.localeCompare(right.projectName);
+  });
 }
 
 export function IncomesScreen({
   incomes,
+  scheduledPayments,
   projects,
   demoMode,
 }: {
   incomes: IncomeRecord[];
+  scheduledPayments: ScheduledPaymentRecord[];
   projects: ProjectRecord[];
   demoMode: boolean;
 }) {
@@ -169,30 +244,91 @@ export function IncomesScreen({
   const [isPending, startTransition] = useTransition();
   const [statusFilter, setStatusFilter] = useState<IncomeLedgerStatus | "">("");
   const [typeFilter, setTypeFilter] = useState<IncomeType | "">("");
+  const [originFilter, setOriginFilter] = useState<IncomeOrigin | "">("");
+  const [clientFilter, setClientFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState("");
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<IncomeFormState>(buildEmptyForm(projects));
 
+  const ledgerRows = useMemo<LedgerIncomeRow[]>(
+    () =>
+      sortLedgerRows([
+        ...incomes.map((income) => ({
+          id: income.id,
+          rowKey: `income:${income.id}`,
+          rowKind: "INCOME" as const,
+          origin: income.origin,
+          projectId: income.projectId,
+          projectName: income.projectName,
+          clientName: income.clientName,
+          date: income.date,
+          dueDate: income.dueDate,
+          amountUsd: income.amountUsd,
+          amountArs: income.amountArs,
+          exchangeRate: income.exchangeRate,
+          status: income.status,
+          displayStatus: income.displayStatus,
+          type: income.type,
+          notes: income.notes,
+          income,
+          scheduledPayment: null,
+        })),
+        ...scheduledPayments
+          .filter(isOpenScheduledPayment)
+          .map((payment) => ({
+            id: payment.id,
+            rowKey: `scheduled:${payment.id}`,
+            rowKind: "SCHEDULED" as const,
+            origin: "RECURRENT" as const,
+            projectId: payment.projectId,
+            projectName: payment.projectName,
+            clientName: payment.clientName,
+            date: payment.expectedDate,
+            dueDate: payment.expectedDate,
+            amountUsd: payment.expectedAmountUsd,
+            amountArs: null,
+            exchangeRate: null,
+            status: "PENDING" as const,
+            displayStatus: mapScheduledPaymentStatus(payment.status),
+            type: payment.type,
+            notes: payment.notes,
+            income: null,
+            scheduledPayment: payment,
+          })),
+      ]),
+    [incomes, scheduledPayments],
+  );
+
   const visibleIncomes = useMemo(
     () =>
-      incomes.filter((income) => {
+      ledgerRows.filter((income) => {
         if (statusFilter && income.displayStatus !== statusFilter) {
           return false;
         }
         if (typeFilter && income.type !== typeFilter) {
           return false;
         }
+        if (originFilter && income.origin !== originFilter) {
+          return false;
+        }
+        if (clientFilter && income.clientName !== clientFilter) {
+          return false;
+        }
+        if (projectFilter && income.projectId !== projectFilter) {
+          return false;
+        }
         return true;
       }),
-    [incomes, statusFilter, typeFilter],
+    [clientFilter, ledgerRows, originFilter, projectFilter, statusFilter, typeFilter],
   );
 
   const summary = useMemo(
     () => ({
       paidUsd: incomes.filter((income) => income.displayStatus === "PAID").reduce((sum, income) => sum + income.amountUsd, 0),
-      openUsd: incomes.filter((income) => income.displayStatus !== "PAID").reduce((sum, income) => sum + income.amountUsd, 0),
+      openUsd: ledgerRows.filter((income) => income.displayStatus !== "PAID").reduce((sum, income) => sum + income.amountUsd, 0),
       developmentPaidUsd: incomes
         .filter((income) => income.displayStatus === "PAID" && income.type === "DEVELOPMENT")
         .reduce((sum, income) => sum + income.amountUsd, 0),
@@ -200,7 +336,7 @@ export function IncomesScreen({
         .filter((income) => income.displayStatus === "PAID" && income.type === "MAINTENANCE")
         .reduce((sum, income) => sum + income.amountUsd, 0),
     }),
-    [incomes],
+    [incomes, ledgerRows],
   );
 
   const filteredTotals = useMemo(
@@ -212,10 +348,27 @@ export function IncomesScreen({
     [visibleIncomes],
   );
 
+  const clientOptions = useMemo(
+    () => Array.from(new Set(ledgerRows.map((income) => income.clientName))).sort((left, right) => left.localeCompare(right)),
+    [ledgerRows],
+  );
+
+  const projectOptions = useMemo(
+    () =>
+      [...projects]
+        .sort((left, right) => left.name.localeCompare(right.name))
+        .map((project) => ({
+          id: project.id,
+          label: `${project.clientName} · ${project.name}`,
+        })),
+    [projects],
+  );
+
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === form.projectId) ?? null,
     [projects, form.projectId],
   );
+
   const editingIncome = useMemo(
     () => incomes.find((income) => income.id === editingIncomeId) ?? null,
     [editingIncomeId, incomes],
@@ -250,6 +403,10 @@ export function IncomesScreen({
   };
 
   const handleEdit = (income: IncomeRecord) => {
+    if (income.origin === "RECURRENT") {
+      return;
+    }
+
     setEditingIncomeId(income.id);
     setDeleteDialogOpen(false);
     setDeleteError(null);
@@ -327,7 +484,7 @@ export function IncomesScreen({
         <Card className="border-amber-950/30 bg-gradient-to-br from-amber-950 via-amber-900 to-coral text-white">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-50/80">Pendiente a cobrar</div>
           <div className="mt-3 font-display text-4xl text-white">{formatUsd(summary.openUsd)}</div>
-          <p className="mt-2 text-sm text-amber-50/90">Incluye pendientes vigentes y vencidos.</p>
+          <p className="mt-2 text-sm text-amber-50/90">Incluye manuales abiertos y ocurrencias recurrentes pendientes o vencidas.</p>
         </Card>
         <Card>
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cobalt">Desarrollo cobrado</div>
@@ -499,12 +656,14 @@ export function IncomesScreen({
         </Card>
 
         <Card>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="font-display text-2xl text-ink">Ledger de ingresos</h2>
-              <p className="mt-1 text-sm text-ink/55">Cada fila conserva fecha operativa, vencimiento y tipo financiero sin tocar el flujo actual.</p>
+              <p className="mt-1 text-sm text-ink/55">
+                El operativo global ahora mezcla ingresos manuales y ocurrencias recurrentes abiertas sin duplicar la serie madre.
+              </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <Select className="max-w-[220px]" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as IncomeLedgerStatus | "")}>
                 <option value="">Todos los estados</option>
                 <option value="PAID">Cobrado</option>
@@ -515,6 +674,26 @@ export function IncomesScreen({
                 <option value="">Todos los tipos</option>
                 <option value="DEVELOPMENT">Desarrollo</option>
                 <option value="MAINTENANCE">Mantenimiento</option>
+              </Select>
+              <Select className="max-w-[220px]" value={originFilter} onChange={(event) => setOriginFilter(event.target.value as IncomeOrigin | "")}>
+                <option value="">Origen: Todos</option>
+                <option value="RECURRENT">Origen: Recurrente</option>
+              </Select>
+              <Select className="max-w-[220px]" value={clientFilter} onChange={(event) => setClientFilter(event.target.value)}>
+                <option value="">Todos los clientes</option>
+                {clientOptions.map((clientName) => (
+                  <option key={clientName} value={clientName}>
+                    {clientName}
+                  </option>
+                ))}
+              </Select>
+              <Select className="max-w-[260px]" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}>
+                <option value="">Todos los proyectos</option>
+                {projectOptions.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.label}
+                  </option>
+                ))}
               </Select>
             </div>
           </div>
@@ -537,13 +716,28 @@ export function IncomesScreen({
           </div>
 
           {visibleIncomes.length === 0 ? (
-            <EmptyState title="Sin ingresos" description="Cargá cobros o pendientes y clasificá si corresponden a desarrollo o mantenimiento." />
+            <EmptyState title="Sin ingresos" description="No hay filas que coincidan con los filtros activos en el ledger." />
           ) : (
             <DataTable
-              headers={["Fecha", "Vence", "Cliente", "Proyecto", "Tipo", "USD", "Estado", "Notas", "Acción"]}
+              headers={["Fecha", "Vence", "Origen", "Cliente", "Proyecto", "Tipo", "USD", "Estado", "Notas", "Acción"]}
+              tableClassName="min-w-[78rem] table-fixed"
+              colGroup={
+                <colgroup>
+                  <col className="w-[8rem]" />
+                  <col className="w-[8rem]" />
+                  <col className="w-[8rem]" />
+                  <col className="w-[10rem]" />
+                  <col className="w-[14rem]" />
+                  <col className="w-[9rem]" />
+                  <col className="w-[8rem]" />
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[15rem]" />
+                  <col className="w-[11rem]" />
+                </colgroup>
+              }
               footer={
                 <tr>
-                  <td className="px-4 py-3 font-semibold text-ink" colSpan={5}>
+                  <td className="px-4 py-3 font-semibold text-ink" colSpan={6}>
                     Total filtrado
                   </td>
                   <td className="px-4 py-3 font-semibold text-emerald-950">{formatUsd(filteredTotals.amountUsd)}</td>
@@ -554,9 +748,14 @@ export function IncomesScreen({
               }
             >
               {visibleIncomes.map((income) => (
-                <tr key={income.id} className={statusRowClassName(income.displayStatus)}>
+                <tr key={income.rowKey} className={statusRowClassName(income.displayStatus)}>
                   <td className="px-4 py-3">{formatShortDate(income.date)}</td>
                   <td className="px-4 py-3">{formatShortDate(income.dueDate)}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${originChip(income.origin)}`}>
+                      {formatOrigin(income.origin)}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">{income.clientName}</td>
                   <td className="px-4 py-3">{income.projectName}</td>
                   <td className="px-4 py-3">
@@ -572,21 +771,41 @@ export function IncomesScreen({
                   </td>
                   <td className="px-4 py-3 text-ink/60">{income.notes ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button type="button" variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => handleEdit(income)}>
-                        Editar
-                      </Button>
-                      {income.displayStatus !== "PAID" ? (
-                        <Button
-                          type="button"
-                          className="px-3 py-1.5 text-xs"
-                          disabled={isPending || demoMode}
-                          onClick={() => handleMarkPaid(income)}
-                        >
-                          {demoMode ? "Demo" : isPending ? "Registrando…" : "Marcar cobrado"}
-                        </Button>
-                      ) : null}
-                    </div>
+                    {income.rowKind === "SCHEDULED" && income.scheduledPayment ? (
+                      <MarkPaymentPaidButton
+                        paymentId={income.scheduledPayment.id}
+                        expectedDate={income.scheduledPayment.expectedDate}
+                        paymentStatus={income.scheduledPayment.status}
+                        paymentType={income.scheduledPayment.type}
+                        expectedAmountUsd={income.scheduledPayment.expectedAmountUsd}
+                        projectName={income.scheduledPayment.projectName}
+                        demoMode={demoMode}
+                        compact
+                      />
+                    ) : income.income ? (
+                      <div className="flex flex-wrap gap-2">
+                        {income.income.origin === "MANUAL" ? (
+                          <Button type="button" variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => handleEdit(income.income!)}>
+                            Editar
+                          </Button>
+                        ) : null}
+                        {income.income.displayStatus !== "PAID" ? (
+                          <Button
+                            type="button"
+                            className="px-3 py-1.5 text-xs"
+                            disabled={isPending || demoMode}
+                            onClick={() => handleMarkPaid(income.income!)}
+                          >
+                            {demoMode ? "Demo" : isPending ? "Registrando…" : "Marcar cobrado"}
+                          </Button>
+                        ) : null}
+                        {income.income.origin === "RECURRENT" && income.income.displayStatus === "PAID" ? (
+                          <span className="text-xs text-ink/45">Gestionado desde la ocurrencia.</span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-ink/45">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
