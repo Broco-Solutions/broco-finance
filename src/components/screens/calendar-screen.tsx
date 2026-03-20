@@ -267,13 +267,18 @@ export function CalendarScreen({
       .filter((expense) => !linkedExpenseIds.has(expense.id) && !expense.scheduledExpenseId)
       .map<CalendarEvent>((expense) => ({
         id: `expense:${expense.id}`,
-        date: expense.date,
+        date: expense.displayStatus === "PAID" ? expense.date : expense.dueDate ?? expense.date,
         amountUsd: expense.amountUsd,
-        title: expense.description,
+        title: expense.description || expense.categoryName,
         subtitle: `${expense.categoryName}${expense.projectName ? ` · ${expense.projectName}` : ""}`,
         direction: "expense",
         source: "expense",
-        state: "paid",
+        state:
+          expense.displayStatus === "PAID"
+            ? "paid"
+            : expense.displayStatus === "OVERDUE"
+              ? "overdue"
+              : "pending",
         canOpen: !expense.salaryWithdrawalId,
         scheduledPayment: null,
         income: null,

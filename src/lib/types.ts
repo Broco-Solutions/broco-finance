@@ -6,6 +6,8 @@ export type ContractFrequency = "monthly" | "quarterly" | "biannual" | "annual";
 export type ScheduledPaymentStatus = "pending" | "paid" | "overdue" | "cancelled";
 export type ScheduledExpenseStatus = "PENDING" | "PAID";
 export type ExpenseType = "fixed" | "variable";
+export type ExpenseStatus = "PAID" | "PENDING";
+export type ExpenseLedgerStatus = ExpenseStatus | "OVERDUE";
 export type DistributionLayer = "emergency" | "growth";
 
 export type MonetaryFields = {
@@ -104,9 +106,13 @@ export type ExpenseCategoryRecord = {
 export type ExpenseRecord = MonetaryFields & {
   id: string;
   date: string;
+  dueDate: string | null;
+  correspondsToDate: string | null;
   categoryId: string;
   categoryName: string;
   expenseType: ExpenseType;
+  status: ExpenseStatus;
+  displayStatus: ExpenseLedgerStatus;
   projectId: string | null;
   projectName: string | null;
   description: string;

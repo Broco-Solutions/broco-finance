@@ -1,6 +1,7 @@
 import {
   ContractFrequency,
   DistributionLayer,
+  ExpenseStatus,
   ExpenseType,
   IncomeStatus,
   IncomeType,
@@ -22,6 +23,7 @@ import type {
   DistributionRecord,
   DistributionSummary,
   ExpenseCategoryRecord,
+  ExpenseLedgerStatus,
   IncomeLedgerStatus,
   ExpenseRecord,
   IncomeRecord,
@@ -133,6 +135,25 @@ type ScheduledPaymentWithProjectRecord = {
   };
 };
 
+type ExpenseWithRelationsRecord = {
+  id: string;
+  date: Date;
+  dueDate: Date | null;
+  status: ExpenseStatus;
+  categoryId: string;
+  expenseType: ExpenseType;
+  projectId: string | null;
+  amountUsd: Prisma.Decimal | number;
+  amountArs: Prisma.Decimal | number | null;
+  exchangeRate: Prisma.Decimal | number | null;
+  description: string;
+  salaryWithdrawalId: string | null;
+  notes: string | null;
+  category: { name: string };
+  project: { name: string } | null;
+  scheduledExpense?: { id: string } | null;
+};
+
 type RecurringExpenseWithScheduleRecord = {
   id: string;
   description: string;
@@ -190,6 +211,14 @@ function isPendingIncomeStatus(status: IncomeStatus | string) {
   return status === IncomeStatus.PENDING;
 }
 
+function isPaidExpenseStatus(status: ExpenseStatus | string) {
+  return status === ExpenseStatus.PAID;
+}
+
+function isPendingExpenseStatus(status: ExpenseStatus | string) {
+  return status === ExpenseStatus.PENDING;
+}
+
 function deriveIncomeDisplayStatus({
   status,
   dueDate,
@@ -218,6 +247,36 @@ function matchesIncomeDisplayStatus(
   }
 
   return income.displayStatus === status;
+}
+
+function deriveExpenseDisplayStatus({
+  status,
+  dueDate,
+}: {
+  status: ExpenseStatus | string;
+  dueDate: Date | string | null | undefined;
+}): ExpenseLedgerStatus {
+  if (!isPendingExpenseStatus(status)) {
+    return "PAID";
+  }
+
+  if (!dueDate) {
+    return "PENDING";
+  }
+
+  const normalizedDueDate = startOfDay(typeof dueDate === "string" ? parseISO(dueDate) : dueDate);
+  return isBefore(normalizedDueDate, startOfDay(new Date())) ? "OVERDUE" : "PENDING";
+}
+
+function matchesExpenseDisplayStatus(
+  expense: Pick<ExpenseRecord, "displayStatus">,
+  status: ExpenseLedgerStatus | null | undefined,
+) {
+  if (!status) {
+    return true;
+  }
+
+  return expense.displayStatus === status;
 }
 
 function isDevelopmentIncomeType(type: IncomeType | string) {
@@ -250,6 +309,8 @@ const incomeStatusSchema = z.enum(["PAID", "PENDING"]);
 const incomeDisplayStatusSchema = z.enum(["PAID", "PENDING", "OVERDUE"]);
 const incomeTypeSchema = z.enum(["DEVELOPMENT", "MAINTENANCE"]);
 const expenseTypeSchema = z.enum(["fixed", "variable"]);
+const expenseStatusSchema = z.enum(["PAID", "PENDING"]);
+const expenseDisplayStatusSchema = z.enum(["PAID", "PENDING", "OVERDUE"]);
 const contractFrequencySchema = z.enum(["monthly", "quarterly", "biannual", "annual"]);
 const scheduledActionSchema = z.enum(["mark_paid", "cancel", "edit"]);
 const scheduledExpenseStatusSchema = z.enum(["PENDING", "PAID"]);
@@ -313,6 +374,19 @@ function addPendingIncomeDueDateIssue(
   }
 }
 
+function addPendingExpenseDueDateIssue(
+  value: { status?: "PAID" | "PENDING"; dueDate?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  if (value.status === "PENDING" && !value.dueDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Indicá la fecha de vencimiento para gastos pendientes.",
+      path: ["dueDate"],
+    });
+  }
+}
+
 export const incomeInputSchema = (
   incomeBaseSchema.extend({
     status: incomeStatusSchema,
@@ -331,12 +405,14 @@ export const expenseCategoryInputSchema = z.object({
 
 export const expenseInputSchema = z.object({
   date: z.string().min(8, "Fecha inválida."),
+  dueDate: z.string().nullable().optional(),
+  status: expenseStatusSchema,
   categoryId: z.string().uuid("Categoría inválida."),
   expenseType: expenseTypeSchema,
   projectId: z.string().uuid().nullable().optional(),
-  description: z.string().min(2, "La descripción es obligatoria."),
+  description: z.string().trim().nullable().optional(),
   notes: z.string().trim().nullable().optional(),
-}).merge(baseMoneySchema);
+}).merge(baseMoneySchema).superRefine(addPendingExpenseDueDateIssue);
 
 export const recurringExpenseInputSchema = z.object({
   description: z.string().min(2, "La descripción es obligatoria."),
@@ -408,6 +484,7 @@ export const incomeFilterSchema = z.object({
 });
 
 export const expenseFilterSchema = z.object({
+  status: expenseDisplayStatusSchema.nullable().optional(),
   categoryId: z.string().uuid().nullable().optional(),
   type: z.enum(["fixed", "variable"]).nullable().optional(),
   projectId: z.string().uuid().nullable().optional(),
@@ -934,6 +1011,9 @@ function mapDemoIncomes(filters?: z.infer<typeof incomeFilterSchema>) {
 function mapDemoExpenses(filters?: z.infer<typeof expenseFilterSchema>) {
   return filterByRange(
     demoExpenses.filter((expense) => {
+      if (filters?.status && !matchesExpenseDisplayStatus(expense, filters.status)) {
+        return false;
+      }
       if (filters?.categoryId && expense.categoryId !== filters.categoryId) {
         return false;
       }
@@ -1100,29 +1180,20 @@ function mapExpenseCategory(category: { id: string; name: string; isDefault: boo
 }
 
 function mapExpenseRecord(
-  expense: {
-    id: string;
-    date: Date;
-    categoryId: string;
-    expenseType: ExpenseType;
-    projectId: string | null;
-    amountUsd: Prisma.Decimal | number;
-    amountArs: Prisma.Decimal | number | null;
-    exchangeRate: Prisma.Decimal | number | null;
-    description: string;
-    salaryWithdrawalId: string | null;
-    notes: string | null;
-    category: { name: string };
-    project: { name: string } | null;
-    scheduledExpense?: { id: string } | null;
-  },
+  expense: ExpenseWithRelationsRecord,
 ): ExpenseRecord {
+  const dueDate = expense.dueDate ? dateOnly(expense.dueDate) : null;
+
   return {
     id: expense.id,
     date: dateOnly(expense.date),
+    dueDate,
+    correspondsToDate: expense.status === ExpenseStatus.PAID ? dueDate : null,
     categoryId: expense.categoryId,
     categoryName: expense.category.name,
     expenseType: expense.expenseType,
+    status: expense.status,
+    displayStatus: deriveExpenseDisplayStatus({ status: expense.status, dueDate }),
     projectId: expense.projectId,
     projectName: expense.project?.name ?? null,
     amountUsd: requireNumber(expense.amountUsd),
@@ -1619,6 +1690,8 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
         select: {
           id: true,
           date: true,
+          dueDate: true,
+          status: true,
           categoryId: true,
           expenseType: true,
           projectId: true,
@@ -1628,6 +1701,11 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
           description: true,
           salaryWithdrawalId: true,
           notes: true,
+          scheduledExpense: {
+            select: {
+              id: true,
+            },
+          },
           category: {
             select: {
               name: true,
@@ -1896,8 +1974,14 @@ export async function listExpenses(filters?: z.infer<typeof expenseFilterSchema>
     return { data: mapDemoExpenses(filters), demoMode: true };
   }
 
+  const persistedStatusFilter =
+    filters?.status === "OVERDUE" || filters?.status === "PENDING"
+      ? ExpenseStatus.PENDING
+      : (filters?.status as ExpenseStatus | undefined);
+
   const items = await prisma.expense.findMany({
     where: {
+      status: persistedStatusFilter,
       categoryId: filters?.categoryId ?? undefined,
       expenseType: (filters?.type as ExpenseType | undefined) ?? undefined,
       projectId: filters?.projectId ?? undefined,
@@ -1909,6 +1993,8 @@ export async function listExpenses(filters?: z.infer<typeof expenseFilterSchema>
     select: {
       id: true,
       date: true,
+      dueDate: true,
+      status: true,
       categoryId: true,
       expenseType: true,
       projectId: true,
@@ -1937,7 +2023,7 @@ export async function listExpenses(filters?: z.infer<typeof expenseFilterSchema>
     orderBy: { date: "desc" },
   });
 
-  return { data: items.map(mapExpenseRecord), demoMode: false };
+  return { data: items.map(mapExpenseRecord).filter((expense) => matchesExpenseDisplayStatus(expense, filters?.status ?? null)), demoMode: false };
 }
 
 export async function createExpense(input: z.infer<typeof expenseInputSchema>) {
@@ -1947,10 +2033,12 @@ export async function createExpense(input: z.infer<typeof expenseInputSchema>) {
   return withDashboardRevalidation(prisma.expense.create({
     data: {
       date: parseISO(input.date),
+      dueDate: normalizeOptionalDate(input.dueDate),
+      status: input.status as ExpenseStatus,
       categoryId: input.categoryId,
       expenseType: input.expenseType as ExpenseType,
       projectId: input.projectId ?? null,
-      description: input.description.trim(),
+      description: input.description?.trim() ?? "",
       notes: input.notes ?? null,
       ...money,
     },
@@ -1983,10 +2071,12 @@ export async function updateExpense(id: string, input: z.infer<typeof expenseInp
     where: { id },
     data: {
       date: parseISO(input.date),
+      dueDate: normalizeOptionalDate(input.dueDate),
+      status: input.status as ExpenseStatus,
       categoryId: input.categoryId,
       expenseType: input.expenseType as ExpenseType,
       projectId: input.projectId ?? null,
-      description: input.description.trim(),
+      description: input.description?.trim() ?? "",
       notes: input.notes ?? null,
       ...money,
     },
@@ -2196,6 +2286,8 @@ export async function updateScheduledExpense(id: string, input: z.infer<typeof s
     const createdExpense = await tx.expense.create({
       data: {
         date: paidAt,
+        dueDate: scheduledExpense.dueDate,
+        status: ExpenseStatus.PAID,
         categoryId: scheduledExpense.recurringExpense.categoryId,
         expenseType: ExpenseType.fixed,
         projectId: null,
@@ -2232,7 +2324,7 @@ export async function getDistributionPage(month?: string | null): Promise<Distri
   const [layers, incomes, expenses, salaries] = await Promise.all([
     prisma.distributionConfig.findMany({ orderBy: { layer: "asc" } }),
     prisma.income.findMany({ where: { status: IncomeStatus.PAID }, select: { amountUsd: true } }),
-    prisma.expense.findMany({ select: { amountUsd: true } }),
+    prisma.expense.findMany({ where: { status: ExpenseStatus.PAID }, select: { amountUsd: true } }),
     prisma.salaryWithdrawal.findMany({
       where: {
         month: month ? parseISO(month) : undefined,
@@ -2816,6 +2908,7 @@ async function getDashboardFromDatabase(filters: z.infer<typeof dashboardFilterS
   };
 
   const expenseWhere: Prisma.ExpenseWhereInput = {
+    status: ExpenseStatus.PAID,
     date: {
       gte: filters?.from ? parseISO(filters.from) : undefined,
       lte: filters?.to ? parseISO(filters.to) : undefined,
@@ -2829,7 +2922,7 @@ async function getDashboardFromDatabase(filters: z.infer<typeof dashboardFilterS
     project: filters?.clientId ? { clientId: filters.clientId } : undefined,
   };
 
-  const [incomes, operationalPendingIncomes, expenses, payments, committedExpensesMonth, layers, allIncomes, allExpenses, salaries, projects, alerts] = await Promise.all([
+  const [incomes, operationalPendingIncomes, expenses, payments, committedScheduledExpenses, operationalPendingExpenses, layers, allIncomes, allExpenses, salaries, projects, alerts] = await Promise.all([
     prisma.income.findMany({
       where: incomeWhere,
       select: {
@@ -2901,9 +2994,32 @@ async function getDashboardFromDatabase(filters: z.infer<typeof dashboardFilterS
         amountUsd: true,
       },
     }),
+    prisma.expense.findMany({
+      where: {
+        status: ExpenseStatus.PENDING,
+        OR: [
+          {
+            dueDate: {
+              lte: currentMonthEnd,
+            },
+          },
+          {
+            dueDate: null,
+            date: {
+              lte: currentMonthEnd,
+            },
+          },
+        ],
+        projectId: filters?.projectId ?? undefined,
+        project: filters?.clientId ? { clientId: filters.clientId } : undefined,
+      },
+      select: {
+        amountUsd: true,
+      },
+    }),
     prisma.distributionConfig.findMany({ orderBy: { layer: "asc" } }),
     prisma.income.findMany({ where: { status: IncomeStatus.PAID }, select: { amountUsd: true } }),
-    prisma.expense.findMany({ select: { amountUsd: true } }),
+    prisma.expense.findMany({ where: { status: ExpenseStatus.PAID }, select: { amountUsd: true } }),
     prisma.salaryWithdrawal.findMany({
       where: { month: currentMonthStart },
       select: { amountUsd: true },
@@ -2949,7 +3065,9 @@ async function getDashboardFromDatabase(filters: z.infer<typeof dashboardFilterS
     })),
     payments: payments.map(mapScheduledPaymentRecord),
     operationalPendingIncomes: operationalPendingIncomes.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
-    committedExpensesMonthUsd: committedExpensesMonth.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
+    committedExpensesMonthUsd:
+      committedScheduledExpenses.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0) +
+      operationalPendingExpenses.reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
     layers: layers.map(mapDistributionRecord),
     allIncomes: allIncomes.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
     allExpenses: allExpenses.map((item) => ({ amountUsd: requireNumber(item.amountUsd) })),
@@ -3004,6 +3122,7 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
       }),
       expenses: mapDemoExpenses({
         projectId: filters?.projectId ?? null,
+        status: "PAID",
         from: filters?.from ?? null,
         to: filters?.to ?? null,
       }),
@@ -3017,14 +3136,25 @@ export async function getDashboard(filters?: z.infer<typeof dashboardFilterSchem
         status: "PENDING",
         to: dateOnly(currentMonthEnd),
       }).map((item) => ({ amountUsd: item.amountUsd })),
-      committedExpensesMonthUsd: mapDemoScheduledExpenses({
-        status: "PENDING",
-        currentMonth: true,
-        includeOverdue: true,
-      }).reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
+      committedExpensesMonthUsd:
+        mapDemoScheduledExpenses({
+          status: "PENDING",
+          currentMonth: true,
+          includeOverdue: true,
+        }).reduce((sum, item) => sum + requireNumber(item.amountUsd), 0) +
+        mapDemoExpenses({
+          projectId: filters?.projectId ?? null,
+          status: "PENDING",
+          to: dateOnly(currentMonthEnd),
+        }).reduce((sum, item) => sum + requireNumber(item.amountUsd), 0) +
+        mapDemoExpenses({
+          projectId: filters?.projectId ?? null,
+          status: "OVERDUE",
+          to: dateOnly(currentMonthEnd),
+        }).reduce((sum, item) => sum + requireNumber(item.amountUsd), 0),
       layers: demoLayers,
       allIncomes: demoIncomes.filter((item) => item.status === "PAID").map((item) => ({ amountUsd: item.amountUsd })),
-      allExpenses: demoExpenses.map((item) => ({ amountUsd: item.amountUsd })),
+      allExpenses: demoExpenses.filter((item) => item.status === "PAID").map((item) => ({ amountUsd: item.amountUsd })),
       salariesThisMonthUsd: demoSalaries
         .filter((item) => item.month === dateOnly(currentMonthStart))
         .reduce((sum, item) => sum + item.amountUsd, 0),

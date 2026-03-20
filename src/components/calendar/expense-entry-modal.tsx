@@ -2,25 +2,25 @@
 
 import { FormEvent, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { ExpenseCategoryRecord, ExpenseRecord, ExpenseType, ProjectRecord } from "@/lib/types";
+import type { ExpenseCategoryRecord, ExpenseRecord, ExpenseStatus, ExpenseType, ProjectRecord } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { EditEntityModal } from "@/components/ui/edit-entity-modal";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 
 type ExpenseFormState = {
   amountArs: string;
   amountUsd: string;
   categoryId: string;
   date: string;
+  dueDate: string;
   description: string;
   exchangeRate: string;
   expenseType: ExpenseType;
-  notes: string;
   projectId: string;
+  status: ExpenseStatus;
 };
 
 function buildExpenseForm({
@@ -35,27 +35,29 @@ function buildExpenseForm({
   if (expense) {
     return {
       date: expense.date,
+      dueDate: expense.dueDate ?? "",
       categoryId: expense.categoryId,
       expenseType: expense.expenseType,
       projectId: expense.projectId ?? "",
+      status: expense.status,
       description: expense.description,
       amountUsd: expense.amountUsd ? String(expense.amountUsd) : "",
       amountArs: expense.amountArs ? String(expense.amountArs) : "",
       exchangeRate: expense.exchangeRate ? String(expense.exchangeRate) : "",
-      notes: expense.notes ?? "",
     };
   }
 
   return {
     date,
+    dueDate: date,
     categoryId: categories[0]?.id ?? "",
     expenseType: "fixed",
     projectId: "",
+    status: "PAID",
     description: "",
     amountUsd: "",
     amountArs: "",
     exchangeRate: "",
-    notes: "",
   };
 }
 
@@ -110,14 +112,16 @@ export function ExpenseEntryModal({
           method: expense ? "PUT" : "POST",
           body: JSON.stringify({
             date: form.date,
+            dueDate: expense ? (form.dueDate || null) : form.status === "PENDING" ? form.dueDate || null : null,
+            status: form.status,
             categoryId: form.categoryId,
             expenseType: form.expenseType,
             projectId: form.projectId || null,
-            description: form.description,
+            description: form.description || null,
             amountUsd: form.amountUsd ? Number(form.amountUsd) : undefined,
             amountArs: form.amountArs ? Number(form.amountArs) : null,
             exchangeRate: form.exchangeRate ? Number(form.exchangeRate) : null,
-            notes: form.notes || null,
+            notes: null,
           }),
         });
         onClose();
@@ -154,8 +158,8 @@ export function ExpenseEntryModal({
         description={
           description ?? (
             expense
-              ? "Ajustá el egreso real directamente desde el calendario."
-              : "Registrá un gasto con la fecha del día elegido y dejalo integrado al ledger."
+              ? "Ajustá el movimiento operativo directamente desde el calendario."
+              : "Registrá un gasto con la fecha elegida y definí si queda pagado o pendiente."
           )
         }
         submitLabel={expense ? "Guardar gasto" : "Crear gasto"}
@@ -168,8 +172,20 @@ export function ExpenseEntryModal({
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha</label>
-              <Input type="date" value={form.date} onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))} />
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Temporalidad</label>
+              <Select
+                value={form.status}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    status: event.target.value as ExpenseStatus,
+                    dueDate: event.target.value === "PENDING" ? prev.dueDate || prev.date : prev.dueDate,
+                  }))
+                }
+              >
+                <option value="PAID">Inmediato</option>
+                <option value="PENDING">Pendiente</option>
+              </Select>
             </div>
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Tipo</label>
@@ -178,6 +194,40 @@ export function ExpenseEntryModal({
                 <option value="variable">Variable</option>
               </Select>
             </div>
+          </div>
+
+          <div className={`grid gap-3 ${form.status === "PENDING" || (expense && form.dueDate) ? "sm:grid-cols-2" : ""}`}>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha</label>
+              <Input
+                type="date"
+                value={form.date}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    date: event.target.value,
+                    dueDate: prev.status === "PENDING" && !prev.dueDate ? event.target.value : prev.dueDate,
+                  }))
+                }
+              />
+            </div>
+            {form.status === "PENDING" ? (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Vence</label>
+                <Input
+                  required
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(event) => setForm((prev) => ({ ...prev, dueDate: event.target.value }))}
+                />
+              </div>
+            ) : null}
+            {form.status !== "PENDING" && expense && form.dueDate ? (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Corresponde a</label>
+                <Input disabled type="date" value={form.dueDate} />
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -206,7 +256,7 @@ export function ExpenseEntryModal({
 
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Descripción</label>
-            <Input value={form.description} onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))} />
+            <Input placeholder="Opcional" value={form.description} onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))} />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -240,11 +290,6 @@ export function ExpenseEntryModal({
                 onChange={(event) => setForm((prev) => ({ ...prev, exchangeRate: event.target.value }))}
               />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Notas</label>
-            <Textarea value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} />
           </div>
 
           {lockedExpense ? (
@@ -291,7 +336,7 @@ export function ExpenseEntryModal({
         {expense ? (
           <div className="space-y-2 text-sm text-ink/70">
             <p>
-              Gasto: <span className="font-semibold text-ink">{expense.description}</span>.
+              Gasto: <span className="font-semibold text-ink">{expense.description || expense.categoryName}</span>.
             </p>
             <p>
               Importe: <span className="font-semibold text-ink">{expense.amountUsd.toFixed(2)} USD</span>.

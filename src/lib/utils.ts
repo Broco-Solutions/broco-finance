@@ -80,6 +80,22 @@ export function formatIncomeStatus(value: string | null | undefined) {
   return "—";
 }
 
+export function formatExpenseStatus(value: string | null | undefined) {
+  if (value === "PAID") {
+    return "Pagado";
+  }
+
+  if (value === "PENDING") {
+    return "Pendiente";
+  }
+
+  if (value === "OVERDUE") {
+    return "Vencido";
+  }
+
+  return "—";
+}
+
 export function formatScheduledPaymentStatus(value: string | null | undefined) {
   if (value === "paid") {
     return "Cobrado";

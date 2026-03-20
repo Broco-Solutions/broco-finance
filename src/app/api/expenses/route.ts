@@ -4,6 +4,7 @@ import { createExpense, expenseFilterSchema, expenseInputSchema, listExpenses } 
 export async function GET(request: Request) {
   const params = Object.fromEntries(new URL(request.url).searchParams.entries());
   const filters = expenseFilterSchema.parse({
+    status: params.status ?? null,
     categoryId: params.categoryId ?? null,
     type: params.type ?? null,
     projectId: params.projectId ?? null,

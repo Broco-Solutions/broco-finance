@@ -52,6 +52,11 @@ enum ScheduledExpenseStatus {
   PAID
 }
 
+enum ExpenseStatus {
+  PAID
+  PENDING
+}
+
 model Client {
   id           String    @id @default(uuid()) @db.Uuid
   name         String    @unique
@@ -180,6 +185,8 @@ model ExpenseCategory {
 model Expense {
   id                 String             @id @default(uuid()) @db.Uuid
   date               DateTime           @db.Date
+  dueDate            DateTime?          @map("due_date") @db.Date
+  status             ExpenseStatus      @default(PAID)
   categoryId         String             @map("category_id") @db.Uuid
   expenseType        ExpenseType        @map("expense_type")
   projectId          String?            @map("project_id") @db.Uuid
@@ -198,6 +205,7 @@ model Expense {
 
   @@index([categoryId, date])
   @@index([projectId, date])
+  @@index([status, dueDate])
   @@index([expenseType, date])
   @@index([projectId, expenseType, date])
   @@map("expenses")
