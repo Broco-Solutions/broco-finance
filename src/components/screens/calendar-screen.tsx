@@ -228,13 +228,18 @@ export function CalendarScreen({
       .filter((income) => !linkedIncomeIds.has(income.id))
       .map<CalendarEvent>((income) => ({
         id: `income:${income.id}`,
-        date: income.date,
+        date: income.displayStatus === "PAID" ? income.date : income.dueDate ?? income.date,
         amountUsd: income.amountUsd,
         title: income.projectName,
         subtitle: `${income.clientName} · ${income.type === "DEVELOPMENT" ? "desarrollo" : "mantenimiento"}`,
         direction: "income",
         source: "income",
-        state: income.status === "PAID" ? "paid" : "pending",
+        state:
+          income.displayStatus === "PAID"
+            ? "paid"
+            : income.displayStatus === "OVERDUE"
+              ? "overdue"
+              : "pending",
         canOpen: true,
         scheduledPayment: null,
         income,

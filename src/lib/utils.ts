@@ -73,6 +73,10 @@ export function formatIncomeStatus(value: string | null | undefined) {
     return "Pendiente";
   }
 
+  if (value === "OVERDUE") {
+    return "Vencido";
+  }
+
   return "—";
 }
 

@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { IncomeRecord, IncomeStatus, IncomeType, ProjectRecord } from "@/lib/types";
+import type { IncomeLedgerStatus, IncomeRecord, IncomeStatus, IncomeType, ProjectRecord } from "@/lib/types";
 import { apiFetch } from "@/lib/api";
 import { cn, formatArs, formatIncomeStatus, formatIncomeType, formatProjectStatus, formatShortDate, formatUsd } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -25,10 +25,28 @@ const typeSegments: Array<{ value: IncomeType; label: string; hint: string }> = 
   { value: "MAINTENANCE", label: "Mantenimiento", hint: "Se toma como fee operativo" },
 ];
 
-function statusChip(status: IncomeStatus) {
-  return status === "PAID"
-    ? "border-emerald-900/20 bg-emerald-50 text-emerald-950"
-    : "border-amber-900/20 bg-amber-50 text-amber-950";
+function statusChip(status: IncomeLedgerStatus) {
+  if (status === "PAID") {
+    return "border-emerald-900/20 bg-emerald-50 text-emerald-950";
+  }
+
+  if (status === "OVERDUE") {
+    return "border-brick/20 bg-rose-50 text-brick";
+  }
+
+  return "border-amber-900/20 bg-amber-50 text-amber-950";
+}
+
+function statusRowClassName(status: IncomeLedgerStatus) {
+  if (status === "OVERDUE") {
+    return "bg-rose-50/70";
+  }
+
+  if (status === "PENDING") {
+    return "bg-amber-50/60";
+  }
+
+  return undefined;
 }
 
 function typeChip(type: IncomeType) {
@@ -101,6 +119,7 @@ function SegmentedControl<T extends string>({
 type IncomeFormState = {
   projectId: string;
   date: string;
+  dueDate: string;
   status: IncomeStatus;
   type: IncomeType;
   amountUsd: string;
@@ -113,12 +132,27 @@ function buildEmptyForm(projects: ProjectRecord[]): IncomeFormState {
   return {
     projectId: projects[0]?.id ?? "",
     date: new Date().toISOString().slice(0, 10),
+    dueDate: "",
     status: "PAID",
     type: "DEVELOPMENT",
     amountUsd: "",
     amountArs: "",
     exchangeRate: "",
     notes: "",
+  };
+}
+
+function buildIncomePayload(form: IncomeFormState, editingIncomeId: string | null) {
+  return {
+    projectId: form.projectId,
+    date: form.date,
+    dueDate: editingIncomeId ? (form.dueDate || null) : form.status === "PENDING" ? form.dueDate || null : null,
+    status: form.status,
+    type: form.type,
+    amountUsd: form.amountUsd ? Number(form.amountUsd) : undefined,
+    amountArs: form.amountArs ? Number(form.amountArs) : null,
+    exchangeRate: form.exchangeRate ? Number(form.exchangeRate) : null,
+    notes: form.notes || null,
   };
 }
 
@@ -133,8 +167,8 @@ export function IncomesScreen({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [statusFilter, setStatusFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<IncomeLedgerStatus | "">("");
+  const [typeFilter, setTypeFilter] = useState<IncomeType | "">("");
   const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -144,7 +178,7 @@ export function IncomesScreen({
   const visibleIncomes = useMemo(
     () =>
       incomes.filter((income) => {
-        if (statusFilter && income.status !== statusFilter) {
+        if (statusFilter && income.displayStatus !== statusFilter) {
           return false;
         }
         if (typeFilter && income.type !== typeFilter) {
@@ -157,13 +191,13 @@ export function IncomesScreen({
 
   const summary = useMemo(
     () => ({
-      paidUsd: incomes.filter((income) => income.status === "PAID").reduce((sum, income) => sum + income.amountUsd, 0),
-      pendingUsd: incomes.filter((income) => income.status === "PENDING").reduce((sum, income) => sum + income.amountUsd, 0),
+      paidUsd: incomes.filter((income) => income.displayStatus === "PAID").reduce((sum, income) => sum + income.amountUsd, 0),
+      openUsd: incomes.filter((income) => income.displayStatus !== "PAID").reduce((sum, income) => sum + income.amountUsd, 0),
       developmentPaidUsd: incomes
-        .filter((income) => income.status === "PAID" && income.type === "DEVELOPMENT")
+        .filter((income) => income.displayStatus === "PAID" && income.type === "DEVELOPMENT")
         .reduce((sum, income) => sum + income.amountUsd, 0),
       maintenancePaidUsd: incomes
-        .filter((income) => income.status === "PAID" && income.type === "MAINTENANCE")
+        .filter((income) => income.displayStatus === "PAID" && income.type === "MAINTENANCE")
         .reduce((sum, income) => sum + income.amountUsd, 0),
     }),
     [incomes],
@@ -202,20 +236,9 @@ export function IncomesScreen({
     startTransition(async () => {
       try {
         setError(null);
-        const payload = {
-          projectId: form.projectId,
-          date: form.date,
-          status: form.status,
-          type: form.type,
-          amountUsd: form.amountUsd ? Number(form.amountUsd) : undefined,
-          amountArs: form.amountArs ? Number(form.amountArs) : null,
-          exchangeRate: form.exchangeRate ? Number(form.exchangeRate) : null,
-          notes: form.notes || null,
-        };
-
         await apiFetch(editingIncomeId ? `/api/incomes/${editingIncomeId}` : "/api/incomes", {
           method: editingIncomeId ? "PUT" : "POST",
-          body: JSON.stringify(payload),
+          body: JSON.stringify(buildIncomePayload(form, editingIncomeId)),
         });
 
         resetForm();
@@ -234,6 +257,7 @@ export function IncomesScreen({
     setForm({
       projectId: income.projectId,
       date: income.date,
+      dueDate: income.dueDate ?? "",
       status: income.status,
       type: income.type,
       amountUsd: income.amountUsd ? String(income.amountUsd) : "",
@@ -252,6 +276,7 @@ export function IncomesScreen({
           body: JSON.stringify({
             projectId: income.projectId,
             date: new Date().toISOString().slice(0, 10),
+            dueDate: income.dueDate,
             status: "PAID",
             type: income.type,
             amountUsd: income.amountUsd,
@@ -291,12 +316,7 @@ export function IncomesScreen({
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        eyebrow="Ingresos"
-        title="Ingresos"
-        description=""
-        demoMode={demoMode}
-      />
+      <PageHeader eyebrow="Ingresos" title="Ingresos" description="" demoMode={demoMode} />
 
       <div className="grid gap-4 xl:grid-cols-4">
         <Card className="border-emerald-950/40 bg-gradient-to-br from-emerald-950 via-emerald-900 to-lime-700 text-white">
@@ -306,8 +326,8 @@ export function IncomesScreen({
         </Card>
         <Card className="border-amber-950/30 bg-gradient-to-br from-amber-950 via-amber-900 to-coral text-white">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-50/80">Pendiente a cobrar</div>
-          <div className="mt-3 font-display text-4xl text-white">{formatUsd(summary.pendingUsd)}</div>
-          <p className="mt-2 text-sm text-amber-50/90">Cuenta por cobrar todavía abierta.</p>
+          <div className="mt-3 font-display text-4xl text-white">{formatUsd(summary.openUsd)}</div>
+          <p className="mt-2 text-sm text-amber-50/90">Incluye pendientes vigentes y vencidos.</p>
         </Card>
         <Card>
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cobalt">Desarrollo cobrado</div>
@@ -337,7 +357,13 @@ export function IncomesScreen({
                 value={form.status}
                 options={statusSegments}
                 activeToneClassName={form.status === "PAID" ? "bg-emerald-700" : "bg-amber-700"}
-                onChange={(status) => setForm((prev) => ({ ...prev, status }))}
+                onChange={(status) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    status,
+                    dueDate: status === "PENDING" ? prev.dueDate || prev.date : prev.dueDate,
+                  }))
+                }
               />
               <SegmentedControl
                 label="Naturaleza"
@@ -369,7 +395,39 @@ export function IncomesScreen({
               </div>
             ) : null}
 
-            <Input type="date" value={form.date} onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))} />
+            <div className={`grid gap-4 ${form.status === "PENDING" || (editingIncomeId && form.dueDate) ? "md:grid-cols-2" : ""}`}>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha</label>
+                <Input
+                  type="date"
+                  value={form.date}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      date: event.target.value,
+                      dueDate: prev.status === "PENDING" && !prev.dueDate ? event.target.value : prev.dueDate,
+                    }))
+                  }
+                />
+              </div>
+              {form.status === "PENDING" ? (
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Vence</label>
+                  <Input
+                    required
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(event) => setForm((prev) => ({ ...prev, dueDate: event.target.value }))}
+                  />
+                </div>
+              ) : null}
+              {form.status !== "PENDING" && editingIncomeId && form.dueDate ? (
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Vence original</label>
+                  <Input disabled type="date" value={form.dueDate} />
+                </div>
+              ) : null}
+            </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
               <Input
@@ -444,15 +502,16 @@ export function IncomesScreen({
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-display text-2xl text-ink">Ledger de ingresos</h2>
-              <p className="mt-1 text-sm text-ink/55">Cada fila conserva estado operativo y tipo financiero para no mezclar build con retainer.</p>
+              <p className="mt-1 text-sm text-ink/55">Cada fila conserva fecha operativa, vencimiento y tipo financiero sin tocar el flujo actual.</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Select className="max-w-[220px]" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <Select className="max-w-[220px]" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as IncomeLedgerStatus | "")}>
                 <option value="">Todos los estados</option>
                 <option value="PAID">Cobrado</option>
                 <option value="PENDING">Pendiente</option>
+                <option value="OVERDUE">Vencido</option>
               </Select>
-              <Select className="max-w-[220px]" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+              <Select className="max-w-[220px]" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as IncomeType | "")}>
                 <option value="">Todos los tipos</option>
                 <option value="DEVELOPMENT">Desarrollo</option>
                 <option value="MAINTENANCE">Mantenimiento</option>
@@ -481,10 +540,10 @@ export function IncomesScreen({
             <EmptyState title="Sin ingresos" description="Cargá cobros o pendientes y clasificá si corresponden a desarrollo o mantenimiento." />
           ) : (
             <DataTable
-              headers={["Fecha", "Cliente", "Proyecto", "Tipo", "ARS", "USD", "Estado", "Notas", "Acción"]}
+              headers={["Fecha", "Vence", "Cliente", "Proyecto", "Tipo", "ARS", "USD", "Estado", "Notas", "Acción"]}
               footer={
                 <tr>
-                  <td className="px-4 py-3 font-semibold text-ink" colSpan={4}>
+                  <td className="px-4 py-3 font-semibold text-ink" colSpan={5}>
                     Total filtrado
                   </td>
                   <td className="px-4 py-3 font-semibold text-ink">{formatArs(filteredTotals.amountArs)}</td>
@@ -496,8 +555,9 @@ export function IncomesScreen({
               }
             >
               {visibleIncomes.map((income) => (
-                <tr key={income.id} className={income.status === "PENDING" ? "bg-amber-50/60" : undefined}>
+                <tr key={income.id} className={statusRowClassName(income.displayStatus)}>
                   <td className="px-4 py-3">{formatShortDate(income.date)}</td>
+                  <td className="px-4 py-3">{formatShortDate(income.dueDate)}</td>
                   <td className="px-4 py-3">{income.clientName}</td>
                   <td className="px-4 py-3">{income.projectName}</td>
                   <td className="px-4 py-3">
@@ -508,8 +568,8 @@ export function IncomesScreen({
                   <td className="px-4 py-3">{formatArs(income.amountArs)}</td>
                   <td className="px-4 py-3">{formatUsd(income.amountUsd)}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${statusChip(income.status)}`}>
-                      {formatIncomeStatus(income.status)}
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${statusChip(income.displayStatus)}`}>
+                      {formatIncomeStatus(income.displayStatus)}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-ink/60">{income.notes ?? "—"}</td>
@@ -518,7 +578,7 @@ export function IncomesScreen({
                       <Button type="button" variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => handleEdit(income)}>
                         Editar
                       </Button>
-                      {income.status === "PENDING" ? (
+                      {income.displayStatus !== "PAID" ? (
                         <Button
                           type="button"
                           className="px-3 py-1.5 text-xs"
@@ -559,7 +619,7 @@ export function IncomesScreen({
             <p>
               Tipo y estado:{" "}
               <span className="font-semibold text-ink">
-                {formatIncomeType(editingIncome.type)} · {formatIncomeStatus(editingIncome.status)}
+                {formatIncomeType(editingIncome.type)} · {formatIncomeStatus(editingIncome.displayStatus)}
               </span>
               .
             </p>

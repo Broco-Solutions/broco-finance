@@ -22,6 +22,7 @@ import type {
   DistributionRecord,
   DistributionSummary,
   ExpenseCategoryRecord,
+  IncomeLedgerStatus,
   ExpenseRecord,
   IncomeRecord,
   ProjectDetailPayload,
@@ -85,6 +86,7 @@ type ProjectFinancialRecord = {
   incomes: Array<{
     amountUsd: Prisma.Decimal | number;
     date: Date;
+    dueDate: Date | null;
     status: IncomeStatus | string;
     type: IncomeType | string;
   }>;
@@ -95,6 +97,7 @@ type IncomeWithProjectRecord = {
   id: string;
   projectId: string;
   date: Date;
+  dueDate: Date | null;
   amountUsd: Prisma.Decimal | number;
   amountArs: Prisma.Decimal | number | null;
   exchangeRate: Prisma.Decimal | number | null;
@@ -187,6 +190,36 @@ function isPendingIncomeStatus(status: IncomeStatus | string) {
   return status === IncomeStatus.PENDING;
 }
 
+function deriveIncomeDisplayStatus({
+  status,
+  dueDate,
+}: {
+  status: IncomeStatus | string;
+  dueDate: Date | string | null | undefined;
+}): IncomeLedgerStatus {
+  if (!isPendingIncomeStatus(status)) {
+    return "PAID";
+  }
+
+  if (!dueDate) {
+    return "PENDING";
+  }
+
+  const normalizedDueDate = startOfDay(typeof dueDate === "string" ? parseISO(dueDate) : dueDate);
+  return isBefore(normalizedDueDate, startOfDay(new Date())) ? "OVERDUE" : "PENDING";
+}
+
+function matchesIncomeDisplayStatus(
+  income: Pick<IncomeRecord, "displayStatus">,
+  status: IncomeLedgerStatus | null | undefined,
+) {
+  if (!status) {
+    return true;
+  }
+
+  return income.displayStatus === status;
+}
+
 function isDevelopmentIncomeType(type: IncomeType | string) {
   return type === IncomeType.DEVELOPMENT;
 }
@@ -214,6 +247,7 @@ function normalizeOptionalDate(value: string | null | undefined) {
 
 const projectStatusSchema = z.enum(["ACTIVE", "COMPLETED", "CANCELLED"]);
 const incomeStatusSchema = z.enum(["PAID", "PENDING"]);
+const incomeDisplayStatusSchema = z.enum(["PAID", "PENDING", "OVERDUE"]);
 const incomeTypeSchema = z.enum(["DEVELOPMENT", "MAINTENANCE"]);
 const expenseTypeSchema = z.enum(["fixed", "variable"]);
 const contractFrequencySchema = z.enum(["monthly", "quarterly", "biannual", "annual"]);
@@ -258,13 +292,38 @@ export const projectInputSchema = z.object({
   notes: z.string().trim().nullable().optional(),
 });
 
-export const incomeInputSchema = z.object({
+const incomeBaseSchema = z.object({
   projectId: z.string().uuid("Proyecto inválido."),
   date: z.string().min(8, "Fecha inválida."),
-  status: incomeStatusSchema,
+  dueDate: z.string().nullable().optional(),
   type: incomeTypeSchema.default("DEVELOPMENT"),
   notes: z.string().trim().nullable().optional(),
-}).merge(baseMoneySchema);
+});
+
+function addPendingIncomeDueDateIssue(
+  value: { status?: "PAID" | "PENDING"; dueDate?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  if (value.status === "PENDING" && !value.dueDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Indicá la fecha de vencimiento para ingresos pendientes.",
+      path: ["dueDate"],
+    });
+  }
+}
+
+export const incomeInputSchema = (
+  incomeBaseSchema.extend({
+    status: incomeStatusSchema,
+  }).merge(baseMoneySchema)
+).superRefine(addPendingIncomeDueDateIssue);
+
+const scheduledPaymentCreateIncomeSchema = (
+  incomeBaseSchema.extend({
+    status: incomeStatusSchema.optional(),
+  }).merge(baseMoneySchema)
+).superRefine(addPendingIncomeDueDateIssue);
 
 export const expenseCategoryInputSchema = z.object({
   name: z.string().min(2, "El nombre es obligatorio."),
@@ -296,7 +355,7 @@ export const scheduledPaymentInputSchema = z.object({
   paidAt: z.string().nullable().optional(),
   notes: z.string().trim().nullable().optional(),
   incomeId: z.string().uuid().nullable().optional(),
-  createIncome: incomeInputSchema.extend({ status: incomeStatusSchema.optional() }).nullable().optional(),
+  createIncome: scheduledPaymentCreateIncomeSchema.nullable().optional(),
 });
 
 export const distributionInputSchema = z.object({
@@ -342,7 +401,8 @@ export const scheduledFilterSchema = z.object({
 export const incomeFilterSchema = z.object({
   projectId: z.string().uuid().nullable().optional(),
   clientId: z.string().uuid().nullable().optional(),
-  status: z.enum(["PAID", "PENDING"]).nullable().optional(),
+  status: incomeDisplayStatusSchema.nullable().optional(),
+  type: incomeTypeSchema.nullable().optional(),
   from: z.string().nullable().optional(),
   to: z.string().nullable().optional(),
 });
@@ -420,11 +480,13 @@ function sumIncomeUsd<T extends { amountUsd: Prisma.Decimal | number; status: In
 }
 
 function nextReceivableDate(
-  incomes: Array<{ date: Date; status: IncomeStatus | string }>,
+  incomes: Array<{ date: Date; dueDate: Date | null; status: IncomeStatus | string }>,
   payments: Array<{ expectedDate: Date; status: ScheduledPaymentStatus }>,
 ) {
   const candidates = [
-    ...incomes.filter((income) => isPendingIncomeStatus(income.status)).map((income) => income.date),
+    ...incomes
+      .filter((income) => isPendingIncomeStatus(income.status))
+      .map((income) => income.dueDate ?? income.date),
     ...payments.filter((payment) => isOpenScheduledStatus(payment.status)).map((payment) => payment.expectedDate),
   ].sort((a, b) => a.getTime() - b.getTime());
 
@@ -856,7 +918,10 @@ function mapDemoIncomes(filters?: z.infer<typeof incomeFilterSchema>) {
       if (filters?.clientId && demoProjects.find((project) => project.id === income.projectId)?.clientId !== filters.clientId) {
         return false;
       }
-      if (filters?.status && income.status !== filters.status) {
+      if (filters?.type && income.type !== filters.type) {
+        return false;
+      }
+      if (!matchesIncomeDisplayStatus(income, filters?.status ?? null)) {
         return false;
       }
       return true;
@@ -1006,17 +1071,21 @@ function mapProjectRecord(
 function mapIncomeRecord(
   income: IncomeWithProjectRecord,
 ): IncomeRecord {
+  const dueDate = income.dueDate ? dateOnly(income.dueDate) : null;
+
   return {
     id: income.id,
     projectId: income.projectId,
     projectName: income.project.name,
     clientName: income.project.client.name,
     date: dateOnly(income.date),
+    dueDate,
     correspondsToDate: income.scheduledPayment?.expectedDate ? dateOnly(income.scheduledPayment.expectedDate) : null,
     amountUsd: requireNumber(income.amountUsd),
     amountArs: toNumber(income.amountArs),
     exchangeRate: toNumber(income.exchangeRate),
     status: income.status,
+    displayStatus: deriveIncomeDisplayStatus({ status: income.status, dueDate }),
     type: income.type,
     notes: income.notes,
   };
@@ -1262,6 +1331,7 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
             select: {
               amountUsd: true,
               date: true,
+              dueDate: true,
               status: true,
               type: true,
             },
@@ -1293,6 +1363,7 @@ export async function getClientDetail(id: string): Promise<ClientDetailPayload> 
       id: true,
       projectId: true,
       date: true,
+      dueDate: true,
       amountUsd: true,
       amountArs: true,
       exchangeRate: true,
@@ -1436,6 +1507,7 @@ export async function listProjects(filters?: { clientId?: string | null; status?
         select: {
           amountUsd: true,
           date: true,
+          dueDate: true,
           status: true,
           type: true,
         },
@@ -1489,33 +1561,34 @@ export async function getProjectDetail(id: string): Promise<ProjectDetailPayload
           name: true,
         },
       },
-        incomes: {
-          select: {
-            id: true,
-            projectId: true,
-            date: true,
+      incomes: {
+        select: {
+          id: true,
+          projectId: true,
+          date: true,
+          dueDate: true,
           amountUsd: true,
           amountArs: true,
           exchangeRate: true,
           status: true,
           type: true,
           notes: true,
-            project: {
-              select: {
-                name: true,
-                client: {
-                  select: {
-                    name: true,
-                  },
+          project: {
+            select: {
+              name: true,
+              client: {
+                select: {
+                  name: true,
                 },
               },
             },
-            scheduledPayment: {
-              select: {
-                expectedDate: true,
-              },
+          },
+          scheduledPayment: {
+            select: {
+              expectedDate: true,
             },
           },
+        },
         orderBy: { date: "desc" },
       },
       scheduledPayments: {
@@ -1660,10 +1733,16 @@ export async function listIncomes(filters?: z.infer<typeof incomeFilterSchema>) 
     return { data: mapDemoIncomes(filters), demoMode: true };
   }
 
+  const persistedStatusFilter =
+    filters?.status === "OVERDUE" || filters?.status === "PENDING"
+      ? IncomeStatus.PENDING
+      : (filters?.status as IncomeStatus | undefined);
+
   const items = await prisma.income.findMany({
     where: {
       projectId: filters?.projectId ?? undefined,
-      status: (filters?.status as IncomeStatus | undefined) ?? undefined,
+      status: persistedStatusFilter,
+      type: (filters?.type as IncomeType | undefined) ?? undefined,
       project: filters?.clientId ? { clientId: filters.clientId } : undefined,
       date: {
         gte: filters?.from ? parseISO(filters.from) : undefined,
@@ -1674,6 +1753,7 @@ export async function listIncomes(filters?: z.infer<typeof incomeFilterSchema>) 
       id: true,
       projectId: true,
       date: true,
+      dueDate: true,
       amountUsd: true,
       amountArs: true,
       exchangeRate: true,
@@ -1694,7 +1774,8 @@ export async function listIncomes(filters?: z.infer<typeof incomeFilterSchema>) 
     orderBy: { date: "desc" },
   });
 
-  return { data: items.map(mapIncomeRecord), demoMode: false };
+  const mappedItems = items.map(mapIncomeRecord).filter((income) => matchesIncomeDisplayStatus(income, filters?.status ?? null));
+  return { data: mappedItems, demoMode: false };
 }
 
 export async function createIncome(input: z.infer<typeof incomeInputSchema>) {
@@ -1706,6 +1787,7 @@ export async function createIncome(input: z.infer<typeof incomeInputSchema>) {
     data: {
       projectId: input.projectId,
       date: parseISO(input.date),
+      dueDate: normalizeOptionalDate(input.dueDate),
       status: input.status as IncomeStatus,
       type: input.type as IncomeType,
       notes: normalizeOptionalText(input.notes),
@@ -1732,6 +1814,7 @@ export async function updateIncome(id: string, input: z.infer<typeof incomeInput
     data: {
       projectId: input.projectId,
       date: parseISO(input.date),
+      dueDate: normalizeOptionalDate(input.dueDate),
       status: input.status as IncomeStatus,
       type: input.type as IncomeType,
       notes: normalizeOptionalText(input.notes),
@@ -2715,9 +2798,19 @@ async function getDashboardFromDatabase(filters: z.infer<typeof dashboardFilterS
 
   const operationalPendingIncomeWhere: Prisma.IncomeWhereInput = {
     status: IncomeStatus.PENDING,
-    date: {
-      lte: currentMonthEnd,
-    },
+    OR: [
+      {
+        dueDate: {
+          lte: currentMonthEnd,
+        },
+      },
+      {
+        dueDate: null,
+        date: {
+          lte: currentMonthEnd,
+        },
+      },
+    ],
     projectId: filters?.projectId ?? undefined,
     project: filters?.clientId ? { clientId: filters.clientId } : undefined,
   };

@@ -16,6 +16,7 @@ type IncomeFormState = {
   amountArs: string;
   amountUsd: string;
   date: string;
+  dueDate: string;
   exchangeRate: string;
   notes: string;
   projectId: string;
@@ -36,6 +37,7 @@ function buildIncomeForm({
     return {
       projectId: income.projectId,
       date: income.date,
+      dueDate: income.dueDate ?? "",
       status: income.status,
       type: income.type,
       amountUsd: income.amountUsd ? String(income.amountUsd) : "",
@@ -48,6 +50,7 @@ function buildIncomeForm({
   return {
     projectId: projects[0]?.id ?? "",
     date,
+    dueDate: date,
     status: "PENDING",
     type: "DEVELOPMENT",
     amountUsd: "",
@@ -115,6 +118,7 @@ export function IncomeEntryModal({
           body: JSON.stringify({
             projectId: form.projectId,
             date: form.date,
+            dueDate: income ? (form.dueDate || null) : form.status === "PENDING" ? form.dueDate || null : null,
             status: form.status,
             type: form.type,
             amountUsd: form.amountUsd ? Number(form.amountUsd) : undefined,
@@ -144,6 +148,7 @@ export function IncomeEntryModal({
           body: JSON.stringify({
             projectId: form.projectId,
             date: new Date().toISOString().slice(0, 10),
+            dueDate: form.dueDate || null,
             status: "PAID",
             type: form.type,
             amountUsd: form.amountUsd ? Number(form.amountUsd) : undefined,
@@ -199,7 +204,16 @@ export function IncomeEntryModal({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Estado</label>
-              <Select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as IncomeStatus }))}>
+              <Select
+                value={form.status}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    status: event.target.value as IncomeStatus,
+                    dueDate: event.target.value === "PENDING" ? prev.dueDate || prev.date : prev.dueDate,
+                  }))
+                }
+              >
                 <option value="PENDING">Pendiente</option>
                 <option value="PAID">Cobrado</option>
               </Select>
@@ -231,9 +245,38 @@ export function IncomeEntryModal({
             </div>
           ) : null}
 
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha</label>
-            <Input type="date" value={form.date} onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))} />
+          <div className={`grid gap-3 ${form.status === "PENDING" || (income && form.dueDate) ? "sm:grid-cols-2" : ""}`}>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Fecha</label>
+              <Input
+                type="date"
+                value={form.date}
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    date: event.target.value,
+                    dueDate: prev.status === "PENDING" && !prev.dueDate ? event.target.value : prev.dueDate,
+                  }))
+                }
+              />
+            </div>
+            {form.status === "PENDING" ? (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Vence</label>
+                <Input
+                  required
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(event) => setForm((prev) => ({ ...prev, dueDate: event.target.value }))}
+                />
+              </div>
+            ) : null}
+            {form.status !== "PENDING" && income && form.dueDate ? (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">Vence original</label>
+                <Input disabled type="date" value={form.dueDate} />
+              </div>
+            ) : null}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">

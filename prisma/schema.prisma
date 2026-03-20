@@ -124,6 +124,7 @@ model Income {
   id            String             @id @default(uuid()) @db.Uuid
   projectId     String             @map("project_id") @db.Uuid
   date          DateTime           @db.Date
+  dueDate       DateTime?          @map("due_date") @db.Date
   status        IncomeStatus       @default(PAID)
   type          IncomeType         @default(DEVELOPMENT) @map("income_type")
   amountArs     Decimal?           @map("amount_ars") @db.Decimal(14, 2)
@@ -137,6 +138,7 @@ model Income {
 
   @@index([projectId, date])
   @@index([status, date])
+  @@index([status, dueDate])
   @@index([projectId, status, date])
   @@index([type, date])
   @@map("incomes")

@@ -7,6 +7,7 @@ export async function GET(request: Request) {
     projectId: params.projectId ?? null,
     clientId: params.clientId ?? null,
     status: params.status ?? null,
+    type: params.type ?? null,
     from: params.from ?? null,
     to: params.to ?? null,
   });
