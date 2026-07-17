@@ -1256,7 +1256,7 @@ export const config = {
 ### 19.1 Estrategia
 
 - PostgreSQL 16 local en Docker para tests.
-- Variables: `DATABASE_URL_TEST` apunta al contenedor local (puerto 5433).
+- Variables: `DATABASE_URL_TEST` apunta al contenedor local (puerto 5434).
 - `DATABASE_URL` debe estar definida (para `prisma generate`) pero distinta de `DATABASE_URL_TEST`.
 - `DATABASE_URL_TEST !== DATABASE_URL` verificado en setup de tests.
 
@@ -1285,7 +1285,7 @@ services:
       POSTGRES_PASSWORD: broco_test
       POSTGRES_DB: broco_finance_test
     ports:
-      - "5433:5432"
+      - "5434:5432"
     tmpfs:
       - /var/lib/postgresql/data
 ```
@@ -1301,8 +1301,8 @@ SESSION_SECRET=...
 
 `.env.test.example`:
 ```
-DATABASE_URL_TEST=postgresql://broco_test:broco_test@localhost:5433/broco_finance_test
-DATABASE_URL=postgresql://broco_test:broco_test@localhost:5433/broco_finance_test
+DATABASE_URL_TEST=postgresql://broco_test:broco_test@localhost:5434/broco_finance_test
+DATABASE_URL=postgresql://broco_test:broco_test@localhost:5434/broco_finance_test
 APP_PASSWORD=test_password
 SESSION_SECRET=test_secret_key_for_signing
 ALLOW_DESTRUCTIVE_TEST_DB=true
@@ -2230,10 +2230,11 @@ npx prisma db execute --stdin <<< "SELECT 1;"
 # Usar DATABASE_URL_TEST para verificar conexion
 ```
 
-**Aceptacion:** Docker levanta PostgreSQL 16 en puerto 5433. `vitest run` no falla por configuracion.
+**Aceptacion:** Docker levanta PostgreSQL 16 en puerto 5434. `vitest run` no falla por configuracion.
 **Riesgos:** Docker no disponible. Alternativa: base de test remota con credenciales separadas.
 **Rollback:** `docker compose down`, `npm uninstall vitest`, revertir `package.json`.
 **Dependencias:** Fase 1.
+**Estado:** COMPLETADA (2026-07-17). PostgreSQL 16 operativo en puerto 5434. Guardia 10/10 OK. Integracion 4/4 OK (0 skipped). Conexion real verificada. PostgreSQL 16.x confirmado via SHOW server_version. Desvio anterior por Docker resuelto.
 
 ### Fase 3 — Modelo Prisma + restricciones SQL
 **Objetivo:** nuevo schema Prisma con CHECKs SQL.
@@ -2788,7 +2789,7 @@ npm run db:seed  # Ejecuta el seed viejo (requiere xlsx en dependencies y Excel 
 ### 35.2 Implementacion (por fase)
 
 - [ ] Fase 1: Auditoria completada (este documento)
-- [ ] Fase 2: Base de test funcional (Docker up, conexion OK)
+- [x] Fase 2: Base de test funcional (PostgreSQL 16 en puerto 5434, guardia 10/10, integracion 4/4, 0 skipped)
 - [ ] Fase 3: Schema Prisma validado, CHECKs SQL activos, migrado en test
 - [ ] Fase 4: Migracion generada y aplicada solo en test (CHECKs SQL validados en test)
 - [ ] Fase 5: Extraccion Excel ejecutada, datos canonicos generados y revisados
@@ -3021,7 +3022,7 @@ docker compose -f docker-compose.test.yml up -d
 npx prisma db execute --stdin <<< "SELECT 1;"
 ```
 
-**Resultado:** Docker up en puerto 5433. Conexion exitosa.
+**Resultado:** Docker up en puerto 5434. Conexion exitosa.
 **Exit code:** 0 para cada comando.
 **Evidencia:** `docker ps` muestra postgres:16-alpine.
 

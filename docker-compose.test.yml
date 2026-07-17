@@ -1,0 +1,18 @@
+services:
+  postgres_test:
+    image: postgres:16-alpine
+    container_name: broco_finance_test_db
+    environment:
+      POSTGRES_USER: broco_test
+      POSTGRES_PASSWORD: broco_test
+      POSTGRES_DB: broco_finance_test
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U broco_test -d broco_finance_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
