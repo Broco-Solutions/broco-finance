@@ -91,8 +91,23 @@ const CATEGORIES: ExtractedCategory[] = [
 
 // ---- HELPERS ----
 function cleanText(v: unknown): string | null { if (v == null) return null; const t = String(v).replace(/\s+/g, " ").trim(); return t || null; }
-function parseCurrency(v: unknown): number | null { const t = cleanText(v); if (!t) return null; const n = t.replace(/\$/g, "").replace(/\s+/g, ""); const s = n.includes(",") && n.lastIndexOf(",") > n.lastIndexOf(".") ? n.replace(/\./g, "").replace(",", ".") : n.replace(/,/g, ""); const a = Number(s); return Number.isFinite(a) ? a : null; }
+function parseCurrency(v: unknown): number | null { if (typeof v === "number") return Number.isFinite(v) && v > 0 ? v : null; const t = cleanText(v); if (!t) return null; const n = t.replace(/\$/g, "").replace(/\s+/g, ""); const s = n.includes(",") && n.lastIndexOf(",") > n.lastIndexOf(".") ? n.replace(/\./g, "").replace(",", ".") : n.replace(/,/g, ""); const a = Number(s); return Number.isFinite(a) ? a : null; }
 function parseCurrencyStr(v: unknown): string | null { const t = cleanText(v); if (!t) return null; const n = t.replace(/\$/g, "").replace(/\s+/g, ""); const s = n.includes(",") && n.lastIndexOf(",") > n.lastIndexOf(".") ? n.replace(/\./g, "").replace(",", ".") : n.replace(/,/g, ""); return /^[0-9]+(\.[0-9]+)?$/.test(s) ? s : null; }
+
+function getCellRaw(sheet: XLSX.WorkSheet, r: number, c: number): number | null {
+  const cell = sheet[XLSX.utils.encode_cell({r, c})];
+  if (!cell) return null;
+  if (cell.t === "n") return cell.v as number;
+  if (cell.t === "s") { const n = Number(cell.v); return Number.isFinite(n) ? n : null; }
+  return null;
+}
+function getCellStr(sheet: XLSX.WorkSheet, r: number, c: number): string | null {
+  const cell = sheet[XLSX.utils.encode_cell({r, c})];
+  if (!cell) return null;
+  if (cell.t === "n") return String(cell.v);
+  if (cell.t === "s") return String(cell.v);
+  return null;
+}
 function parseDate(v: unknown): string | null { if (v == null) return null; const t = cleanText(v); if (!t) return null; const parts = t!.split("/"); if (parts.length === 3) { let d = parseInt(parts[0],10), m = parseInt(parts[1],10)-1, y = parseInt(parts[2],10); if (y<100) y+=2000; const dt = new Date(y,m,d); if (!isNaN(dt.getTime()) && dt.getFullYear()===y && dt.getMonth()===m) return dt.toISOString().slice(0,10); } const dt = new Date(t!); return !isNaN(dt.getTime()) ? dt.toISOString().slice(0,10) : null; }
 function toFixed6(d: Decimal): string { return d.toFixed(6); }
 function toFixed2(d: Decimal): string { return d.toFixed(2); }
@@ -102,9 +117,7 @@ function consistentAmount(arsStr: string, usdStr: string): { amountUsd: string; 
   const ars = dec(arsStr);
   const usd = dec(usdStr);
   const rate = ars.dividedBy(usd);
-  const rate6 = dec(rate.toFixed(6));
-  const usd6 = ars.dividedBy(rate6).toFixed(6);
-  return { amountUsd: usd6, exchangeRate: rate6.toFixed(6), amountArs: ars.toFixed(2) };
+  return { amountUsd: usd.toFixed(6), exchangeRate: rate.toFixed(6), amountArs: ars.toFixed(2) };
 }
 
 function usdOnlyStr(usdStr: string): string {
@@ -147,8 +160,8 @@ function main() {
   if (!fs.existsSync(xlsxPath)) { console.error("No se encontro:", xlsxPath); process.exit(1); }
   console.log("Leyendo:", xlsxPath);
   const wb = XLSX.readFile(xlsxPath, { cellDates: true });
-  const ri = XLSX.utils.sheet_to_json<SheetRow>(wb.Sheets["Ingresos"], { defval: null, raw: false });
-  const re = XLSX.utils.sheet_to_json<SheetRow>(wb.Sheets["Gastos"], { defval: null, raw: false });
+  const ri = XLSX.utils.sheet_to_json<SheetRow>(wb.Sheets["Ingresos"], { defval: null, raw: true });
+  const re = XLSX.utils.sheet_to_json<SheetRow>(wb.Sheets["Gastos"], { defval: null, raw: true });
   console.log("Ingresos raw:", ri.length, "Gastos raw:", re.length);
 
   const incomes: ExtractedIncome[] = [];

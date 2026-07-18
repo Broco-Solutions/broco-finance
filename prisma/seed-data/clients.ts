@@ -1,4 +1,4 @@
-// Generado: 2026-07-18T12:26:44.777Z
+// Generado: 2026-07-18T12:39:48.401Z
 export const seedClients = [
   {
     "id": "955e0f68-1bf4-5ed1-a311-ddd331fc35c1",
