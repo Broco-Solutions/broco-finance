@@ -1,23 +1,14 @@
 import { cn } from "@/lib/utils";
 
-export function Badge({
-  children,
-  tone = "neutral",
-}: {
-  children: React.ReactNode;
-  tone?: "neutral" | "success" | "danger" | "warning";
-}) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]",
-        tone === "neutral" && "bg-black/5 text-ink/70",
-        tone === "success" && "bg-mint text-ink",
-        tone === "danger" && "bg-brick/10 text-brick",
-        tone === "warning" && "bg-coral/10 text-brick",
-      )}
-    >
-      {children}
-    </span>
-  );
+type Tone = "neutral" | "success" | "warning" | "danger";
+
+const toneClasses: Record<Tone, string> = {
+  neutral: "bg-gray-100 text-gray-700",
+  success: "bg-green-100 text-green-800",
+  warning: "bg-amber-100 text-amber-800",
+  danger: "bg-red-100 text-red-800",
+};
+
+export function Badge({ children, tone = "neutral", className }: { children: React.ReactNode; tone?: Tone; className?: string }) {
+  return <span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium", toneClasses[tone], className)}>{children}</span>;
 }

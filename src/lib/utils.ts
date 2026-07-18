@@ -1,216 +1,44 @@
 import { clsx, type ClassValue } from "clsx";
-import { format, parseISO } from "date-fns";
 import { twMerge } from "tailwind-merge";
+import { formatUsd } from "@/lib/money";
 
-type NumericLike =
-  | number
-  | string
-  | {
-      toNumber?: () => number;
-      toString(): string;
-    }
-  | null
-  | undefined;
+export function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)); }
 
-const usdFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+export { formatUsd, formatArs } from "@/lib/money";
+export { formatDate, formatDateShort as formatShortDate, toInputDate } from "@/lib/dates";
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+// Legacy aliases
+export function toCurrencyNumber(v: unknown) { if (v == null) return null; const n = typeof v === "object" && v != null && "toString" in v ? Number((v as { toString(): string }).toString()) : Number(v); return Number.isFinite(n) ? n : null; }
+export function formatCurrency(v: unknown) { return formatUsd(v as string | number | null | undefined); }
+export function toFixedCurrencyInput(v: unknown) { const n = toCurrencyNumber(v); return n != null ? n.toFixed(2) : ""; }
 
-export function toCurrencyNumber(value: NumericLike) {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim().replace(/\s+/g, "");
-    const normalized = trimmed.includes(".") && trimmed.includes(",") ? trimmed.replaceAll(",", "") : trimmed.replace(",", ".");
-    const numericValue = Number(normalized);
-    return Number.isFinite(numericValue) ? numericValue : null;
-  }
-
-  if (typeof value === "object" && "toNumber" in value && typeof value.toNumber === "function") {
-    const numericValue = value.toNumber();
-    if (Number.isFinite(numericValue)) {
-      return numericValue;
-    }
-  }
-
-  const numericValue = Number(value.toString());
-  return Number.isFinite(numericValue) ? numericValue : null;
-}
-
-export function formatCurrency(value: NumericLike) {
-  const numericValue = toCurrencyNumber(value);
-
-  if (numericValue === null) {
-    return "—";
-  }
-
-  return usdFormatter.format(roundCurrency(numericValue));
-}
-
-export function formatUsd(value: NumericLike) {
-  return formatCurrency(value);
-}
-
-export function formatIncomeStatus(value: string | null | undefined) {
-  if (value === "PAID") {
-    return "Cobrado";
-  }
-
+export function formatIncomeStatus(value: string | null | undefined, dueDate?: string | Date | null) {
+  if (value === "PAID") return "Cobrado";
   if (value === "PENDING") {
+    if (dueDate) { const d = new Date(dueDate); const t = new Date(); if (d < t) return "Vencido"; }
     return "Pendiente";
   }
-
-  if (value === "OVERDUE") {
-    return "Vencido";
-  }
-
   return "—";
 }
 
-export function formatExpenseStatus(value: string | null | undefined) {
-  if (value === "PAID") {
-    return "Pagado";
-  }
-
+export function formatExpenseStatus(value: string | null | undefined, dueDate?: string | Date | null) {
+  if (value === "PAID") return "Pagado";
   if (value === "PENDING") {
+    if (dueDate) { const d = new Date(dueDate); const t = new Date(); if (d < t) return "Vencido"; }
     return "Pendiente";
   }
-
-  if (value === "OVERDUE") {
-    return "Vencido";
-  }
-
   return "—";
 }
 
-export function formatScheduledPaymentStatus(value: string | null | undefined) {
-  if (value === "paid") {
-    return "Cobrado";
-  }
-
-  if (value === "pending") {
-    return "Pendiente";
-  }
-
-  if (value === "overdue") {
-    return "Vencido";
-  }
-
-  if (value === "cancelled") {
-    return "Cancelado";
-  }
-
+export function formatIncomeType(v: string | null | undefined) {
+  if (v === "DEVELOPMENT") return "Desarrollo";
+  if (v === "MAINTENANCE") return "Mantenimiento";
+  if (v === "OTHER") return "Otro";
   return "—";
 }
 
-export function formatRecurringSeriesStatus(value: string | null | undefined) {
-  if (value === "ACTIVE") {
-    return "Activa";
-  }
-
-  if (value === "FINALIZED") {
-    return "Finalizada";
-  }
-
+export function formatProjectStatus(v: string | boolean | null | undefined) {
+  if (v === true || v === "true") return "Activo";
+  if (v === false || v === "false") return "Inactivo";
   return "—";
-}
-
-export function formatRecurringIncomeSource(value: string | null | undefined) {
-  if (value === "PROJECT") {
-    return "Proyecto";
-  }
-
-  if (value === "MANUAL") {
-    return "Manual";
-  }
-
-  return "—";
-}
-
-export function formatIncomeType(value: string | null | undefined) {
-  if (value === "DEVELOPMENT") {
-    return "Desarrollo";
-  }
-
-  if (value === "MAINTENANCE") {
-    return "Mantenimiento";
-  }
-
-  return "—";
-}
-
-export function formatExpenseType(value: string | null | undefined) {
-  if (value === "fixed") {
-    return "Fijo";
-  }
-
-  if (value === "variable") {
-    return "Variable";
-  }
-
-  return "—";
-}
-
-export function formatProjectStatus(value: string | null | undefined) {
-  if (value === "ACTIVE") {
-    return "Activo";
-  }
-
-  if (value === "COMPLETED") {
-    return "Completado";
-  }
-
-  if (value === "CANCELLED") {
-    return "Cancelado";
-  }
-
-  return "—";
-}
-
-export function toFixedCurrencyInput(value: NumericLike) {
-  const numericValue = toCurrencyNumber(value);
-  return numericValue === null ? "" : roundCurrency(numericValue).toFixed(2);
-}
-
-export function formatArs(value: number | null) {
-  if (value === null) {
-    return "—";
-  }
-
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-export function formatShortDate(value: string | Date | null) {
-  if (!value) {
-    return "—";
-  }
-
-  const date = typeof value === "string" ? parseISO(value) : value;
-  return format(date, "dd MMM yyyy");
-}
-
-export function formatMonthLabel(value: string | Date) {
-  const date = typeof value === "string" ? parseISO(value) : value;
-  return format(date, "MMM yyyy");
-}
-
-export function roundCurrency(value: number) {
-  return Math.round(value * 100) / 100;
 }

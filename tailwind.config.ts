@@ -1,37 +1,23 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: [
-    "./src/app/**/*.{ts,tsx}",
-    "./src/components/**/*.{ts,tsx}",
-    "./src/lib/**/*.{ts,tsx}",
-  ],
+  content: ["./src/app/**/*.{ts,tsx}", "./src/components/**/*.{ts,tsx}", "./src/lib/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        ink: "#101522",
-        paper: "#f4efe2",
-        sand: "#ddd2bf",
-        cobalt: "#1d4ed8",
-        lime: "#bef264",
+        brand: { DEFAULT: "#1d4ed8", 50: "#eff6ff", 100: "#dbeafe", 500: "#3b82f6", 600: "#2563eb", 700: "#1d4ed8" },
+        positive: "#16a34a",
+        negative: "#dc2626",
+        ink: "#111827",
+        paper: "#f3f4f6",
+        sand: "#e5e7eb",
+        cobalt: "#2563eb",
+        lime: "#22c55e",
         coral: "#f97316",
-        brick: "#9f3b23",
-        mint: "#d4fae5",
+        brick: "#dc2626",
+        mint: "#dcfce7",
       },
-      boxShadow: {
-        panel: "0 18px 60px rgba(16, 21, 34, 0.14)",
-      },
-      borderRadius: {
-        panel: "1.5rem",
-      },
-      backgroundImage: {
-        "ledger-grid":
-          "linear-gradient(rgba(16,21,34,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(16,21,34,0.08) 1px, transparent 1px)",
-      },
-      fontFamily: {
-        display: ["var(--font-fraunces)"],
-        sans: ["var(--font-space)"],
-      },
+      fontFamily: { sans: ["var(--font-inter)"] },
     },
   },
   plugins: [],

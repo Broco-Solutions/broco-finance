@@ -1,11 +1,5 @@
 import { cn } from "@/lib/utils";
 
-export function Card({
-  className,
-  children,
-}: {
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return <section className={cn("panel noise overflow-hidden p-4 md:p-5 lg:p-6", className)}>{children}</section>;
+export function Card({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn("rounded-xl border border-gray-200 bg-white p-4", className)}>{children}</div>;
 }

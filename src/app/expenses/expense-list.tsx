@@ -23,8 +23,8 @@ type Proj = { id: string; name: string };
 
 function fd(d: string | Date | null) { if (!d) return "—"; return d instanceof Date ? d.toISOString().slice(0, 10) : d.slice(0, 10); }
 function fu(v: { toString(): string } | number | string | null) { if (v == null) return "—"; return Number(typeof v === "object" ? v.toString() : v).toFixed(2); }
-function sl(s: string, d: string | Date | null) { if (s === "PAID") return "Cobrado/Pagado"; if (s === "PENDING") { const t = new Date(); const dd = d ? new Date(d) : null; return dd && dd < t ? "Vencido" : "Pendiente"; } return s; }
-function st(s: string, d: string | Date | null) { const l = sl(s, d); if (l.startsWith("Cobrado") || l.startsWith("Pagado")) return "success" as const; if (l === "Vencido") return "danger" as const; return "warning" as const; }
+function sl(s: string, d: string | Date | null) { if (s === "PAID") return "Pagado"; if (s === "PENDING") { const t = new Date(); const dd = d ? new Date(d) : null; return dd && dd < t ? "Vencido" : "Pendiente"; } return s; }
+function st(s: string, d: string | Date | null) { const l = sl(s, d); if (l === "Pagado") return "success" as const; if (l === "Vencido") return "danger" as const; return "warning" as const; }
 
 export function ExpenseList({ initial, categories: cats, projects: projs }: { initial: E[]; categories: Cat[]; projects: Proj[] }) {
   const [expenses] = useState<E[]>(initial);
