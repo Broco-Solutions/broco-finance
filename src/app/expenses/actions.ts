@@ -1,0 +1,47 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { isAuthenticated } from "@/lib/auth";
+import { createExpense, updateExpense, deleteExpense, expenseSchema, getExpense } from "@/server/services/expenses";
+
+type R = { success: true } | { success: false; message: string };
+function pn(v: FormDataEntryValue | null) { if (!v || v === "") return undefined; const n = Number(v); return Number.isFinite(n) ? n : undefined; }
+
+export async function saveExpense(_prev: R | null, fd: FormData): Promise<R> {
+  try {
+    if (!isAuthenticated()) throw new Error("Sesion expirada.");
+    const data = expenseSchema.parse({
+      expenseCategoryId: fd.get("expenseCategoryId"), projectId: fd.get("projectId") || null,
+      type: fd.get("type"), concept: fd.get("concept"), notes: fd.get("notes") || null,
+      status: fd.get("status"), amountUsd: pn(fd.get("amountUsd")), amountArs: pn(fd.get("amountArs")),
+      exchangeRate: pn(fd.get("exchangeRate")), dueDate: fd.get("dueDate") || null, effectiveDate: fd.get("effectiveDate") || null,
+    });
+    const id = fd.get("id") as string | null;
+    if (id) await updateExpense(id, data); else await createExpense(data);
+    revalidatePath("/expenses");
+    return { success: true };
+  } catch (e) { return { success: false, message: e instanceof Error ? e.message : "Error." }; }
+}
+
+export async function removeExpense(_prev: R | null, fd: FormData): Promise<R> {
+  try { if (!isAuthenticated()) throw new Error("Sesion expirada."); await deleteExpense(fd.get("id") as string); revalidatePath("/expenses"); return { success: true }; }
+  catch (e) { return { success: false, message: e instanceof Error ? e.message : "Error." }; }
+}
+
+export async function payExpense(_prev: R | null, fd: FormData): Promise<R> {
+  try {
+    if (!isAuthenticated()) throw new Error("Sesion expirada.");
+    const id = fd.get("id") as string;
+    const e = await getExpense(id);
+    const data = expenseSchema.parse({
+      expenseCategoryId: e.expenseCategoryId, projectId: e.projectId, type: e.type, concept: e.concept, notes: e.notes,
+      status: "PAID", amountUsd: pn(fd.get("amountUsd")) ?? Number(e.amountUsd),
+      amountArs: pn(fd.get("amountArs")) ?? (e.amountArs ? Number(e.amountArs) : undefined),
+      exchangeRate: pn(fd.get("exchangeRate")) ?? (e.exchangeRate ? Number(e.exchangeRate) : undefined),
+      dueDate: e.dueDate?.toISOString().slice(0, 10) ?? null, effectiveDate: fd.get("effectiveDate") as string,
+    });
+    await updateExpense(id, data);
+    revalidatePath("/expenses");
+    return { success: true };
+  } catch (e) { return { success: false, message: e instanceof Error ? e.message : "Error." }; }
+}

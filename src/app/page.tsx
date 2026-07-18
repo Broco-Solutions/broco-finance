@@ -1,17 +1,17 @@
+import { getDashboard } from "@/server/services/dashboard";
 import { PageHeader } from "@/components/ui/page-header";
+import { Card } from "@/components/ui/card";
+import { DashboardContent } from "./dashboard-content";
 
-export default function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams?: { month?: string; year?: string } }) {
+  const month = searchParams?.month ? parseInt(searchParams.month) : undefined;
+  const year = searchParams?.year ? parseInt(searchParams.year) : undefined;
+  const data = await getDashboard(month, year);
+
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="Dashboard" title="Dashboard" description="" meta={null} />
-      <div className="rounded-[1.5rem] border border-black/10 bg-white/65 p-10 text-center">
-        <p className="text-ink/60">
-          El dashboard esta siendo adaptado al nuevo modelo financiero.
-        </p>
-        <p className="mt-2 text-sm text-ink/40">
-          Sera reconstruido en la fase correspondiente del plan de simplificacion.
-        </p>
-      </div>
+      <PageHeader eyebrow="Dashboard" title="Dashboard" description={`${String(data.period.month).padStart(2,"0")}/${data.period.year}`} meta={null} />
+      <DashboardContent data={data} />
     </div>
   );
 }

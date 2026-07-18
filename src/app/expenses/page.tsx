@@ -1,17 +1,24 @@
+import { listExpenses } from "@/server/services/expenses";
+import { listCategories } from "@/server/services/expense-categories";
+import { listProjects } from "@/server/services/projects";
 import { PageHeader } from "@/components/ui/page-header";
+import { ExpenseList } from "./expense-list";
 
-export default function ExpensesPage() {
+export default async function ExpensesPage() {
+  const [expenses, categories, projects] = await Promise.all([
+    listExpenses().catch(() => []),
+    listCategories().catch(() => []),
+    listProjects().catch(() => []),
+  ]);
+
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Gastos" title="Gastos" description="" meta={null} />
-      <div className="rounded-[1.5rem] border border-black/10 bg-white/65 p-10 text-center">
-        <p className="text-ink/60">
-          Este modulo esta siendo adaptado al nuevo modelo financiero.
-        </p>
-        <p className="mt-2 text-sm text-ink/40">
-          Sera reconstruido en la fase correspondiente del plan de simplificacion.
-        </p>
-      </div>
+      <ExpenseList
+        initial={JSON.parse(JSON.stringify(expenses))}
+        categories={JSON.parse(JSON.stringify(categories))}
+        projects={JSON.parse(JSON.stringify(projects.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }))))}
+      />
     </div>
   );
 }
