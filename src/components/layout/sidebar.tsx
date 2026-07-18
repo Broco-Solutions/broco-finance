@@ -41,9 +41,9 @@ export function Sidebar() {
       </div>
       <div className="rounded-[1.6rem] border border-white/10 bg-white/6 p-4">
         <div className="text-xs uppercase tracking-[0.16em] text-paper/60">Regla central</div>
-        <p className="mt-3 text-sm leading-7 text-paper/85">
-          El remanente nunca se calcula por rango: es histórico, acumulado y ya incluye salarios vía gastos.
-        </p>
+          <p className="mt-3 text-sm leading-7 text-paper/85">
+            Finanzas operativas para Broco Solutions.
+          </p>
       </div>
     </aside>
   );
