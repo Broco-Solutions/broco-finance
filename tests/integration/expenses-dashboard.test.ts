@@ -99,32 +99,33 @@ describe.skipIf(skip)("Gastos", () => {
 describe.skipIf(skip)("Dashboard", () => {
   it("14-18. metricas basicas", async () => {
     const now = new Date();
-    const m = now.getMonth() + 1; const y = now.getFullYear();
-    const d = await getDashboard(m, y);
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    const to = now;
+    const d = await getDashboard(from, to);
 
     // Create a paid income this month
     const inc = await prisma.income.create({ data: { type: "OTHER", concept: "Dash test", status: "PAID", amountUsd: 500, effectiveDate: now } }); track(inc.id);
-    const d2 = await getDashboard(m, y);
+    const d2 = await getDashboard(from, to);
     expect(d2.kpis.paidIncomesUsd).toBeGreaterThanOrEqual(d.kpis.paidIncomesUsd);
     await prisma.income.delete({ where: { id: inc.id } });
 
     // Create a pending income with future dueDate → should appear as pending
-    const future = new Date(y, m - 1, 15);
+    const future = new Date(now.getFullYear(), now.getMonth(), 15);
     const pInc = await prisma.income.create({ data: { type: "OTHER", concept: "Dash pend", status: "PENDING", amountUsd: 100, dueDate: future } }); track(pInc.id);
-    const d3 = await getDashboard(m, y);
+    const d3 = await getDashboard(from, to);
     expect(d3.kpis.pendingIncomesUsd).toBeGreaterThanOrEqual(d.kpis.pendingIncomesUsd);
     await prisma.income.delete({ where: { id: pInc.id } });
 
     // Vencido: income PAST due, PENDING
     const oldInc = await prisma.income.create({ data: { type: "OTHER", concept: "Dash old", status: "PENDING", amountUsd: 10, dueDate: new Date("2020-01-01") } }); track(oldInc.id);
-    const d4 = await getDashboard(m, y);
+    const d4 = await getDashboard(from, to);
     expect(d4.kpis.overdueIncomesCount).toBeGreaterThanOrEqual(1);
     await prisma.income.delete({ where: { id: oldInc.id } });
 
     // Upcoming
     const in7 = new Date(); in7.setDate(in7.getDate() + 3);
     const upInc = await prisma.income.create({ data: { type: "OTHER", concept: "Dash 7d", status: "PENDING", amountUsd: 55, dueDate: in7 } }); track(upInc.id);
-    const d5 = await getDashboard(m, y);
+    const d5 = await getDashboard(from, to);
     const found = d5.upcomingIncomes.some((x: { id: string }) => x.id === upInc.id);
     expect(found).toBe(true);
     await prisma.income.delete({ where: { id: upInc.id } });

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { LogOut, Menu, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { BrandLogo } from "@/components/layout/brand-logo";
 import { navigationItems } from "@/components/layout/navigation-config";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -31,7 +32,7 @@ export function Header() {
     <>
       <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="flex items-center justify-between px-4 py-2.5 md:px-6">
-          <div className="text-sm font-semibold text-gray-700 lg:hidden">Broco Finance</div>
+          <div className="text-sm font-semibold text-gray-700 lg:hidden"><BrandLogo className="max-w-[120px]" priority /></div>
           <div className="hidden lg:block" />
           <div className="flex items-center gap-3">
             <Button variant="ghost" onClick={logout} disabled={isPending} className="hidden lg:flex text-sm">
