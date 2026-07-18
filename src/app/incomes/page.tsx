@@ -1,17 +1,24 @@
+import { listIncomes } from "@/server/services/incomes";
+import { listProjects } from "@/server/services/projects";
+import { listClients } from "@/server/services/clients";
 import { PageHeader } from "@/components/ui/page-header";
+import { IncomeList } from "./income-list";
 
-export default function IncomesPage() {
+export default async function IncomesPage() {
+  const [incomes, projects, clients] = await Promise.all([
+    listIncomes().catch(() => []),
+    listProjects().catch(() => []),
+    listClients().catch(() => []),
+  ]);
+
   return (
     <div className="space-y-6">
       <PageHeader eyebrow="Ingresos" title="Ingresos" description="" meta={null} />
-      <div className="rounded-[1.5rem] border border-black/10 bg-white/65 p-10 text-center">
-        <p className="text-ink/60">
-          Este modulo esta siendo adaptado al nuevo modelo financiero.
-        </p>
-        <p className="mt-2 text-sm text-ink/40">
-          Sera reconstruido en la fase correspondiente del plan de simplificacion.
-        </p>
-      </div>
+      <IncomeList
+        initialIncomes={JSON.parse(JSON.stringify(incomes))}
+        projects={JSON.parse(JSON.stringify(projects.map((p) => ({ id: p.id, name: p.name, clientId: p.clientId }))))}
+        clients={JSON.parse(JSON.stringify(clients.map((c) => ({ id: c.id, name: c.name }))))}
+      />
     </div>
   );
 }

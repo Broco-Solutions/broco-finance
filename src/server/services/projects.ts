@@ -164,6 +164,7 @@ export async function listProjects(filters?: {
     select: {
       id: true,
       name: true,
+      clientId: true,
       isActive: true,
       startDate: true,
       endDate: true,

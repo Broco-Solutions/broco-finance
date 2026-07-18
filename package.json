@@ -15,7 +15,7 @@
     "db:seed:test": "NODE_ENV=test ALLOW_DESTRUCTIVE_TEST_DB=true DATABASE_URL=postgresql://mock:mock@localhost:9999/broco_finance_prod DATABASE_URL_TEST=postgresql://broco_test:broco_test@localhost:5434/broco_finance_test tsx prisma/seed.ts",
     "test": "vitest run",
     "test:unit": "vitest run --dir tests/unit",
-    "test:integration": "test -n \"$DATABASE_URL_TEST\" || (echo \"DATABASE_URL_TEST no esta definida\" && exit 1); vitest run tests/integration/smoke-db.test.ts && DATABASE_URL=\"$DATABASE_URL_TEST\" vitest run tests/integration/clients-projects.test.ts",
+    "test:integration": "test -n \"$DATABASE_URL_TEST\" || (echo \"DATABASE_URL_TEST no esta definida\" && exit 1); vitest run tests/integration/smoke-db.test.ts && DATABASE_URL=\"$DATABASE_URL_TEST\" vitest run tests/integration/clients-projects.test.ts tests/integration/incomes.test.ts",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d",
     "test:db:down": "docker compose -f docker-compose.test.yml down",
     "test:db:status": "docker compose -f docker-compose.test.yml ps"
