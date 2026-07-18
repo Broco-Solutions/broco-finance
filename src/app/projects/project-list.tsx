@@ -118,6 +118,8 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
         <Button onClick={() => { setEditProject(null); setShowForm(true); }}>Nuevo proyecto</Button>
       </div>
 
+      {/* DESKTOP TABLE */}
+      <div className="hidden md:block">
       <DataTable headers={["Proyecto", "Cliente", "Estado", "Inicio", "Fin", "Importe acordado", "Importe mensual", "Acciones"]}>
         {filtered.map((p) => (
           <tr key={p.id}>
@@ -136,6 +138,28 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
           </tr>
         ))}
       </DataTable>
+      </div>
+
+      {/* MOBILE CARDS */}
+      <div className="space-y-2 md:hidden">
+        {filtered.map((p) => (
+          <div key={p.id} className="rounded-lg border border-gray-200 bg-white p-3 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Link href={`/projects/${p.id}`} className="font-medium text-sm text-cobalt underline">{p.name}</Link>
+              <Badge tone={p.isActive ? "success" : "neutral"}>{p.isActive ? "Activo" : "Inactivo"}</Badge>
+            </div>
+            <div className="text-xs text-gray-500">{p.client.name}</div>
+            {fmtDate(p.startDate) !== "—" && <div className="text-xs text-gray-400">Inicio: {fmtDate(p.startDate)}{p.endDate ? ` · Fin: ${fmtDate(p.endDate)}` : ""}</div>}
+            <div className="text-xs font-medium tabular-nums">{fmtAmount(p.oneTimeCurrency, p.oneTimeAmountUsd)}</div>
+            <div className="flex gap-1 pt-1">
+              <Button variant="secondary" className="text-xs flex-1" onClick={() => { setEditProject(p); setShowForm(true); }}>Editar</Button>
+              <Button variant="secondary" className="text-xs flex-1" onClick={() => handleToggle(p)}>{p.isActive ? "Inactivar" : "Activar"}</Button>
+              <Button variant="secondary" className="text-xs flex-1 text-brick" onClick={() => { setDeleteTarget(p); setDelError(null); }}>Eliminar</Button>
+            </div>
+          </div>
+        ))}
+        {filtered.length === 0 && <p className="text-center text-gray-400 text-sm py-8">Sin proyectos.</p>}
+      </div>
 
       <ProjectFormModal
         open={showForm}

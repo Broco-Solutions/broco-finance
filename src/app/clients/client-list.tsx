@@ -56,6 +56,8 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
 
   return (
     <>
+      {/* DESKTOP TABLE */}
+      <div className="hidden md:block">
       <DataTable headers={["Nombre", "Contacto", "Email", "Telefono", "Proyectos", "Acciones"]}>
         {clients.map((c) => (
           <tr key={c.id}>
@@ -79,6 +81,28 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
           </tr>
         ))}
       </DataTable>
+      </div>
+
+      {/* MOBILE CARDS */}
+      <div className="space-y-2 md:hidden">
+        {clients.map((c) => (
+          <div key={c.id} className="rounded-lg border border-gray-200 bg-white p-3 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Link href={`/clients/${c.id}`} className="font-medium text-sm text-cobalt underline">{c.name}</Link>
+              <span className="text-xs text-gray-500">{c._count.projects} proy.</span>
+            </div>
+            <div className="text-xs text-gray-400 space-y-0.5">
+              {c.contactName && <div>Contacto: {c.contactName}</div>}
+              {c.contactEmail && <div>{c.contactEmail}</div>}
+              {c.contactPhone && <div>{c.contactPhone}</div>}
+            </div>
+            <div className="flex gap-1 pt-1">
+              <Button variant="secondary" className="text-xs flex-1" onClick={() => { setEditing(c); setShowForm(true); }}>Editar</Button>
+              <Button variant="secondary" className="text-xs flex-1 text-brick" onClick={() => setDeleteTarget(c)}>Eliminar</Button>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <ClientFormModal
         open={showForm}

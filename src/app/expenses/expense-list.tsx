@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,8 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
   const router = useRouter();
   const sp = useSearchParams();
 
-  useEffect(() => { if (sp.get("new") === "1") { setShowForm(true); router.replace("/expenses"); } }, []);
+  const didOpen = useRef(false);
+  useEffect(() => { if (!didOpen.current && sp.get("new") === "1") { didOpen.current = true; setShowForm(true); router.replace("/expenses"); } }, [sp, router]);
 
   const reload = () => { setTimeout(() => window.location.reload(), 500); };
 
