@@ -106,16 +106,22 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
 
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
-        <DataTable headers={["Concepto","Categoria","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}>
+        <DataTable
+          headers={["Concepto","Categoria","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
+          colGroup={<colgroup><col style={{width:"16%"}} /><col style={{width:"14%"}} /><col style={{width:"14%"}} /><col style={{width:"7%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"10%"}} /><col style={{width:"12%"}} /></colgroup>}
+          footer={<tr className="bg-gray-50 font-semibold"><td className="px-4 py-2.5 text-xs text-gray-500">Total filtrado · {filtered.length} mov.</td><td /><td /><td /><td /><td /><td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(filteredExpTotal)}</td><td /><td /></tr>}
+        >
           {filtered.map(e => (
             <tr key={e.id}>
-              <td className="px-4 py-3 text-sm">{e.concept}</td><td className="px-4 py-3 text-sm">{e.category.name}</td><td className="px-4 py-3 text-sm">{e.project?.name ?? "—"}</td>
-              <td className="px-4 py-3 text-sm">{e.type === "FIXED" ? "Fijo" : "Variable"}</td>
-              <td className="px-4 py-3"><Badge tone={formatExpenseStatus(e.status, e.dueDate) === "Pagado" ? "success" : formatExpenseStatus(e.status, e.dueDate) === "Vencido" ? "danger" : "warning"}>{formatExpenseStatus(e.status, e.dueDate)}</Badge></td>
-              <td className="px-4 py-3 text-sm tabular-nums">{e.status === "PAID" ? formatDate(e.effectiveDate) : formatDate(e.dueDate)}</td>
-              <td className="px-4 py-3 text-sm text-right tabular-nums">{formatUsd(fmt(e.amountUsd))}</td>
-              <td className="px-4 py-3 text-sm text-right tabular-nums">{e.amountArs ? formatArs(fmt(e.amountArs)) : "—"}</td>
-              <td className="px-4 py-3 space-x-1">
+              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={e.concept}>{e.concept}</td>
+              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={e.category.name}>{e.category.name}</td>
+              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={e.project?.name ?? ""}>{e.project?.name ?? "—"}</td>
+              <td className="px-4 py-2.5 text-sm whitespace-nowrap">{e.type === "FIXED" ? "Fijo" : "Variable"}</td>
+              <td className="px-4 py-2.5"><Badge tone={formatExpenseStatus(e.status, e.dueDate) === "Pagado" ? "success" : formatExpenseStatus(e.status, e.dueDate) === "Vencido" ? "danger" : "warning"}>{formatExpenseStatus(e.status, e.dueDate)}</Badge></td>
+              <td className="px-4 py-2.5 text-sm tabular-nums whitespace-nowrap">{e.status === "PAID" ? formatDate(e.effectiveDate) : formatDate(e.dueDate)}</td>
+              <td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(fmt(e.amountUsd))}</td>
+              <td className="px-4 py-2.5 text-sm text-right tabular-nums">{e.amountArs ? formatArs(fmt(e.amountArs)) : "—"}</td>
+              <td className="px-4 py-2.5 space-x-1 whitespace-nowrap">
                 {e.status === "PENDING" && <Button variant="secondary" className="text-xs" onClick={() => openPay(e)}>Pagar</Button>}
                 <Button variant="secondary" className="text-xs" onClick={() => openForm(e)}>Editar</Button>
                 <Button variant="secondary" className="text-xs text-brick" onClick={() => { setDelTarget(e); setDelError(null); }}>Elim.</Button>

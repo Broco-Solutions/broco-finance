@@ -80,7 +80,7 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
         <Badge tone="neutral">{periodLabel}</Badge>
         <div className="flex gap-2 ml-auto">
           <Link href="/incomes?new=1"><Button className="text-sm"><PlusCircle className="mr-1.5 h-4 w-4" />Nuevo ingreso</Button></Link>
-          <Link href="/expenses?new=1"><Button variant="secondary" className="text-sm"><Receipt className="mr-1.5 h-4 w-4" />Nuevo gasto</Button></Link>
+          <Link href="/expenses?new=1"><Button className="text-sm bg-gray-800 text-white hover:bg-gray-900"><Receipt className="mr-1.5 h-4 w-4" />Nuevo gasto</Button></Link>
         </div>
       </div>
 

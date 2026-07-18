@@ -93,18 +93,22 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
 
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
-        <DataTable headers={["Concepto","Cliente","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}>
+        <DataTable
+          headers={["Concepto","Cliente","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
+          colGroup={<colgroup><col style={{width:"16%"}} /><col style={{width:"14%"}} /><col style={{width:"14%"}} /><col style={{width:"8%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"10%"}} /><col style={{width:"11%"}} /></colgroup>}
+          footer={<tr className="bg-gray-50 font-semibold"><td className="px-4 py-2.5 text-xs text-gray-500">Total filtrado · {filtered.length} mov.</td><td /><td /><td /><td /><td /><td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(filteredTotal)}</td><td /><td /></tr>}
+        >
           {filtered.map(inc => (
             <tr key={inc.id}>
-              <td className="px-4 py-3 text-sm">{inc.concept}</td>
-              <td className="px-4 py-3 text-sm">{inc.client?.name ?? "—"}</td>
-              <td className="px-4 py-3 text-sm">{inc.project?.name ?? "—"}</td>
-              <td className="px-4 py-3 text-sm">{formatIncomeType(inc.type)}</td>
-              <td className="px-4 py-3"><Badge tone={statusTone(inc.status, inc.dueDate)}>{statusLabel(inc.status, inc.dueDate)}</Badge></td>
-              <td className="px-4 py-3 text-sm tabular-nums">{inc.status === "PAID" ? formatDate(inc.effectiveDate) : formatDate(inc.dueDate)}</td>
-              <td className="px-4 py-3 text-sm text-right tabular-nums">{formatUsd(fmt(inc.amountUsd))}</td>
-              <td className="px-4 py-3 text-sm text-right tabular-nums">{inc.amountArs ? formatArs(fmt(inc.amountArs)) : "—"}</td>
-              <td className="px-4 py-3 space-x-1">
+              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={inc.concept}>{inc.concept}</td>
+              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={inc.client?.name ?? ""}>{inc.client?.name ?? "—"}</td>
+              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={inc.project?.name ?? ""}>{inc.project?.name ?? "—"}</td>
+              <td className="px-4 py-2.5 text-sm whitespace-nowrap">{formatIncomeType(inc.type)}</td>
+              <td className="px-4 py-2.5"><Badge tone={statusTone(inc.status, inc.dueDate)}>{statusLabel(inc.status, inc.dueDate)}</Badge></td>
+              <td className="px-4 py-2.5 text-sm tabular-nums whitespace-nowrap">{inc.status === "PAID" ? formatDate(inc.effectiveDate) : formatDate(inc.dueDate)}</td>
+              <td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(fmt(inc.amountUsd))}</td>
+              <td className="px-4 py-2.5 text-sm text-right tabular-nums">{inc.amountArs ? formatArs(fmt(inc.amountArs)) : "—"}</td>
+              <td className="px-4 py-2.5 space-x-1 whitespace-nowrap">
                 {inc.status === "PENDING" && <Button variant="secondary" className="text-xs" onClick={() => setPayTarget(inc)}>Cobrar</Button>}
                 <Button variant="secondary" className="text-xs" onClick={() => { setEditing(inc); setShowForm(true); }}>Editar</Button>
                 <Button variant="secondary" className="text-xs text-brick" onClick={() => { setDeleteTarget(inc); setDelError(null); }}>Elim.</Button>
