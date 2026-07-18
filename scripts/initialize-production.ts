@@ -97,6 +97,9 @@ async function main() {
     if (final[0] !== 13 || final[1] !== 18 || final[2] !== 14 || final[3] !== 45 || final[4] !== 79) {
       throw new Error(`Conteos incorrectos: Cli=${final[0]} Proj=${final[1]} Cat=${final[2]} Inc=${final[3]} Exp=${final[4]}`);
     }
+  }, {
+    maxWait: 20000,
+    timeout: 300000,
   });
 
   // Final verification
