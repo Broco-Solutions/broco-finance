@@ -1,28 +1,17 @@
-import { ExpensesScreen } from "@/components/screens/expenses-screen";
-import {
-  listExpenseCategories,
-  listExpenses,
-  listProjects,
-  listRecurringExpenses,
-} from "@/server/services/finance";
+import { PageHeader } from "@/components/ui/page-header";
 
-export const dynamic = "force-dynamic";
-
-export default async function ExpensesPage() {
-  const [{ data: expenses, demoMode }, { data: categories }, { data: projects }, { data: recurringExpenses }] = await Promise.all([
-    listExpenses(),
-    listExpenseCategories(),
-    listProjects(),
-    listRecurringExpenses(),
-  ]);
-
+export default function ExpensesPage() {
   return (
-    <ExpensesScreen
-      expenses={expenses}
-      categories={categories}
-      projects={projects}
-      recurringExpenses={recurringExpenses}
-      demoMode={demoMode}
-    />
+    <div className="space-y-6">
+      <PageHeader eyebrow="Gastos" title="Gastos" description="" meta={null} />
+      <div className="rounded-[1.5rem] border border-black/10 bg-white/65 p-10 text-center">
+        <p className="text-ink/60">
+          Este modulo esta siendo adaptado al nuevo modelo financiero.
+        </p>
+        <p className="mt-2 text-sm text-ink/40">
+          Sera reconstruido en la fase correspondiente del plan de simplificacion.
+        </p>
+      </div>
+    </div>
   );
 }

@@ -2259,6 +2259,85 @@ npx prisma validate
 **Aceptacion:** `prisma validate` exitoso. Migracion aplicada en test. CHECKs SQL activos.
 **Riesgos:** errores de sintaxis en CHECKs. Rollback: git checkout del schema anterior.
 **Dependencias:** Fase 2 (base de test disponible).
+**Estado:** Esquema implementado, consumidores legacy eliminados, build recuperado, APIs temporales eliminadas. Servicios definitivos pendientes. Checkpoint listo.
+
+**Limpieza final (2026-07-17):**
+- **12 API routes financieras eliminadas** (clients, projects, incomes, expenses, expense-categories, dashboard, alerts con sus subrutas [id]). Sin consumidores, sin respuestas vacias.
+- **Solo /api/auth permanece** (funcional, usada por login-form).
+- **Placeholders estaticos** sin fetch a APIs.
+- **0 consumidores residuales** de APIs financieras.
+- **Prisma sin cambios** (26 CHECKs, 3 indices CI, 5 FKs, 13 migraciones).
+- TypeScript: 0, Lint: 0, Build: OK.
+
+**Resultados de la auditoria final (2026-07-17):**
+- **finance.ts**: eliminado completamente (0 consumidores, 0 referencias)
+- **notYet()**: 0 invocaciones en runtime (el archivo ya no existe)
+- **demo-data.ts**: eliminado, 0 referencias restantes
+- **Middleware**: limpiado de referencias Kanban, auth funcional
+- **Auth API route**: restaurada a funcionamiento real con lib/auth.ts existente
+- **Rutas eliminadas**: /kanban, /calendar, /distribution, /recurring → 404
+- **Rutas protegidas**: 7/7 → 200 OK (placeholders)
+- **API routes**: 7/7 → 200 OK (stubs seguros)
+- **Navegacion**: 5 items (Dashboard, Clientes, Proyectos, Ingresos, Gastos)
+- **Sin enlaces a rutas eliminadas**: verificado
+- **Sin imports muertos a servicios eliminados**: verificado
+- **Sin referencias a modelos/enums legacy en src/**: verificado
+- **Prisma**: format OK, validate OK, generate OK, migrate status up to date (13 migraciones)
+- **Tests**: 43/43 (10 unit + 4 integracion + 29 SQL, 0 skipped)
+- TypeScript: 0, Lint: 0, Build: OK
+- Smoke HTTP: login 200, protected routes 200, deleted routes 404
+- **66 archivos cambiados** (15,196 lineas eliminadas, 349 agregadas)
+- Sin seed ejecutado, sin produccion tocada
+
+**Resultados del corte coordinado (2026-07-17, bloque atomico):**
+- **TypeScript: 0 errores** (de 387 a 0)
+- **Lint: 0 errores**
+- **Build: exitoso**
+- **Tests: 43/43** (10 unit + 4 integracion + 29 SQL, 0 skipped)
+- **65 archivos afectados** (15,107 lineas eliminadas, 429 lineas nuevas)
+
+**Modulos eliminados permanentemente:**
+- Kanban (servicio, ruta, pagina, componentes, tipos, navegacion)
+- Calendario (ruta, pagina, componentes)
+- Distribucion / capas / reservas (ruta, pagina, API)
+- Salarios / retiros como modulo separado (ruta, API)
+- Recurrencias automaticas (rutas, API de recurring-incomes, recurring-expenses)
+- Pagos y gastos programados (rutas, API de scheduled-payments, scheduled-expenses)
+- Demo mode (`src/server/demo-data.ts` eliminado completamente)
+
+**Modulos en placeholder (pendientes de reconstruccion en fases 8-13):**
+- Clientes, Proyectos, Ingresos, Gastos, Categorias, Dashboard, Alertas
+- Cada ruta muestra pagina honesta "Este modulo esta siendo adaptado al nuevo modelo financiero"
+- Las API routes devuelven datos minimos o lanzan error "Modulo pendiente de reconstruccion"
+
+**Formula monetaria canonica en CHECKs:**
+`amountUsd = round(amountArs / exchangeRate, 6)` (NUMERIC, 4 constraints)
+
+**Resultados corregidos (2026-07-17, segunda revision):**
+- 12 migraciones historicas conservadas + 1 migracion destructiva nueva (13 total)
+- Reconstruccion desde cero validada con `prisma migrate reset --skip-seed`
+- 26 CHECKs SQL, 3 indices funcionales CI, 5 FKs RESTRICT, 13 indices regulares, 4 enums, 5 tablas
+- **Formula monetaria canonica:** `amountUsd = round(amountArs / exchangeRate, 6)` (NUMERIC, no tolerancia, no reconstruccion del TC desde USD)
+- CHECKs de consistencia: `chk_income_monetary_consistency`, `chk_expense_monetary_consistency`, `chk_project_one_time_ars_consistency`, `chk_project_monthly_ars_consistency`
+- Caso de redondeo verificado: `round(1000.00 / 810.000000, 6) = 1.234568` aceptado; `1.234567` rechazado
+- DROP de tablas y enums antiguos al inicio de la migracion
+- Tests: unitarios 10/10, integracion 4/4, **SQL 29/29** (17 originales + 12 de aceptacion/rechazo monetario) = 43 total
+- Lint: OK. TypeScript: 387 errores. Build: falla.
+- `prisma format` OK, `prisma validate` OK, `prisma generate` OK, `prisma migrate status` OK
+- Tests: unitarios 10/10, integracion 4/4, SQL constraints 17/17 = 31 tests pasando
+- Lint: OK. TypeScript: 387 errores. Build: falla.
+
+**Errores residuales de TypeScript (387):**
+- Archivos afectados: `src/server/services/finance.ts`, `src/server/services/kanban.ts`, `prisma/seed.ts`
+- TS2339 (120): propiedad inexistente en Prisma Client (scheduledPayment, recurringIncome, etc.)
+- TS2353 (77): campo desconocido en create/update (date, status, monthlyFeeUsd, isDefault, etc.)
+- TS7006 (67): parametro implicitamente 'any' (sin tipos por modelos removidos)
+- TS2305 (11): miembro exportado no encontrado (@prisma/client)
+- Otros (112): TS2322, TS2345, TS2694, TS2551, TS2561, TS18046
+- Estos archivos seran reescritos/eliminados en Fases 8-16. No se requieren stubs ni compatibilidad transitoria.
+- Produccion no fue tocada. Migracion solo aplicada en DATABASE_URL_TEST.
+- Estos archivos seran reescritos/eliminados en Fases 8-16. No se requieren stubs ni compatibilidad transitoria.
+- Produccion no fue tocada. Migracion solo aplicada en DATABASE_URL_TEST.
 
 ### Fase 4 — Generacion de migracion (solo test)
 **Objetivo:** generar la migracion inicial simplificada y aplicarla contra la base de test para validar el schema antes de tocar produccion. La migracion contra `DATABASE_URL` real se ejecuta recien en la Fase 20 (Produccion).
@@ -2790,7 +2869,7 @@ npm run db:seed  # Ejecuta el seed viejo (requiere xlsx en dependencies y Excel 
 
 - [ ] Fase 1: Auditoria completada (este documento)
 - [x] Fase 2: Base de test funcional (PostgreSQL 16 en puerto 5434, guardia 10/10, integracion 4/4, 0 skipped)
-- [ ] Fase 3: Schema Prisma validado, CHECKs SQL activos, migrado en test
+- [ ] Fase 3: Schema Prisma validado (26 CHECKs, 3 indices CI, 5 FKs). 12 migraciones historicas conservadas + 1 nueva destructiva. Reconstruccion desde cero validada. 31 tests pasando. 387 errores TS residuales (finance.ts, kanban.ts, seed.ts — se reescribiran en fases 8-16). Build rojo. Fase no cerrada.
 - [ ] Fase 4: Migracion generada y aplicada solo en test (CHECKs SQL validados en test)
 - [ ] Fase 5: Extraccion Excel ejecutada, datos canonicos generados y revisados
 - [ ] Fase 6: Seed ejecutado y verificado en test (conteos correctos)

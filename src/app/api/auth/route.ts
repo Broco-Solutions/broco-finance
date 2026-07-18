@@ -1,26 +1,23 @@
-import { z } from "zod";
-import { clearSessionCookie, isLoginValid, setSessionCookie } from "@/lib/auth";
+import { isLoginValid, setSessionCookie, clearSessionCookie } from "@/lib/auth";
 import { AppError } from "@/server/errors";
-import { readJson, withRoute } from "@/server/http";
-
-const schema = z.object({
-  password: z.string().min(1, "Ingresá la contraseña."),
-});
+import { withRoute } from "@/server/http";
 
 export async function POST(request: Request) {
+  const body = await request.json().catch(() => ({}));
+  const password = typeof body.password === "string" ? body.password : "";
+
   return withRoute(async () => {
-    const { password } = await readJson(request, schema);
-
     if (!isLoginValid(password)) {
-      throw new AppError("La contraseña no coincide.", 401);
+      throw new AppError("Contrasena incorrecta.", 401);
     }
-
     setSessionCookie();
-    return { ok: true };
+    return { data: { ok: true } };
   });
 }
 
 export async function DELETE() {
-  clearSessionCookie();
-  return Response.json({ data: { ok: true } });
+  return withRoute(async () => {
+    clearSessionCookie();
+    return { data: { ok: true } };
+  });
 }

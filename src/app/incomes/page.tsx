@@ -1,14 +1,17 @@
-import { IncomesScreen } from "@/components/screens/incomes-screen";
-import { listIncomes, listProjects, listScheduledPayments } from "@/server/services/finance";
+import { PageHeader } from "@/components/ui/page-header";
 
-export const dynamic = "force-dynamic";
-
-export default async function IncomesPage() {
-  const [{ data: incomes, demoMode }, { data: scheduledPayments }, { data: projects }] = await Promise.all([
-    listIncomes(),
-    listScheduledPayments({ type: "MAINTENANCE" }),
-    listProjects(),
-  ]);
-
-  return <IncomesScreen incomes={incomes} scheduledPayments={scheduledPayments} projects={projects} demoMode={demoMode} />;
+export default function IncomesPage() {
+  return (
+    <div className="space-y-6">
+      <PageHeader eyebrow="Ingresos" title="Ingresos" description="" meta={null} />
+      <div className="rounded-[1.5rem] border border-black/10 bg-white/65 p-10 text-center">
+        <p className="text-ink/60">
+          Este modulo esta siendo adaptado al nuevo modelo financiero.
+        </p>
+        <p className="mt-2 text-sm text-ink/40">
+          Sera reconstruido en la fase correspondiente del plan de simplificacion.
+        </p>
+      </div>
+    </div>
+  );
 }

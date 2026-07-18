@@ -7,60 +7,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum ProjectStatus {
-  ACTIVE
-  COMPLETED
-  CANCELLED
-}
-
-enum IncomeStatus {
-  PAID
-  PENDING
+enum Currency {
+  USD
+  ARS
 }
 
 enum IncomeType {
   DEVELOPMENT
   MAINTENANCE
-}
-
-enum ContractFrequency {
-  monthly
-  quarterly
-  biannual
-  annual
-}
-
-enum ScheduledPaymentStatus {
-  pending
-  paid
-  overdue
-  cancelled
+  OTHER
 }
 
 enum ExpenseType {
-  fixed
-  variable
+  FIXED
+  VARIABLE
 }
 
-enum DistributionLayer {
-  emergency
-  growth
-}
-
-enum ScheduledExpenseStatus {
-  PENDING
-  PAID
-  CANCELLED
-}
-
-enum ExpenseStatus {
+enum FinancialStatus {
   PAID
   PENDING
 }
 
 model Client {
   id           String    @id @default(uuid()) @db.Uuid
-  name         String    @unique
+  name         String
   contactName  String?   @map("contact_name")
   contactEmail String?   @map("contact_email")
   contactPhone String?   @map("contact_phone")
@@ -68,237 +38,98 @@ model Client {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   projects     Project[]
+  incomes      Income[]
 
   @@map("clients")
 }
 
 model Project {
-  id               String              @id @default(uuid()) @db.Uuid
-  clientId         String              @map("client_id") @db.Uuid
-  name             String
-  status           ProjectStatus       @default(ACTIVE)
-  devBudgetUsd     Decimal?            @map("dev_budget_usd") @db.Decimal(12, 2)
-  monthlyFeeUsd    Decimal?            @map("monthly_fee_usd") @db.Decimal(12, 2)
-  monthlyFeeEndDate DateTime?          @map("monthly_fee_end_date") @db.Date
-  notes            String?
-  createdAt        DateTime            @default(now()) @map("created_at")
-  updatedAt        DateTime            @updatedAt @map("updated_at")
-  client           Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  incomes          Income[]
-  expenses         Expense[]
-  recurringIncome  RecurringIncome?
-  recurringExpenses RecurringExpense[]
-  scheduledPayments ScheduledPayment[]
-  kanbanPlacement  KanbanProjectPlacement?
+  id                             String    @id @default(uuid()) @db.Uuid
+  clientId                       String    @map("client_id") @db.Uuid
+  name                           String
+  isActive                       Boolean   @default(true) @map("is_active")
+  startDate                      DateTime? @map("start_date") @db.Date
+  endDate                        DateTime? @map("end_date") @db.Date
+  notes                          String?
+  oneTimeOriginalAmount          Decimal?  @map("one_time_original_amount") @db.Decimal(18, 6)
+  oneTimeCurrency                Currency? @map("one_time_currency")
+  oneTimeExchangeRate            Decimal?  @map("one_time_exchange_rate") @db.Decimal(18, 6)
+  oneTimeAmountUsd               Decimal?  @map("one_time_amount_usd") @db.Decimal(18, 6)
+  monthlyRecurringOriginalAmount Decimal?  @map("monthly_recurring_original_amount") @db.Decimal(18, 6)
+  monthlyRecurringCurrency       Currency? @map("monthly_recurring_currency")
+  monthlyRecurringExchangeRate   Decimal?  @map("monthly_recurring_exchange_rate") @db.Decimal(18, 6)
+  monthlyRecurringAmountUsd      Decimal?  @map("monthly_recurring_amount_usd") @db.Decimal(18, 6)
+  createdAt                      DateTime  @default(now()) @map("created_at")
+  updatedAt                      DateTime  @updatedAt @map("updated_at")
+  client                         Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  incomes                        Income[]
+  expenses                       Expense[]
 
-  @@unique([clientId, name])
-  @@index([clientId, status])
-  @@index([status])
-  @@index([status, monthlyFeeEndDate])
+  @@index([clientId])
+  @@index([isActive])
+  @@index([clientId, isActive])
   @@map("projects")
 }
 
-model KanbanColumn {
-  id         String                  @id @default(uuid()) @db.Uuid
-  name       String
-  color      String?
-  position   Int
-  isActive   Boolean                 @default(true) @map("is_active")
-  isInitial  Boolean                 @default(false) @map("is_initial")
-  createdAt  DateTime                @default(now()) @map("created_at")
-  updatedAt  DateTime                @updatedAt @map("updated_at")
-  placements KanbanProjectPlacement[]
-
-  @@index([position])
-  @@index([isActive, position])
-  @@map("kanban_columns")
-}
-
-model KanbanProjectPlacement {
-  id             String       @id @default(uuid()) @db.Uuid
-  projectId      String       @unique @map("project_id") @db.Uuid
-  kanbanColumnId String       @map("kanban_column_id") @db.Uuid
-  position       Int
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
-  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  kanbanColumn   KanbanColumn @relation(fields: [kanbanColumnId], references: [id], onDelete: Restrict)
-
-  @@index([kanbanColumnId, position])
-  @@map("kanban_project_placements")
-}
-
 model Income {
-  id            String             @id @default(uuid()) @db.Uuid
-  projectId     String             @map("project_id") @db.Uuid
-  date          DateTime           @db.Date
-  dueDate       DateTime?          @map("due_date") @db.Date
-  status        IncomeStatus       @default(PAID)
-  type          IncomeType         @default(DEVELOPMENT) @map("income_type")
-  amountArs     Decimal?           @map("amount_ars") @db.Decimal(14, 2)
-  amountUsd     Decimal            @map("amount_usd") @db.Decimal(12, 2)
-  exchangeRate  Decimal?           @map("exchange_rate") @db.Decimal(12, 4)
+  id            String          @id @default(uuid()) @db.Uuid
+  clientId      String?         @map("client_id") @db.Uuid
+  projectId     String?         @map("project_id") @db.Uuid
+  type          IncomeType      @map("income_type")
+  concept       String
   notes         String?
-  createdAt     DateTime           @default(now()) @map("created_at")
-  updatedAt     DateTime           @updatedAt @map("updated_at")
-  project       Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  scheduledPayment ScheduledPayment?
+  status        FinancialStatus @default(PAID)
+  amountUsd     Decimal         @map("amount_usd") @db.Decimal(18, 6)
+  amountArs     Decimal?        @map("amount_ars") @db.Decimal(18, 2)
+  exchangeRate  Decimal?        @map("exchange_rate") @db.Decimal(18, 6)
+  dueDate       DateTime?       @map("due_date") @db.Date
+  effectiveDate DateTime?       @map("effective_date") @db.Date
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  client        Client?         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  project       Project?        @relation(fields: [projectId], references: [id], onDelete: Restrict)
 
-  @@index([projectId, date])
-  @@index([status, date])
+  @@index([clientId])
+  @@index([projectId])
+  @@index([type])
   @@index([status, dueDate])
-  @@index([projectId, status, date])
-  @@index([type, date])
+  @@index([status, effectiveDate])
   @@map("incomes")
 }
 
-model ScheduledPayment {
-  id                  String                  @id @default(uuid()) @db.Uuid
-  projectId           String                  @map("project_id") @db.Uuid
-  recurringIncomeId   String?                 @map("recurring_income_id") @db.Uuid
-  type                IncomeType              @default(MAINTENANCE)
-  expectedDate        DateTime                @map("expected_date") @db.Date
-  expectedAmountUsd   Decimal                 @map("expected_amount_usd") @db.Decimal(12, 2)
-  status              ScheduledPaymentStatus  @default(pending)
-  paidAt              DateTime?               @map("paid_at")
-  actualIncomeId      String?                 @unique @map("actual_income_id") @db.Uuid
-  notes               String?
-  createdAt           DateTime                @default(now()) @map("created_at")
-  updatedAt           DateTime                @updatedAt @map("updated_at")
-  project             Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  recurringIncome     RecurringIncome?        @relation(fields: [recurringIncomeId], references: [id], onDelete: Cascade)
-  actualIncome        Income?                 @relation(fields: [actualIncomeId], references: [id], onDelete: SetNull)
-
-  @@index([projectId, expectedDate])
-  @@index([recurringIncomeId, expectedDate])
-  @@index([status, expectedDate])
-  @@index([type, expectedDate])
-  @@index([projectId, status, expectedDate])
-  @@map("scheduled_payments")
-}
-
-model RecurringIncome {
-  id               String             @id @default(uuid()) @db.Uuid
-  projectId        String             @unique @map("project_id") @db.Uuid
-  amountUsd        Decimal            @map("amount_usd") @db.Decimal(12, 2)
-  startDate        DateTime           @map("start_date") @db.Date
-  endDate          DateTime?          @map("end_date") @db.Date
-  isActive         Boolean            @default(true) @map("is_active")
-  createdAt        DateTime           @default(now()) @map("created_at")
-  updatedAt        DateTime           @updatedAt @map("updated_at")
-  project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  scheduledPayments ScheduledPayment[]
-
-  @@index([isActive, startDate])
-  @@index([isActive, endDate])
-  @@map("recurring_incomes")
-}
-
 model ExpenseCategory {
-  id                String             @id @default(uuid()) @db.Uuid
-  name              String             @unique
-  isDefault         Boolean            @default(false) @map("is_default")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  expenses          Expense[]
-  recurringExpenses RecurringExpense[]
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  expenses  Expense[]
 
   @@map("expense_categories")
 }
 
 model Expense {
-  id                 String             @id @default(uuid()) @db.Uuid
-  date               DateTime           @db.Date
-  dueDate            DateTime?          @map("due_date") @db.Date
-  status             ExpenseStatus      @default(PAID)
-  categoryId         String             @map("category_id") @db.Uuid
-  expenseType        ExpenseType        @map("expense_type")
-  projectId          String?            @map("project_id") @db.Uuid
-  amountArs          Decimal?           @map("amount_ars") @db.Decimal(14, 2)
-  amountUsd          Decimal            @map("amount_usd") @db.Decimal(12, 2)
-  exchangeRate       Decimal?           @map("exchange_rate") @db.Decimal(12, 4)
-  description        String
-  salaryWithdrawalId String?            @unique @map("salary_withdrawal_id") @db.Uuid
-  notes              String?
-  createdAt          DateTime           @default(now()) @map("created_at")
-  updatedAt          DateTime           @updatedAt @map("updated_at")
-  category           ExpenseCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  project            Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  salaryWithdrawal   SalaryWithdrawal?  @relation(fields: [salaryWithdrawalId], references: [id], onDelete: Cascade)
-  scheduledExpense   ScheduledExpense?
+  id                String          @id @default(uuid()) @db.Uuid
+  expenseCategoryId String          @map("expense_category_id") @db.Uuid
+  projectId         String?         @map("project_id") @db.Uuid
+  type              ExpenseType     @map("expense_type")
+  concept           String
+  notes             String?
+  status            FinancialStatus @default(PAID)
+  amountUsd         Decimal         @map("amount_usd") @db.Decimal(18, 6)
+  amountArs         Decimal?        @map("amount_ars") @db.Decimal(18, 2)
+  exchangeRate      Decimal?        @map("exchange_rate") @db.Decimal(18, 6)
+  dueDate           DateTime?       @map("due_date") @db.Date
+  effectiveDate     DateTime?       @map("effective_date") @db.Date
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  category          ExpenseCategory @relation(fields: [expenseCategoryId], references: [id], onDelete: Restrict)
+  project           Project?        @relation(fields: [projectId], references: [id], onDelete: Restrict)
 
-  @@index([categoryId, date])
-  @@index([projectId, date])
+  @@index([expenseCategoryId])
+  @@index([projectId])
+  @@index([type])
   @@index([status, dueDate])
-  @@index([expenseType, date])
-  @@index([projectId, expenseType, date])
+  @@index([status, effectiveDate])
   @@map("expenses")
-}
-
-model RecurringExpense {
-  id               String             @id @default(uuid()) @db.Uuid
-  description      String
-  categoryId       String             @map("category_id") @db.Uuid
-  projectId        String?            @map("project_id") @db.Uuid
-  amountUsd        Decimal            @map("amount_usd") @db.Decimal(12, 2)
-  startDate        DateTime           @map("start_date") @db.Date
-  endDate          DateTime?          @map("end_date") @db.Date
-  expenseType      ExpenseType        @default(fixed) @map("expense_type")
-  frequency        ContractFrequency  @default(monthly)
-  isActive         Boolean            @default(true) @map("is_active")
-  createdAt        DateTime           @default(now()) @map("created_at")
-  updatedAt        DateTime           @updatedAt @map("updated_at")
-  category         ExpenseCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  project          Project?           @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  scheduledExpenses ScheduledExpense[]
-
-  @@index([categoryId, isActive])
-  @@index([projectId, isActive])
-  @@index([isActive, startDate])
-  @@map("recurring_expenses")
-}
-
-model ScheduledExpense {
-  id                 String                @id @default(uuid()) @db.Uuid
-  recurringExpenseId String                @map("recurring_expense_id") @db.Uuid
-  dueDate            DateTime              @map("due_date") @db.Date
-  amountUsd          Decimal               @map("amount_usd") @db.Decimal(12, 2)
-  status             ScheduledExpenseStatus @default(PENDING)
-  paidAt             DateTime?             @map("paid_at")
-  actualExpenseId    String?               @unique @map("actual_expense_id") @db.Uuid
-  createdAt          DateTime              @default(now()) @map("created_at")
-  updatedAt          DateTime              @updatedAt @map("updated_at")
-  recurringExpense   RecurringExpense      @relation(fields: [recurringExpenseId], references: [id], onDelete: Cascade)
-  actualExpense      Expense?              @relation(fields: [actualExpenseId], references: [id], onDelete: SetNull)
-
-  @@index([status, dueDate])
-  @@index([recurringExpenseId, dueDate])
-  @@map("scheduled_expenses")
-}
-
-model DistributionConfig {
-  id              String             @id @default(uuid()) @db.Uuid
-  layer           DistributionLayer  @unique
-  currentAmountUsd Decimal           @map("current_amount_usd") @db.Decimal(12, 2)
-  storageLocation String?            @map("storage_location")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
-
-  @@map("distribution_config")
-}
-
-model SalaryWithdrawal {
-  id           String    @id @default(uuid()) @db.Uuid
-  personName   String    @map("person_name")
-  month        DateTime  @db.Date
-  amountUsd    Decimal   @map("amount_usd") @db.Decimal(12, 2)
-  amountArs    Decimal?  @map("amount_ars") @db.Decimal(14, 2)
-  exchangeRate Decimal?  @map("exchange_rate") @db.Decimal(12, 4)
-  date         DateTime  @db.Date
-  notes        String?
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  expense      Expense?
-
-  @@index([personName, month])
-  @@index([month])
-  @@map("salary_withdrawals")
 }
