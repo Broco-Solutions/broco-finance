@@ -24,6 +24,7 @@ function fmt(v: any) { return typeof v === "object" && v != null && "toString" i
 export function IncomeList({ initialIncomes, projects, clients }: { initialIncomes: Income[]; projects: { id: string; name: string; clientId?: string }[]; clients: { id: string; name: string }[] }) {
   const [incomes] = useState<Income[]>(initialIncomes);
   const [filter, setFilter] = useState("all"); const [typeFilter, setTypeFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
   const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState<Income | null>(null);
   const [payTarget, setPayTarget] = useState<Income | null>(null); const [deleteTarget, setDeleteTarget] = useState<Income | null>(null);
   const [delError, setDelError] = useState<string | null>(null);
@@ -35,13 +36,18 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   const didOpen = useRef(false);
   useEffect(() => { if (!didOpen.current && sp.get("new") === "1") { didOpen.current = true; setShowForm(true); router.replace("/incomes"); } }, [sp, router]);
 
-  // Sync filters from query params (from dashboard links)
+  // Sync filters from query params
   const didSync = useRef(false);
   useEffect(() => {
     if (didSync.current) return;
-    const s = sp.get("status"); if (s === "PAID" || s === "PENDING") { setFilter(s); didSync.current = true; return; }
-    if (s === "OVERDUE") { setFilter("OVERDUE"); didSync.current = true; }
+    const s = sp.get("status"); if (s === "PAID" || s === "PENDING") setFilter(s); else if (s === "OVERDUE") setFilter("OVERDUE");
+    const f = sp.get("from"), t = sp.get("to");
+    if (f && t) { setDateFrom(f); setDateTo(t); }
+    didSync.current = true;
   }, [sp]);
+
+  const clearRange = () => { setDateFrom(""); setDateTo(""); router.replace("/incomes"); };
+  const clearFilters = () => { setFilter("all"); setTypeFilter(""); clearRange(); };
 
   const reload = () => { setTimeout(() => window.location.reload(), 500); };
   const mkFd = (data: Record<string, unknown>, id?: string) => {
@@ -60,6 +66,16 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
     if (filter === "PAID" && inc.status !== "PAID") return false;
     if (filter === "OVERDUE") { if (inc.status !== "PENDING") return false; const t = new Date(); const d = inc.dueDate ? new Date(inc.dueDate) : null; return d && d < t; }
     if (typeFilter && inc.type !== typeFilter) return false;
+    // Date range filter
+    if (dateFrom && dateTo) {
+      const from = new Date(dateFrom + "T00:00:00");
+      const to = new Date(dateTo + "T00:00:00");
+      if (isNaN(from.getTime()) || isNaN(to.getTime()) || from > to) return true; // ignore invalid range
+      const targetDate = inc.status === "PAID" ? inc.effectiveDate : inc.dueDate;
+      if (!targetDate) return false;
+      const d = new Date(targetDate);
+      if (d < from || d > to) return false;
+    }
     return true;
   });
 
@@ -90,6 +106,13 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
         <span className="text-gray-500">Total filtrado · <span className="font-medium">{filtered.length} movimientos</span></span>
         <span className="font-bold tabular-nums text-gray-900">{formatUsd(filteredTotal)}</span>
       </div>
+      {(dateFrom || dateTo || filter !== "all" || typeFilter) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {dateFrom && dateTo && <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{dateFrom.split("-").reverse().join("/")} – {dateTo.split("-").reverse().join("/")}</span>}
+          {filter !== "all" && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{filter === "PAID" ? "Cobrados" : filter === "PENDING" ? "Pendientes" : "Vencidos"}</span>}
+          <button onClick={clearFilters} className="text-xs text-gray-400 underline hover:text-gray-600">Limpiar filtros</button>
+        </div>
+      )}
 
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">

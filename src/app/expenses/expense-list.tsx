@@ -27,6 +27,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
   const [expenses] = useState<E[]>(initial);
   const [categories, setCategories] = useState<Cat[]>(cats);
   const [fStatus, setFStatus] = useState("all"); const [fType, setFType] = useState(""); const [fCat, setFCat] = useState(""); const [fProj, setFProj] = useState("");
+  const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
   const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState<E | null>(null);
   const [payTarget, setPayTarget] = useState<E | null>(null);
   const [delTarget, setDelTarget] = useState<E | null>(null); const [delError, setDelError] = useState<string | null>(null);
@@ -41,7 +42,9 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
   useEffect(() => { if (!didOpen.current && sp.get("new") === "1") { didOpen.current = true; setShowForm(true); router.replace("/expenses"); } }, [sp, router]);
   // Sync filters from query params
   const didSync = useRef(false);
-  useEffect(() => { if (didSync.current) return; const s = sp.get("status"); if (s === "PAID" || s === "PENDING") { setFStatus(s); didSync.current = true; return; } if (s === "OVERDUE") { setFStatus("OVERDUE"); didSync.current = true; } }, [sp]);
+  useEffect(() => { if (didSync.current) return; const s = sp.get("status"); if (s === "PAID" || s === "PENDING") setFStatus(s); else if (s === "OVERDUE") setFStatus("OVERDUE"); const f = sp.get("from"), t = sp.get("to"); if (f && t) { setDateFrom(f); setDateTo(t); } didSync.current = true; }, [sp]);
+  const clearRange = () => { setDateFrom(""); setDateTo(""); router.replace("/expenses"); };
+  const clearFilters = () => { setFStatus("all"); setFType(""); setFCat(""); setFProj(""); clearRange(); };
 
   const reload = () => { setTimeout(() => window.location.reload(), 500); };
 
@@ -78,6 +81,14 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
     if (fStatus === "PENDING" && e.status !== "PENDING") return false; if (fStatus === "PAID" && e.status !== "PAID") return false;
     if (fStatus === "OVERDUE") { if (e.status !== "PENDING") return false; const t = new Date(); const d = e.dueDate ? new Date(e.dueDate) : null; return d && d < t; }
     if (fType && e.type !== fType) return false; if (fCat && e.expenseCategoryId !== fCat) return false; if (fProj && e.projectId !== fProj) return false;
+    if (dateFrom && dateTo) {
+      const from = new Date(dateFrom + "T00:00:00"); const to = new Date(dateTo + "T00:00:00");
+      if (isNaN(from.getTime()) || isNaN(to.getTime()) || from > to) return true;
+      const targetDate = e.status === "PAID" ? e.effectiveDate : e.dueDate;
+      if (!targetDate) return false;
+      const d = new Date(targetDate);
+      if (d < from || d > to) return false;
+    }
     return true;
   });
 
@@ -103,6 +114,13 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
         <span className="text-gray-500">Total filtrado · <span className="font-medium">{filtered.length} movimientos</span></span>
         <span className="font-bold tabular-nums text-gray-900">{formatUsd(filteredExpTotal)}</span>
       </div>
+      {(dateFrom || dateTo || fStatus !== "all" || fType || fCat || fProj) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {dateFrom && dateTo && <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{dateFrom.split("-").reverse().join("/")} – {dateTo.split("-").reverse().join("/")}</span>}
+          {fStatus !== "all" && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{fStatus === "PAID" ? "Pagados" : fStatus === "PENDING" ? "Pendientes" : "Vencidos"}</span>}
+          <button onClick={clearFilters} className="text-xs text-gray-400 underline hover:text-gray-600">Limpiar filtros</button>
+        </div>
+      )}
 
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">

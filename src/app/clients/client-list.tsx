@@ -58,23 +58,25 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
     <>
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
-      <DataTable headers={["Nombre", "Contacto", "Email", "Telefono", "Proyectos", "Acciones"]}>
+      <DataTable headers={["Nombre", "Contacto", "Email", "Telefono", "Proyectos", "Acciones"]}
+        colGroup={<colgroup><col style={{width:"20%"}} /><col style={{width:"20%"}} /><col style={{width:"20%"}} /><col style={{width:"16%"}} /><col style={{width:"8%"}} /><col style={{width:"16%"}} /></colgroup>}
+      >
         {clients.map((c) => (
           <tr key={c.id}>
-            <td className="px-4 py-3">
+            <td className="px-4 py-2.5 line-clamp-2 break-words" title={c.name}>
               <Link href={`/clients/${c.id}`} className="text-cobalt underline">
                 {c.name}
               </Link>
             </td>
-            <td className="px-4 py-3">{c.contactName ?? "—"}</td>
-            <td className="px-4 py-3">{c.contactEmail ?? "—"}</td>
-            <td className="px-4 py-3">{c.contactPhone ?? "—"}</td>
-            <td className="px-4 py-3">{c._count.projects}</td>
-            <td className="px-4 py-3 space-x-2">
-              <Button variant="secondary" onClick={() => { setEditing(c); setShowForm(true); }}>
+            <td className="px-4 py-2.5 line-clamp-2 break-words" title={c.contactName ?? ""}>{c.contactName ?? "—"}</td>
+            <td className="px-4 py-2.5 text-sm break-all" title={c.contactEmail ?? ""}>{c.contactEmail ?? "—"}</td>
+            <td className="px-4 py-2.5 whitespace-nowrap text-sm">{c.contactPhone ?? "—"}</td>
+            <td className="px-4 py-2.5 text-center text-sm">{c._count.projects}</td>
+            <td className="px-4 py-2.5 space-x-2 whitespace-nowrap">
+              <Button variant="secondary" className="text-xs" onClick={() => { setEditing(c); setShowForm(true); }}>
                 Editar
               </Button>
-              <Button variant="secondary" className="text-brick" onClick={() => setDeleteTarget(c)}>
+              <Button variant="secondary" className="text-xs text-brick" onClick={() => setDeleteTarget(c)}>
                 Eliminar
               </Button>
             </td>
