@@ -11,6 +11,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "data:extract": "tsx scripts/extract-finance-xlsx.ts",
+    "db:seed:test": "NODE_ENV=test ALLOW_DESTRUCTIVE_TEST_DB=true DATABASE_URL=postgresql://mock:mock@localhost:9999/broco_finance_prod DATABASE_URL_TEST=postgresql://broco_test:broco_test@localhost:5434/broco_finance_test tsx prisma/seed.ts",
     "test": "vitest run",
     "test:unit": "vitest run --dir tests/unit",
     "test:integration": "vitest run --dir tests/integration",
@@ -33,7 +35,6 @@
     "react-dom": "^18.3.1",
     "recharts": "^3.8.0",
     "tailwind-merge": "^3.5.0",
-    "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -47,6 +48,7 @@
     "tailwindcss": "^3.4.19",
     "tsx": "^4.21.0",
     "typescript": "^5",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "xlsx": "^0.18.5"
   }
 }

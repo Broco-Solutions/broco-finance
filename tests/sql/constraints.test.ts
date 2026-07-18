@@ -296,14 +296,14 @@ describe.skipIf(skip)("constraints SQL", () => {
     expect(income.id).toBeDefined();
   });
 
-  it("19. rechaza Income ARS con amountUsd inconsistente (falta 1 en 6to decimal)", async () => {
+  it("19. rechaza Income ARS con amountUsd inconsistente (diferencia > 0.00001)", async () => {
     await expectRejected(
       prisma.income.create({
         data: {
           type: "OTHER",
           concept: "test ars bad",
           status: "PAID",
-          amountUsd: 1.234567,
+          amountUsd: 1.23,  // correcto: ~1.234568, diferencia ~0.004 >> 0.00001
           amountArs: 1000.00,
           exchangeRate: 810.000000,
           effectiveDate: new Date("2026-01-15"),
@@ -354,7 +354,7 @@ describe.skipIf(skip)("constraints SQL", () => {
           type: "FIXED",
           concept: "test exp ars bad",
           status: "PAID",
-          amountUsd: 0.617283,
+          amountUsd: 0.60,  // correcto: ~0.617284, diferencia ~0.017 >> 0.00001
           amountArs: 500.00,
           exchangeRate: 810.000000,
           effectiveDate: new Date("2026-01-15"),
@@ -407,7 +407,7 @@ describe.skipIf(skip)("constraints SQL", () => {
           oneTimeOriginalAmount: 1000000.00,
           oneTimeCurrency: "ARS",
           oneTimeExchangeRate: 810.000000,
-          oneTimeAmountUsd: 1234.567900,
+          oneTimeAmountUsd: 1200.000000,  // correcto: ~1234.567901, diferencia ~34 >> 0.00001
         },
       }),
       "Project one-time ARS inconsistente",
@@ -456,7 +456,7 @@ describe.skipIf(skip)("constraints SQL", () => {
           monthlyRecurringOriginalAmount: 200000.00,
           monthlyRecurringCurrency: "ARS",
           monthlyRecurringExchangeRate: 810.000000,
-          monthlyRecurringAmountUsd: 246.913579,
+          monthlyRecurringAmountUsd: 240.000000,  // correcto: ~246.913580, diferencia ~6.9 >> 0.00001
         },
       }),
       "Project monthly ARS inconsistente",
