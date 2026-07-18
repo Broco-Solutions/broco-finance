@@ -10,7 +10,8 @@ export default async function DashboardPage({ searchParams }: { searchParams?: {
   return (
     <div className="space-y-5">
       <PageHeader eyebrow="Dashboard" title="Dashboard financiero" description="" meta={null} />
-      <DashboardClient data={data} prevData={prevData} periodLabel={p.label} period={searchParams?.period ?? "this-month"} />
+      <DashboardClient data={data} prevData={prevData} periodLabel={p.label} period={searchParams?.period ?? "this-month"}
+        rangeFrom={p.from} rangeTo={p.to} prevFrom={p.prevFrom} prevTo={p.prevTo} />
     </div>
   );
 }

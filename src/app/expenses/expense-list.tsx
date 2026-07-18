@@ -39,6 +39,9 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
 
   const didOpen = useRef(false);
   useEffect(() => { if (!didOpen.current && sp.get("new") === "1") { didOpen.current = true; setShowForm(true); router.replace("/expenses"); } }, [sp, router]);
+  // Sync filters from query params
+  const didSync = useRef(false);
+  useEffect(() => { if (didSync.current) return; const s = sp.get("status"); if (s === "PAID" || s === "PENDING") { setFStatus(s); didSync.current = true; return; } if (s === "OVERDUE") { setFStatus("OVERDUE"); didSync.current = true; } }, [sp]);
 
   const reload = () => { setTimeout(() => window.location.reload(), 500); };
 
@@ -78,6 +81,8 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
     return true;
   });
 
+  const filteredExpTotal = filtered.reduce((s, e) => s + fmt(e.amountUsd), 0);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -91,6 +96,12 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
           <Button variant="secondary" className="text-xs" onClick={() => setShowCatMgmt(true)}>Categorias</Button>
           <Button className="text-xs" onClick={() => openForm()}>Nuevo gasto</Button>
         </div>
+      </div>
+
+      {/* Filtered total */}
+      <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-sm">
+        <span className="text-gray-500">Total filtrado · <span className="font-medium">{filtered.length} movimientos</span></span>
+        <span className="font-bold tabular-nums text-gray-900">{formatUsd(filteredExpTotal)}</span>
       </div>
 
       {/* DESKTOP TABLE */}

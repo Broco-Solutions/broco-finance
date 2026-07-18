@@ -3,64 +3,62 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUpRight, ArrowDownRight, Plus, Minus, AlertTriangle } from "lucide-react";
-import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
+import { ArrowUpRight, ArrowDownRight, PlusCircle, Receipt, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatUsd, formatArs } from "@/lib/money";
+import { formatUsd } from "@/lib/money";
 import { formatDate, formatDateShort } from "@/lib/dates";
-
-const COLORS = ["#3b82f6","#22c55e","#f59e0b","#8b5cf6","#ef4444","#06b6d4","#ec4899","#14b8a6","#f97316","#6366f1"];
 
 type Data = Awaited<ReturnType<typeof import("@/server/services/dashboard").getDashboard>>;
 
 function pctChange(cur: number, prev: number): { text: string; positive: boolean; zero: boolean } | null {
   if (prev === 0 && cur === 0) return { text: "—", positive: true, zero: true };
-  if (prev === 0) return null; // "Sin base comparable"
+  if (prev === 0) return null;
   const v = ((cur - prev) / Math.abs(prev)) * 100;
   if (!Number.isFinite(v)) return null;
   return { text: `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`, positive: v >= 0, zero: false };
 }
 
-function KpiCard({ title, value, prevValue, invertGreen }: { title: string; value: number; prevValue?: number; invertGreen?: boolean }) {
-  const change = prevValue != null ? pctChange(value, prevValue) : null;
-  let trend: "up" | "down" | "neutral" = "neutral";
-  if (change && !change.zero) trend = invertGreen ? (change.positive ? "down" : "up") : (change.positive ? "up" : "down");
-  return (
-    <div className="kpi-card flex flex-col gap-1">
-      <div className="text-xs font-medium text-gray-500">{title}</div>
-      <div className="kpi-value text-xl sm:text-2xl font-bold text-gray-900">{formatUsd(value)}</div>
-      <div className="flex items-center gap-1.5 text-xs">
-        {change === null && prevValue != null && prevValue === 0 && value !== 0 && <span className="text-gray-400">Sin base comparable</span>}
-        {change && !change.zero && (
-          <span className={`inline-flex items-center gap-0.5 font-medium ${trend === "up" ? "text-positive" : "text-negative"}`}>
-            {trend === "up" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-            {change.text}
-          </span>
-        )}
-        {change?.zero && <span className="text-gray-400">{change.text}</span>}
-      </div>
-    </div>
-  );
+function dateRangeLabel(from: Date, to: Date): string {
+  const f = from.toISOString().slice(0, 10);
+  const t = to.toISOString().slice(0, 10);
+  return f === t ? f : `${f} – ${t}`;
 }
 
-export function DashboardClient({ data, prevData, periodLabel, period }: { data: Data; prevData: Data; periodLabel: string; period: string }) {
+export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom, rangeTo, prevFrom, prevTo }: {
+  data: Data; prevData: Data; periodLabel: string; period: string;
+  rangeFrom: Date; rangeTo: Date; prevFrom: Date; prevTo: Date;
+}) {
   const router = useRouter();
   const [preset, setPreset] = useState(period === "custom" ? "custom" : (period || "this-month"));
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const k = data.kpis;
+  const prevLabel = dateRangeLabel(prevFrom, prevTo);
+  const rangeLabel = dateRangeLabel(rangeFrom, rangeTo);
 
-  const applyPreset = (p: string) => {
-    setPreset(p);
-    if (p === "custom") return;
-    router.push(`/?period=${p}`);
-  };
+  const applyPreset = (p: string) => { setPreset(p); if (p === "custom") return; router.push(`/?period=${p}`); };
   const applyCustom = () => { if (from && to) router.push(`/?period=custom&from=${from}&to=${to}`); };
 
-  const chartData = [{ name: "Ingresos", Ingresos: k.paidIncomesUsd, Gastos: k.paidExpensesUsd, Neto: k.netUsd }];
+  // Category chart data
+  const catItems = data.categoryBreakdown.items;
+  const catTop5 = catItems.slice(0, 5);
+  const catOther = catItems.slice(5).reduce((s, c) => s + c.total, 0);
+  const catChart = [...catTop5.map(c => ({ name: c.name, total: c.total })), ...(catOther > 0 ? [{ name: "Otros", total: catOther }] : [])];
+  const catTotal = data.categoryBreakdown.total;
+
+  // Client chart data
+  const cliItems = data.clientBreakdown.items;
+  const cliTop5 = cliItems.slice(0, 5);
+  const cliOther = cliItems.slice(5).reduce((s, c) => s + c.total, 0);
+  const cliChart = [...cliTop5.map(c => ({ name: c.name, total: c.total })), ...(cliOther > 0 ? [{ name: "Otros", total: cliOther }] : [])];
+  const cliTotal = data.clientBreakdown.total;
+
+  const incomeParams = `status=PAID&from=${rangeFrom.toISOString().slice(0,10)}&to=${rangeTo.toISOString().slice(0,10)}`;
+  const expenseParams = `status=PAID&from=${rangeFrom.toISOString().slice(0,10)}&to=${rangeTo.toISOString().slice(0,10)}`;
 
   return (
     <div className="space-y-5">
@@ -76,58 +74,106 @@ export function DashboardClient({ data, prevData, periodLabel, period }: { data:
             <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-36 text-xs h-8" />
             <span className="text-xs text-gray-400">a</span>
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-36 text-xs h-8" />
-            <Button variant="secondary" onClick={applyCustom} className="text-xs">Aplicar</Button>
+            <Button variant="secondary" className="text-xs" onClick={applyCustom}>Aplicar</Button>
           </div>
         )}
         <Badge tone="neutral">{periodLabel}</Badge>
         <div className="flex gap-2 ml-auto">
-          <Link href="/incomes?new=1"><Button variant="secondary" className="text-xs"><Plus className="mr-1 h-3.5 w-3.5" />Nuevo ingreso</Button></Link>
-          <Link href="/expenses?new=1"><Button variant="secondary" className="text-xs"><Minus className="mr-1 h-3.5 w-3.5" />Nuevo gasto</Button></Link>
+          <Link href="/incomes?new=1"><Button className="text-sm"><PlusCircle className="mr-1.5 h-4 w-4" />Nuevo ingreso</Button></Link>
+          <Link href="/expenses?new=1"><Button variant="secondary" className="text-sm"><Receipt className="mr-1.5 h-4 w-4" />Nuevo gasto</Button></Link>
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs row 1 */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-        <KpiCard title="Ingresos" value={k.paidIncomesUsd} prevValue={prevData.kpis.paidIncomesUsd} />
-        <KpiCard title="Gastos" value={k.paidExpensesUsd} prevValue={prevData.kpis.paidExpensesUsd} invertGreen />
-        <KpiCard title="Resultado neto" value={k.netUsd} prevValue={prevData.kpis.netUsd} />
-        <KpiCard title="Pendiente de cobro" value={k.pendingIncomesUsd} prevValue={prevData.kpis.pendingIncomesUsd} />
-        <KpiCard title="Pendiente de pago" value={k.pendingExpensesUsd} prevValue={prevData.kpis.pendingExpensesUsd} />
+        <Link href={`/incomes?${incomeParams}`} className="block">
+          <KpiCard title="Ingresos" value={k.paidIncomesUsd} prevValue={prevData.kpis.paidIncomesUsd} detail={`${k.paidIncomesCount} mov.`} prevLabel={prevLabel} clickable />
+        </Link>
+        <Link href={`/expenses?${expenseParams}`} className="block">
+          <KpiCard title="Gastos" value={k.paidExpensesUsd} prevValue={prevData.kpis.paidExpensesUsd} detail={`${k.paidExpensesCount} mov.`} prevLabel={prevLabel} clickable invertGreen />
+        </Link>
+        <KpiCard title="Resultado neto" value={k.netUsd} prevValue={prevData.kpis.netUsd} prevLabel={prevLabel} />
+        <Link href="/incomes?status=PENDING" className="block">
+          <KpiCard title="Pendiente de cobro" value={k.globalPendingIncomesUsd} detail="Total pendiente actual" global />
+        </Link>
+        <Link href="/expenses?status=PENDING" className="block">
+          <KpiCard title="Pendiente de pago" value={k.globalPendingExpensesUsd} detail="Total pendiente actual" global />
+        </Link>
       </div>
 
       {/* Main chart */}
       <Card className="p-4">
-        <h3 className="section-title mb-3">Ingresos y gastos</h3>
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Ingresos y gastos</h3>
         <div className="h-56 sm:h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+            <BarChart data={[{ name: "", Ingresos: k.paidIncomesUsd, Gastos: k.paidExpensesUsd }]} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `USD ${(v/1000).toFixed(0)}k`} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)} />
               <Tooltip formatter={(v: any) => formatUsd(v)} />
-              <Legend />
               <Bar dataKey="Ingresos" fill="#3b82f6" radius={[4,4,0,0]} />
               <Bar dataKey="Gastos" fill="#ef4444" radius={[4,4,0,0]} />
-              <Line type="monotone" dataKey="Neto" stroke="#22c55e" strokeWidth={2} dot={{ r: 4 }} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </Card>
 
-      {/* Vencimientos */}
+      {/* Category & Client breakdowns */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-4">
-          <h3 className="section-title mb-3">Vencidos</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Gastos por categoria</h3>
+          {catChart.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">Sin gastos en este periodo.</p> : (
+            <div className="space-y-2">
+              {catChart.map((c, i) => (
+                <div key={c.name} className="space-y-0.5">
+                  <div className="flex justify-between text-xs"><span>{c.name}</span><span className="tabular-nums font-medium">{formatUsd(c.total)}</span></div>
+                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-brand" style={{width: `${catTotal > 0 ? (c.total / catTotal) * 100 : 0}%`}} /></div>
+                  <div className="text-right text-[10px] text-gray-400">{catTotal > 0 ? ((c.total / catTotal) * 100).toFixed(1) : "0"}%</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Ingresos por cliente</h3>
+          {cliChart.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">Sin ingresos en este periodo.</p> : (
+            <div className="space-y-2">
+              {cliTop5.map((c) => (
+                <div key={c.id} className="space-y-0.5">
+                  <div className="flex justify-between text-xs"><span>{c.name}</span><span className="tabular-nums font-medium">{formatUsd(c.total)}</span></div>
+                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-green-500" style={{width: `${cliTotal > 0 ? (c.total / cliTotal) * 100 : 0}%`}} /></div>
+                  <div className="space-y-0.5 pl-2">
+                    {c.projects.slice(0, 3).map(p => (
+                      <div key={p.id} className="flex justify-between text-[10px] text-gray-400"><span>{p.name}</span><span className="tabular-nums">{formatUsd(p.total)}</span></div>
+                    ))}
+                    {c.projects.length > 3 && <div className="text-[10px] text-gray-300">+ {c.projects.length - 3} proyectos</div>}
+                  </div>
+                </div>
+              ))}
+              {cliOther > 0 && (
+                <div className="space-y-0.5">
+                  <div className="flex justify-between text-xs"><span>Otros</span><span className="tabular-nums font-medium">{formatUsd(cliOther)}</span></div>
+                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-green-500" style={{width: `${cliTotal > 0 ? (cliOther / cliTotal) * 100 : 0}%`}} /></div>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Vencimientos + próximos */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Vencidos</h3>
           <div className="space-y-1.5 text-sm">
             {k.overdueIncomesCount === 0 && k.overdueExpensesCount === 0 && <p className="text-xs text-gray-400 py-2">Sin vencidos.</p>}
             {k.overdueIncomesCount > 0 && (
-              <Link href="/incomes" className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 p-2.5 text-red-700 hover:bg-red-100">
+              <Link href="/incomes?status=PENDING" className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 p-2.5 text-red-700 hover:bg-red-100">
                 <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" />{k.overdueIncomesCount} ingresos</span>
                 <span className="font-semibold tabular-nums">{formatUsd(k.overdueIncomesUsd)}</span>
               </Link>
             )}
             {k.overdueExpensesCount > 0 && (
-              <Link href="/expenses" className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 p-2.5 text-red-700 hover:bg-red-100">
+              <Link href="/expenses?status=PENDING" className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 p-2.5 text-red-700 hover:bg-red-100">
                 <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" />{k.overdueExpensesCount} gastos</span>
                 <span className="font-semibold tabular-nums">{formatUsd(k.overdueExpensesUsd)}</span>
               </Link>
@@ -135,25 +181,46 @@ export function DashboardClient({ data, prevData, periodLabel, period }: { data:
           </div>
         </Card>
         <Card className="p-4">
-          <h3 className="section-title mb-3">Próximos 30 días</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Próximos 30 días</h3>
           <div className="space-y-1.5 text-sm">
             {data.upcomingIncomes.length === 0 && data.upcomingExpenses.length === 0 && <p className="text-xs text-gray-400 py-2">Sin próximos cobros ni pagos.</p>}
             {data.upcomingIncomes.slice(0,3).map(i => (
               <Link key={i.id} href="/incomes" className="flex items-center justify-between rounded-lg border border-gray-100 p-2 hover:bg-gray-50">
-                <span className="text-gray-700 truncate text-xs">{i.concept}</span>
-                <span className="text-xs text-gray-400 ml-2">{i.dueDate ? formatDateShort(i.dueDate) : "—"}</span>
-                <span className="font-medium tabular-nums ml-2 text-xs">{formatUsd(i.amountUsd)}</span>
+                <span className="text-gray-700 truncate text-xs">{i.concept}</span><span className="text-xs text-gray-400 ml-2">{i.dueDate ? formatDateShort(i.dueDate) : "—"}</span><span className="font-medium tabular-nums ml-2 text-xs">{formatUsd(i.amountUsd)}</span>
               </Link>
             ))}
             {data.upcomingExpenses.slice(0,3).map(e => (
               <Link key={e.id} href="/expenses" className="flex items-center justify-between rounded-lg border border-gray-100 p-2 hover:bg-gray-50">
-                <span className="text-gray-700 truncate text-xs">{e.concept}</span>
-                <span className="text-xs text-gray-400 ml-2">{e.dueDate ? formatDateShort(e.dueDate) : "—"}</span>
-                <span className="font-medium tabular-nums ml-2 text-xs">{formatUsd(e.amountUsd)}</span>
+                <span className="text-gray-700 truncate text-xs">{e.concept}</span><span className="text-xs text-gray-400 ml-2">{e.dueDate ? formatDateShort(e.dueDate) : "—"}</span><span className="font-medium tabular-nums ml-2 text-xs">{formatUsd(e.amountUsd)}</span>
               </Link>
             ))}
           </div>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({ title, value, prevValue, detail, prevLabel, invertGreen, clickable, global: isGlobal }: {
+  title: string; value: number; prevValue?: number; detail?: string; prevLabel?: string; invertGreen?: boolean; clickable?: boolean; global?: boolean;
+}) {
+  const change = prevValue != null && !isGlobal ? pctChange(value, prevValue) : null;
+  let trend: "up" | "down" | "neutral" = "neutral";
+  if (change && !change.zero) trend = invertGreen ? (change.positive ? "down" : "up") : (change.positive ? "up" : "down");
+  return (
+    <div className={`kpi-card flex flex-col gap-1 ${clickable ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}>
+      <div className="text-xs font-medium text-gray-500">{title}</div>
+      <div className="kpi-value text-xl sm:text-2xl font-bold text-gray-900">{formatUsd(value)}</div>
+      <div className="flex flex-col gap-0.5">
+        {detail && <span className="text-[11px] text-gray-400">{detail}</span>}
+        {change && !change.zero && (
+          <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${trend === "up" ? "text-positive" : "text-negative"}`}>
+            {trend === "up" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}{change.text}
+            {prevLabel && <span className="text-gray-400 font-normal ml-1">vs. {prevLabel}</span>}
+          </span>
+        )}
+        {change?.zero && prevLabel && <span className="text-xs text-gray-400">{change.text} · vs. {prevLabel}</span>}
+        {change === null && prevValue != null && prevValue === 0 && value !== 0 && prevLabel && <span className="text-xs text-gray-400">Sin base comparable · vs. {prevLabel}</span>}
       </div>
     </div>
   );
