@@ -34,7 +34,7 @@ function fmtDate(d: string | Date | null) {
 function fmtAmount(currency: string | null, usd: { toString(): string } | string | number | null) {
   if (!currency || usd == null) return "—";
   const n = typeof usd === "object" && "toString" in usd ? Number(usd.toString()) : Number(usd);
-  if (currency === "USD") return `${formatUsd(n)} ${n.toFixed(2)}`;
+  if (currency === "USD") return formatUsd(n);
   return formatUsd(n);
 }
 

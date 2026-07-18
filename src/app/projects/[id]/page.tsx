@@ -3,6 +3,7 @@ import { getProject } from "@/server/services/projects";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { formatUsd, formatArs, formatDate } from "@/lib/utils";
 
 export default async function ProjectDetailPage({
   params,
@@ -23,10 +24,10 @@ export default async function ProjectDetailPage({
   const fmtAmt = (currency: string | null, usd: unknown, orig: unknown, rate: unknown) => {
     if (!currency) return "No configurado";
     const u = Number(usd ?? 0);
-    if (currency === "USD") return `USD ${u.toFixed(2)}`;
+    if (currency === "USD") return formatUsd(u);
     const a = Number(orig ?? 0);
     const r = Number(rate ?? 0);
-    return `ARS ${a.toFixed(2)} → USD ${u.toFixed(2)} (TC ${r.toFixed(2)})`;
+    return `${formatArs(a)} → ${formatUsd(u)} (TC ${r.toFixed(2)})`;
   };
 
   return (
