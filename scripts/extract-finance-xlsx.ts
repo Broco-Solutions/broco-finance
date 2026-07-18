@@ -111,8 +111,8 @@ function usdOnlyStr(usdStr: string): string {
   return dec(usdStr).toFixed(6);
 }
 
-function normName(s: string): string { return s.replace(/\s+/g," ").trim().replace(/Automatizacion\b/i,"Automatización").replace(/Lista de difusión/i,"Listas de difusión").replace(/eCommerce/i,"Implementación Tiendanube").replace(/Gestion\b/i,"Gestión").replace(/Modulo\b/i,"Módulo").replace(/Difusion\b/i,"Difusión"); }
-function mapProjName(raw: string): string { const n = normName(raw); if (/^(Automatizacion|Automatización|Bot wsp)/i.test(n)) return "Automatización WhatsApp"; if (/^(Estampilla|Digitalización|Estampilla \+)/i.test(n)) return "Certificados Digitales"; if (/^eCommerce$/i.test(n)) return "Implementación Tiendanube"; return n; }
+function normName(s: string): string { return s.replace(/\s+/g," ").trim().replace(/Automatizacion\b/i,"Automatización").replace(/Lista de difusión/i,"Listas de difusión").replace(/eCommerce/i,"Implementación Tiendanube").replace(/Gestion\b/i,"Gestión").replace(/Modulo\b/i,"Módulo").replace(/Difusion\b/i,"Difusión").replace(/Sistema caja/i,"Sistema de Caja"); }
+function mapProjName(raw: string): string { const n = normName(raw); if (/^(Automatizacion|Automatización|Bot wsp)/i.test(n)) return "Automatización WhatsApp"; if (/^(Estampilla|Digitalización|Estampilla \+)/i.test(n)) return "Certificados Digitales"; if (/^eCommerce$/i.test(n)) return "Implementación Tiendanube"; if (/^Gestion$/i.test(n)) return n; return n; }
 
 const CAT_MAP: Record<string,string> = { "Infra/Cloud":"Infraestructura y Hosting","Hosting/Dominios":"Dominios","Herramientas/Software":"Herramientas","Publicidad (ads)":"Publicidad","Publicidad (Ads)":"Publicidad","Contabilidad/Legal":"Contabilidad y Legal","Prospección/Demos":"Prospección y Demos","Email/Zoho":"Email","Sueldos/Honorarios":"Sueldos y Honorarios","Viajes/Viáticos":"Viajes y Viáticos","Marketing":"Marketing","Hardware":"Hardware","Otros":"Otros" };
 function mapCat(r: string): string { return CAT_MAP[r] ?? r; }
@@ -131,6 +131,7 @@ function clientId(raw: string): string | null {
   if (/^DISTRICE$/i.test(n)) return id("client_districe");
   if (/^NIHAO$/i.test(n)) return id("client_nihao");
   if (/^ATHLETA$/i.test(n)) return id("client_athleta");
+  if (/^RFN$/i.test(n)) return id("client_lorenzo");
   return null;
 }
 
@@ -165,10 +166,11 @@ function main() {
       console.log("  [INGRESO] OTHER Ajuste por intereses USD=", usd);
       continue;
     }
-    if (!rc || !rp || !rt) { console.log("  [skip] Ingreso incompleto:", fecha); continue; }
+    // Allow null tipo — will be treated as DEVELOPMENT for known clients
+    if (!rc || !rp) { console.log("  [skip] Ingreso sin cliente/proyecto:", fecha); continue; }
 
     let type: string, concept: string;
-    const tl = rt.toLowerCase();
+    const tl = (rt || "").toLowerCase();
     if (tl.includes("adelanto")) { type = "DEVELOPMENT"; concept = "Adelanto"; }
     else if (tl.includes("pago final")) { type = "DEVELOPMENT"; concept = "Pago final"; }
     else if (tl.includes("recurrente")) { type = "MAINTENANCE"; concept = "Recurrente"; }
@@ -177,6 +179,8 @@ function main() {
 
     let cid: string | null, pname: string;
     if (/Nico|Oliveto/i.test(rc)) { cid = id("client_zaphi"); pname = "Implementación Odoo"; concept = "Soporte"; }
+    else if (/^RFN$/i.test(rc)) { cid = id("client_lorenzo"); pname = "RFN Argentina - Sistema de Gestión"; }
+    else if (/^ATHLETA$/i.test(rc)) { cid = id("client_athleta"); pname = "Sistema de Gestión"; }
     else { cid = clientId(rc); pname = mapProjName(rp); }
     const pid = projId(cid, pname);
 

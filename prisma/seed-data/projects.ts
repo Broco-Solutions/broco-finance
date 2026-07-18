@@ -1,4 +1,4 @@
-// Generado: 2026-07-18T04:04:09.583Z
+// Generado: 2026-07-18T12:26:44.777Z
 export const seedProjects = [
   {
     "id": "086fcc9f-33c7-560b-8940-98c1f4599498",

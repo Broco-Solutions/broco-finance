@@ -1,4 +1,4 @@
-// Generado: 2026-07-18T04:04:09.583Z
+// Generado: 2026-07-18T12:26:44.777Z
 export const seedCategories = [
   {
     "id": "c2f4ae9b-6273-5927-a9c7-a1fdca87469a",
