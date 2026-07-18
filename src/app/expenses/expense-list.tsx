@@ -81,13 +81,15 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
     if (fStatus === "PENDING" && e.status !== "PENDING") return false; if (fStatus === "PAID" && e.status !== "PAID") return false;
     if (fStatus === "OVERDUE") { if (e.status !== "PENDING") return false; const t = new Date(); const d = e.dueDate ? new Date(e.dueDate) : null; return d && d < t; }
     if (fType && e.type !== fType) return false; if (fCat && e.expenseCategoryId !== fCat) return false; if (fProj && e.projectId !== fProj) return false;
-    if (dateFrom && dateTo) {
-      const from = new Date(dateFrom + "T00:00:00"); const to = new Date(dateTo + "T00:00:00");
-      if (isNaN(from.getTime()) || isNaN(to.getTime()) || from > to) return true;
+    if (dateFrom || dateTo) {
+      const from = dateFrom ? new Date(dateFrom + "T00:00:00") : null;
+      const to = dateTo ? new Date(dateTo + "T00:00:00") : null;
+      if (from && to && from > to) return true;
       const targetDate = e.status === "PAID" ? e.effectiveDate : e.dueDate;
       if (!targetDate) return false;
       const d = new Date(targetDate);
-      if (d < from || d > to) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
     }
     return true;
   });
@@ -102,6 +104,11 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
           <Select value={fType} onChange={(e) => setFType(e.target.value)} className="w-24 text-xs"><option value="">Tipos</option><option value="FIXED">Fijos</option><option value="VARIABLE">Variables</option></Select>
           <Select value={fCat} onChange={(e) => setFCat(e.target.value)} className="w-36 text-xs"><option value="">Cats</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
           <Select value={fProj} onChange={(e) => setFProj(e.target.value)} className="w-36 text-xs"><option value="">Proys</option>{projs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
+          <div className="flex items-center gap-1">
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-32 text-xs h-8" placeholder="Desde" />
+            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-32 text-xs h-8" placeholder="Hasta" />
+            {(dateFrom || dateTo) && <Button variant="ghost" className="text-xs" onClick={clearRange}>Limpiar fechas</Button>}
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" className="text-xs" onClick={() => setShowCatMgmt(true)}>Categorias</Button>
@@ -124,16 +131,16 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
 
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
-        <DataTable
+        <DataTable tableClassName="table-fixed"
           headers={["Concepto","Categoria","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
           colGroup={<colgroup><col style={{width:"16%"}} /><col style={{width:"14%"}} /><col style={{width:"14%"}} /><col style={{width:"7%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"10%"}} /><col style={{width:"12%"}} /></colgroup>}
           footer={<tr className="bg-gray-50 font-semibold"><td className="px-4 py-2.5 text-xs text-gray-500">Total filtrado · {filtered.length} mov.</td><td /><td /><td /><td /><td /><td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(filteredExpTotal)}</td><td /><td /></tr>}
         >
           {filtered.map(e => (
             <tr key={e.id}>
-              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={e.concept}>{e.concept}</td>
-              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={e.category.name}>{e.category.name}</td>
-              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={e.project?.name ?? ""}>{e.project?.name ?? "—"}</td>
+              <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={e.concept}>{e.concept}</div></td>
+              <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={e.category.name}>{e.category.name}</div></td>
+              <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={e.project?.name ?? ""}>{e.project?.name ?? "—"}</div></td>
               <td className="px-4 py-2.5 text-sm whitespace-nowrap">{e.type === "FIXED" ? "Fijo" : "Variable"}</td>
               <td className="px-4 py-2.5"><Badge tone={formatExpenseStatus(e.status, e.dueDate) === "Pagado" ? "success" : formatExpenseStatus(e.status, e.dueDate) === "Vencido" ? "danger" : "warning"}>{formatExpenseStatus(e.status, e.dueDate)}</Badge></td>
               <td className="px-4 py-2.5 text-sm tabular-nums whitespace-nowrap">{e.status === "PAID" ? formatDate(e.effectiveDate) : formatDate(e.dueDate)}</td>

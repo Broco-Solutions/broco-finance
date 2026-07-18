@@ -58,17 +58,19 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
     <>
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
-      <DataTable headers={["Nombre", "Contacto", "Email", "Telefono", "Proyectos", "Acciones"]}
+      <DataTable tableClassName="table-fixed" headers={["Nombre", "Contacto", "Email", "Telefono", "Proyectos", "Acciones"]}
         colGroup={<colgroup><col style={{width:"20%"}} /><col style={{width:"20%"}} /><col style={{width:"20%"}} /><col style={{width:"16%"}} /><col style={{width:"8%"}} /><col style={{width:"16%"}} /></colgroup>}
       >
         {clients.map((c) => (
           <tr key={c.id}>
-            <td className="px-4 py-2.5 line-clamp-2 break-words" title={c.name}>
+            <td className="px-4 py-2.5 align-middle">
+              <div className="line-clamp-2 break-words" title={c.name}>
               <Link href={`/clients/${c.id}`} className="text-cobalt underline">
                 {c.name}
               </Link>
+              </div>
             </td>
-            <td className="px-4 py-2.5 line-clamp-2 break-words" title={c.contactName ?? ""}>{c.contactName ?? "—"}</td>
+            <td className="px-4 py-2.5 align-middle"><div className="line-clamp-2 break-words" title={c.contactName ?? ""}>{c.contactName ?? "—"}</div></td>
             <td className="px-4 py-2.5 text-sm break-all" title={c.contactEmail ?? ""}>{c.contactEmail ?? "—"}</td>
             <td className="px-4 py-2.5 whitespace-nowrap text-sm">{c.contactPhone ?? "—"}</td>
             <td className="px-4 py-2.5 text-center text-sm">{c._count.projects}</td>

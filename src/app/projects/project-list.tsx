@@ -120,13 +120,13 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
 
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
-      <DataTable headers={["Proyecto", "Cliente", "Estado", "Inicio", "Fin", "Importe acordado", "Importe mensual", "Acciones"]}
+      <DataTable tableClassName="table-fixed" headers={["Proyecto", "Cliente", "Estado", "Inicio", "Fin", "Importe acordado", "Importe mensual", "Acciones"]}
         colGroup={<colgroup><col style={{width:"16%"}} /><col style={{width:"14%"}} /><col style={{width:"7%"}} /><col style={{width:"8%"}} /><col style={{width:"8%"}} /><col style={{width:"12%"}} /><col style={{width:"12%"}} /><col style={{width:"23%"}} /></colgroup>}
       >
         {filtered.map((p) => (
           <tr key={p.id}>
-            <td className="px-4 py-2.5 line-clamp-2 break-words" title={p.name}><Link href={`/projects/${p.id}`} className="text-cobalt underline">{p.name}</Link></td>
-            <td className="px-4 py-2.5 line-clamp-2 break-words" title={p.client.name}>{p.client.name}</td>
+            <td className="px-4 py-2.5 align-middle"><div className="line-clamp-2 break-words" title={p.name}><Link href={`/projects/${p.id}`} className="text-cobalt underline">{p.name}</Link></div></td>
+            <td className="px-4 py-2.5 align-middle"><div className="line-clamp-2 break-words" title={p.client.name}>{p.client.name}</div></td>
             <td className="px-4 py-2.5"><Badge tone={p.isActive ? "success" : "neutral"}>{p.isActive ? "Activo" : "Inactivo"}</Badge></td>
             <td className="px-4 py-2.5 whitespace-nowrap text-sm">{fmtDate(p.startDate)}</td>
             <td className="px-4 py-2.5 whitespace-nowrap text-sm">{fmtDate(p.endDate)}</td>

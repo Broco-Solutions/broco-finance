@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { IncomeFormModal } from "./income-form-modal";
 import { PayIncomeModal } from "./pay-income-modal";
@@ -67,14 +68,16 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
     if (filter === "OVERDUE") { if (inc.status !== "PENDING") return false; const t = new Date(); const d = inc.dueDate ? new Date(inc.dueDate) : null; return d && d < t; }
     if (typeFilter && inc.type !== typeFilter) return false;
     // Date range filter
-    if (dateFrom && dateTo) {
-      const from = new Date(dateFrom + "T00:00:00");
-      const to = new Date(dateTo + "T00:00:00");
-      if (isNaN(from.getTime()) || isNaN(to.getTime()) || from > to) return true; // ignore invalid range
+    if (dateFrom || dateTo) {
+      const from = dateFrom ? new Date(dateFrom + "T00:00:00") : null;
+      const to = dateTo ? new Date(dateTo + "T00:00:00") : null;
+      if (from && to && isNaN(from.getTime()) || isNaN(to ? to.getTime() : 0)) return true;
+      if (from && to && from > to) return true; // invalid range, show everything
       const targetDate = inc.status === "PAID" ? inc.effectiveDate : inc.dueDate;
       if (!targetDate) return false;
       const d = new Date(targetDate);
-      if (d < from || d > to) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
     }
     return true;
   });
@@ -94,6 +97,11 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
           <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-36 text-xs">
             <option value="">Todos los tipos</option><option value="DEVELOPMENT">Desarrollo</option><option value="MAINTENANCE">Mantenimiento</option><option value="OTHER">Otro</option>
           </Select>
+          <div className="flex items-center gap-1">
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-32 text-xs h-8" placeholder="Desde" />
+            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-32 text-xs h-8" placeholder="Hasta" />
+            {(dateFrom || dateTo) && <Button variant="ghost" className="text-xs" onClick={clearRange}>Limpiar fechas</Button>}
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="secondary" className="text-xs" onClick={() => setShowInst(true)}>Cuotas</Button>
@@ -116,16 +124,16 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
 
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
-        <DataTable
+        <DataTable tableClassName="table-fixed"
           headers={["Concepto","Cliente","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
           colGroup={<colgroup><col style={{width:"16%"}} /><col style={{width:"14%"}} /><col style={{width:"14%"}} /><col style={{width:"8%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"10%"}} /><col style={{width:"11%"}} /></colgroup>}
           footer={<tr className="bg-gray-50 font-semibold"><td className="px-4 py-2.5 text-xs text-gray-500">Total filtrado · {filtered.length} mov.</td><td /><td /><td /><td /><td /><td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(filteredTotal)}</td><td /><td /></tr>}
         >
           {filtered.map(inc => (
             <tr key={inc.id}>
-              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={inc.concept}>{inc.concept}</td>
-              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={inc.client?.name ?? ""}>{inc.client?.name ?? "—"}</td>
-              <td className="px-4 py-2.5 text-sm line-clamp-2 break-words" title={inc.project?.name ?? ""}>{inc.project?.name ?? "—"}</td>
+              <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={inc.concept}>{inc.concept}</div></td>
+              <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={inc.client?.name ?? ""}>{inc.client?.name ?? "—"}</div></td>
+              <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={inc.project?.name ?? ""}>{inc.project?.name ?? "—"}</div></td>
               <td className="px-4 py-2.5 text-sm whitespace-nowrap">{formatIncomeType(inc.type)}</td>
               <td className="px-4 py-2.5"><Badge tone={statusTone(inc.status, inc.dueDate)}>{statusLabel(inc.status, inc.dueDate)}</Badge></td>
               <td className="px-4 py-2.5 text-sm tabular-nums whitespace-nowrap">{inc.status === "PAID" ? formatDate(inc.effectiveDate) : formatDate(inc.dueDate)}</td>
