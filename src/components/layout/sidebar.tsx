@@ -11,7 +11,9 @@ export function Sidebar() {
   return (
     <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col bg-gray-900 text-gray-300 lg:flex">
       <div className="px-4 py-4">
-        <BrandLogo className="max-w-[160px] rounded-lg" priority />
+        <Link href="/" className="block cursor-pointer hover:opacity-80 transition-opacity">
+          <BrandLogo className="max-w-[160px] rounded-lg" priority />
+        </Link>
       </div>
       <nav className="flex-1 space-y-0.5 px-2">
         {navigationItems.map((item) => {

@@ -64,7 +64,9 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
       fd.set("type", form.type); fd.set("concept", form.concept); if (form.notes) fd.set("notes", form.notes);
       fd.set("status", form.status); if (form.status === "PENDING") fd.set("dueDate", form.dueDate); if (form.status === "PAID") fd.set("effectiveDate", form.effectiveDate);
       if (form.useArs) { fd.set("amountArs", form.amountArs); fd.set("exchangeRate", form.exchangeRate); } else fd.set("amountUsd", form.amountUsd);
-      stt(() => { saveExpense(null, fd); }); setShowForm(false); reload();
+      const result = await saveExpense(null, fd);
+      if (!result.success) { setFormErr(result.message); return; }
+      setShowForm(false); reload();
     } catch (err) { setFormErr(err instanceof Error ? err.message : "Error."); } finally { setFormSaving(false); }
   };
 
@@ -72,7 +74,8 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
   const openPay = (e: E) => { setPayTarget(e); setPayForm({ effectiveDate: new Date().toISOString().slice(0,10), useArs: e.amountArs != null, amountUsd: e.amountUsd ? String(e.amountUsd) : "", amountArs: e.amountArs ? String(e.amountArs) : "", exchangeRate: e.exchangeRate ? String(e.exchangeRate) : "" }); };
   const handlePay = async (ev: React.FormEvent) => { ev.preventDefault(); const fd = new FormData(); fd.set("id", payTarget!.id); fd.set("effectiveDate", payForm.effectiveDate);
     if (payForm.useArs) { fd.set("amountArs", payForm.amountArs); fd.set("exchangeRate", payForm.exchangeRate); } else fd.set("amountUsd", payForm.amountUsd);
-    stt(() => { payExpense(null, fd); }); setPayTarget(null); reload(); };
+    const result = await payExpense(null, fd);
+    if (result.success) { setPayTarget(null); reload(); } else { setFormErr(result.message); } };
   const handleDelete = () => { if (!delTarget) return; const fd = new FormData(); fd.set("id", delTarget.id); stt(() => { removeExpense(null, fd); }); setDelTarget(null); reload(); };
   const handleCatSave = async (ev: React.FormEvent) => { ev.preventDefault(); setCatError(null); const fd = new FormData(); if (catForm.id) fd.set("id", catForm.id); fd.set("name", catForm.name); stt(() => { saveCategory(null, fd); }); setCatForm({ id: "", name: "" }); reload(); };
   const handleCatDel = () => { if (!catDelTarget) return; const fd = new FormData(); fd.set("id", catDelTarget.id); stt(() => { removeCategory(null, fd); }); setCatDelTarget(null); reload(); };
