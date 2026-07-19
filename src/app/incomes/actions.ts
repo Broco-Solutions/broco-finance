@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isAuthenticated } from "@/lib/auth";
-import { createIncome, updateIncome, deleteIncome, incomeSchema } from "@/server/services/incomes";
+import { createIncome, updateIncome, deleteIncome, incomeSchema, createIncomeBatch as batchCreate } from "@/server/services/incomes";
 
 type ActionResult = { success: true } | { success: false; message: string };
 
@@ -79,10 +79,7 @@ export async function createIncomeBatch(entries: Array<{
 }>) {
   try {
     requireAuth();
-    for (const entry of entries) {
-      const data = incomeSchema.parse(entry);
-      await createIncome(data);
-    }
+    await batchCreate(entries);
     revalidatePath("/incomes");
     return { success: true };
   } catch (e) {

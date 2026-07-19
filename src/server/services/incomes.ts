@@ -203,3 +203,35 @@ export async function deleteIncome(id: string) {
   revalidatePath("/incomes");
 }
 
+export type BatchEntry = {
+  type: string; projectId?: string | null; clientId?: string | null;
+  concept: string; notes?: string | null; status: string;
+  amountUsd?: number | null; amountArs?: number | null; exchangeRate?: number | null;
+  dueDate?: string | null; effectiveDate?: string | null;
+};
+
+export async function createIncomeBatch(entries: BatchEntry[]) {
+  await prisma.$transaction(async (tx) => {
+    for (const entry of entries) {
+      const data = incomeSchema.parse(entry);
+      if (data.status === "PENDING" && !data.dueDate) throw new Error("La fecha de vencimiento es obligatoria.");
+      if (data.status === "PAID" && !data.effectiveDate) throw new Error("La fecha de cobro es obligatoria.");
+      const money = computeMoney(data);
+      await tx.income.create({
+        data: {
+          clientId: data.projectId ? (await tx.project.findUnique({ where: { id: data.projectId }, select: { clientId: true } }))?.clientId ?? data.clientId ?? null : data.clientId ?? null,
+          projectId: data.projectId ?? null,
+          type: data.type as "DEVELOPMENT" | "MAINTENANCE" | "OTHER",
+          concept: data.concept,
+          notes: data.notes?.trim() || null,
+          status: data.status as "PAID" | "PENDING",
+          ...money,
+          dueDate: data.dueDate ? new Date(data.dueDate) : null,
+          effectiveDate: data.status === "PAID" ? new Date(data.effectiveDate!) : null,
+        },
+      });
+    }
+  });
+  revalidatePath("/incomes");
+}
+
