@@ -56,6 +56,11 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
 
   return (
     <>
+      {/* Totalizador */}
+      <div className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 flex items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-wider text-gray-500">Total de clientes</span>
+        <span className="text-lg font-bold tabular-nums text-gray-900">{clients.length}</span>
+      </div>
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
       <DataTable tableClassName="table-fixed" headers={["Nombre", "Contacto", "Email", "Telefono", "Proyectos", "Acciones"]}

@@ -118,6 +118,14 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
         <Button onClick={() => { setEditProject(null); setShowForm(true); }}>Nuevo proyecto</Button>
       </div>
 
+      {/* Totalizador */}
+      <div className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 flex items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
+          {filter === "active" ? "Proyectos activos" : filter === "inactive" ? "Proyectos inactivos" : "Total de proyectos"}
+        </span>
+        <span className="text-lg font-bold tabular-nums text-gray-900">{filtered.length}</span>
+      </div>
+
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
       <DataTable tableClassName="table-fixed" headers={["Proyecto", "Cliente", "Estado", "Inicio", "Fin", "Importe acordado", "Importe mensual", "Acciones"]}
