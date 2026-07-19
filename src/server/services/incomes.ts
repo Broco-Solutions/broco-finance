@@ -26,17 +26,6 @@ export const incomeSchema = z.object({
 
 export type IncomeInput = z.infer<typeof incomeSchema>;
 
-export const installmentSchema = z.object({
-  projectId: z.string().min(1, "Proyecto requerido."),
-  type: z.enum(["DEVELOPMENT", "MAINTENANCE"]),
-  concept: z.string().trim().min(1, "Concepto requerido."),
-  count: z.number().int().min(1).max(60),
-  firstDueDate: z.string().min(1, "Primer vencimiento requerido."),
-  amountUsd: z.number().nullable().optional(),
-  amountArs: z.number().nullable().optional(),
-  exchangeRate: z.number().nullable().optional(),
-  notes: z.string().trim().nullable().optional(),
-});
 
 // ---------------------------------------------------------------------------
 // Decimal helpers
@@ -69,16 +58,6 @@ function computeMoney(input: {
   throw new Error("Ingresa monto USD, o ARS + tipo de cambio.");
 }
 
-function addMonthsPreserveDay(date: Date, months: number): Date {
-  const d = new Date(date);
-  const targetMonth = d.getMonth() + months;
-  d.setMonth(targetMonth);
-  // If the day overflowed (e.g. Jan 31 → Mar 3), roll back to last day of target month
-  if (d.getMonth() !== (targetMonth % 12 + 12) % 12) {
-    d.setDate(0);
-  }
-  return d;
-}
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -224,48 +203,3 @@ export async function deleteIncome(id: string) {
   revalidatePath("/incomes");
 }
 
-export async function generateInstallments(input: z.infer<typeof installmentSchema>) {
-  const data = installmentSchema.parse(input);
-
-  const project = await prisma.project.findUnique({
-    where: { id: data.projectId },
-    select: { id: true, clientId: true },
-  });
-  if (!project) throw new Error("Proyecto no encontrado.");
-
-  const money = computeMoney({
-    amountUsd: data.amountUsd,
-    amountArs: data.amountArs,
-    exchangeRate: data.exchangeRate,
-  });
-
-  const firstDate = new Date(data.firstDueDate);
-  const installments = [];
-
-  for (let i = 0; i < data.count; i++) {
-    const dueDate = addMonthsPreserveDay(firstDate, i);
-    installments.push({
-      clientId: project.clientId,
-      projectId: data.projectId,
-      type: data.type,
-      concept: `${data.concept} — Cuota ${i + 1}/${data.count}`,
-      notes: data.notes?.trim() || null,
-      status: "PENDING" as const,
-      amountUsd: money.amountUsd,
-      amountArs: money.amountArs,
-      exchangeRate: money.exchangeRate,
-      dueDate,
-      effectiveDate: null,
-    });
-  }
-
-  // Transactional: all or nothing
-  await prisma.$transaction(
-    installments.map((inst) =>
-      prisma.income.create({ data: inst }),
-    ),
-  );
-
-  revalidatePath("/incomes");
-  return { count: installments.length };
-}

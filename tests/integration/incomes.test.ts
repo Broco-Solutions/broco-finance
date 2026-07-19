@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { createIncome, updateIncome, deleteIncome, getIncome, generateInstallments } from "@/server/services/incomes";
+import { createIncome, updateIncome, deleteIncome, getIncome } from "@/server/services/incomes";
+import { createIncomeBatch } from "@/app/incomes/actions";
 import { createClient } from "@/server/services/clients";
 import { createProject } from "@/server/services/projects";
 
@@ -153,15 +154,14 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
     await expect(getIncome(inc.id)).rejects.toThrow("no encontrado");
   });
 
-  it("12. genera cuotas", async () => {
-    const result = await generateInstallments({
-      projectId, type: "DEVELOPMENT", concept: "Cuota", count: 3,
-      firstDueDate: "2026-01-31", amountUsd: 100,
-    });
-    expect(result.count).toBe(3);
-    const incomes = await prisma.income.findMany({
-      where: { concept: { startsWith: "Cuota" } },
-    });
+  it("12. crea lote de ingresos via batch", async () => {
+    const result = await createIncomeBatch([
+      { type: "DEVELOPMENT", projectId, concept: "Lote", status: "PENDING", amountUsd: 100, dueDate: "2026-02-01" },
+      { type: "DEVELOPMENT", projectId, concept: "Lote", status: "PENDING", amountUsd: 100, dueDate: "2026-03-01" },
+      { type: "DEVELOPMENT", projectId, concept: "Lote", status: "PENDING", amountUsd: 100, dueDate: "2026-04-01" },
+    ]);
+    expect(result.success).toBe(true);
+    const incomes = await prisma.income.findMany({ where: { concept: "Lote" } });
     expect(incomes.length).toBe(3);
     incomes.forEach((i) => { track(i.id); expect(i.status).toBe("PENDING"); });
   });
@@ -206,31 +206,23 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
     expect(updated.clientId).toBeNull();
   });
 
-  it("17. rollback total si una cuota falla", async () => {
-    await expect(
-      generateInstallments({ projectId: "00000000-0000-0000-0000-000000000000", type: "DEVELOPMENT", concept: "Bad", count: 5, firstDueDate: "2026-01-01", amountUsd: 100 }),
-    ).rejects.toThrow();
-    const incomes = await prisma.income.findMany({ where: { concept: { startsWith: "Bad" } } });
-    expect(incomes.length).toBe(0);
+  it("17. batch con proyecto invalido falla parcialmente", async () => {
+    const result = await createIncomeBatch([
+      { type: "DEVELOPMENT", projectId: "00000000-0000-0000-0000-000000000000", concept: "Bad", status: "PAID", amountUsd: 100, effectiveDate: "2026-01-01" },
+    ]);
+    expect(result.success).toBe(false);
   });
 
-  it("18. fechas mensuales: 31 enero en año bisiesto y no bisiesto", async () => {
-    // Non-leap: 2027-01-31 → 2027-02-28
-    const r1 = await generateInstallments({ projectId, type: "DEVELOPMENT", concept: `DateNonLeap-${Date.now()}`, count: 2, firstDueDate: "2027-01-31", amountUsd: 10 });
-    expect(r1.count).toBe(2);
-    const incs1 = await prisma.income.findMany({ where: { concept: { startsWith: "DateNonLeap-" } }, orderBy: { dueDate: "asc" } });
-    expect(incs1.length).toBe(2);
-    testIds.push(...incs1.map(i => i.id));
-    expect(incs1[0].dueDate?.toISOString().slice(0, 10)).toBe("2027-01-31");
-    expect(incs1[1].dueDate?.toISOString().slice(0, 10)).toBe("2027-02-28");
-
-    // Leap: 2028-01-31 → 2028-02-29
-    const r2 = await generateInstallments({ projectId, type: "DEVELOPMENT", concept: `DateLeap-${Date.now()}`, count: 2, firstDueDate: "2028-01-31", amountUsd: 10 });
-    expect(r2.count).toBe(2);
-    const incs2 = await prisma.income.findMany({ where: { concept: { startsWith: "DateLeap-" } }, orderBy: { dueDate: "asc" } });
-    expect(incs2.length).toBe(2);
-    testIds.push(...incs2.map(i => i.id));
-    expect(incs2[0].dueDate?.toISOString().slice(0, 10)).toBe("2028-01-31");
-    expect(incs2[1].dueDate?.toISOString().slice(0, 10)).toBe("2028-02-29");
+  it("18. batch con fechas en intervalos de 30 dias", async () => {
+    const name = `Interval-${Date.now()}`;
+    const result = await createIncomeBatch([
+      { type: "OTHER", concept: name, status: "PENDING", amountUsd: 10, dueDate: "2027-01-31" },
+      { type: "OTHER", concept: name, status: "PENDING", amountUsd: 10, dueDate: "2027-03-02" },
+    ]);
+    expect(result.success).toBe(true);
+    const incs = await prisma.income.findMany({ where: { concept: name }, orderBy: { dueDate: "asc" } });
+    expect(incs.length).toBe(2);
+    incs.forEach(i => track(i.id));
+    expect(incs[0].dueDate?.toISOString().slice(0,10)).toBe("2027-01-31");
   });
 });

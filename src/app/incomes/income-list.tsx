@@ -11,8 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { IncomeFormModal } from "./income-form-modal";
 import { PayIncomeModal } from "./pay-income-modal";
-import { InstallmentModal } from "./installment-modal";
-import { saveIncome, removeIncome, payIncome, createInstallments } from "./actions";
+import { saveIncome, removeIncome, payIncome, createIncomeBatch } from "./actions";
 import { formatUsd, formatArs, formatDate, formatDateShort, formatIncomeStatus, formatIncomeType } from "@/lib/utils";
 
 type Income = { id: string; type: string; concept: string; notes: string | null; status: string;
@@ -29,7 +28,6 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState<Income | null>(null);
   const [payTarget, setPayTarget] = useState<Income | null>(null); const [deleteTarget, setDeleteTarget] = useState<Income | null>(null);
   const [delError, setDelError] = useState<string | null>(null);
-  const [showInst, setShowInst] = useState(false);
   const [_, startTransition] = useTransition();
   const router = useRouter();
   const sp = useSearchParams();
@@ -57,10 +55,27 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
     return fd;
   };
 
-  const handleSave = async (data: Record<string, unknown>) => { startTransition(() => { saveIncome(null, mkFd(data, editing?.id)); }); setShowForm(false); setEditing(null); reload(); };
+  const handleSave = async (data: Record<string, unknown>) => {
+    const batch = data.batch as Array<Record<string, unknown>> | undefined;
+    if (batch) {
+      const entries = batch.map(r => ({
+        type: data.type as string, projectId: (data.projectId as string) || null, clientId: (data.clientId as string) || null,
+        concept: data.concept as string, notes: (data.notes as string) || null, status: r.status as string,
+        amountUsd: (r.amountUsd as string) ? Number(r.amountUsd) : undefined,
+        amountArs: (r.amountArs as string) ? Number(r.amountArs) : undefined,
+        exchangeRate: (r.exchangeRate as string) ? Number(r.exchangeRate) : undefined,
+        dueDate: r.status === "PENDING" ? (r.date as string) : null,
+        effectiveDate: r.status === "PAID" ? (r.date as string) : null,
+      }));
+      const result = await createIncomeBatch(entries);
+      if (!result.success) throw new Error(result.message);
+      setShowForm(false); setEditing(null); reload();
+    } else {
+      startTransition(() => { saveIncome(null, mkFd(data, editing?.id)); }); setShowForm(false); setEditing(null); reload();
+    }
+  };
   const handlePay = async (data: Record<string, unknown>) => { if (!payTarget) return; const fd = mkFd({ effectiveDate: data.effectiveDate, amountUsd: data.amountUsd, amountArs: data.amountArs, exchangeRate: data.exchangeRate }, payTarget.id); startTransition(() => { payIncome(null, fd); }); setPayTarget(null); reload(); };
   const handleDelete = () => { if (!deleteTarget) return; startTransition(() => { removeIncome(null, mkFd({}, deleteTarget.id)); }); setDeleteTarget(null); reload(); };
-  const handleInstallments = async (data: Record<string, unknown>) => { startTransition(() => { createInstallments(null, mkFd(data)); }); setShowInst(false); reload(); };
 
   const filtered = incomes.filter(inc => {
     if (filter === "PENDING" && inc.status !== "PENDING") return false;
@@ -104,7 +119,6 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="secondary" className="text-xs" onClick={() => setShowInst(true)}>Cuotas</Button>
           <Button className="text-xs" onClick={() => { setEditing(null); setShowForm(true); }}>Nuevo ingreso</Button>
         </div>
       </div>
@@ -181,8 +195,6 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
         onClose={() => { setShowForm(false); setEditing(null); }} onSave={handleSave} />
 
       <PayIncomeModal open={!!payTarget} income={payTarget} onClose={() => setPayTarget(null)} onConfirm={handlePay} />
-      <InstallmentModal open={showInst} onClose={() => setShowInst(false)} onSave={handleInstallments} />
-
       <ConfirmActionModal open={!!deleteTarget} title={deleteTarget?.status === "PAID" ? "Eliminar ingreso cobrado" : "Eliminar ingreso"}
         description={deleteTarget?.status === "PAID" ? "Este ingreso ya esta cobrado. ¿Confirmas que queres eliminarlo?" : `¿Eliminar "${deleteTarget?.concept}"?`}
         confirmLabel="Eliminar" isPending={false} error={delError} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} />

@@ -2,14 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isAuthenticated } from "@/lib/auth";
-import {
-  createIncome,
-  updateIncome,
-  deleteIncome,
-  generateInstallments,
-  incomeSchema,
-  installmentSchema,
-} from "@/server/services/incomes";
+import { createIncome, updateIncome, deleteIncome, incomeSchema } from "@/server/services/incomes";
 
 type ActionResult = { success: true } | { success: false; message: string };
 
@@ -41,11 +34,7 @@ export async function saveIncome(_prev: ActionResult | null, formData: FormData)
     });
 
     const id = formData.get("id") as string | null;
-    if (id) {
-      await updateIncome(id, data);
-    } else {
-      await createIncome(data);
-    }
+    if (id) { await updateIncome(id, data); } else { await createIncome(data); }
     return { success: true };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al guardar." };
@@ -66,22 +55,14 @@ export async function payIncome(_prev: ActionResult | null, formData: FormData):
   try {
     requireAuth();
     const id = formData.get("id") as string;
-    const income = await import("@/server/services/incomes").then((m) => m.getIncome(id));
-
+    const inc = await import("@/server/services/incomes").then((m) => m.getIncome(id));
     const data = incomeSchema.parse({
-      projectId: income.projectId,
-      clientId: income.clientId,
-      type: income.type,
-      concept: income.concept,
-      notes: income.notes,
-      status: "PAID",
-      amountUsd: parseNum(formData.get("amountUsd")) ?? Number(income.amountUsd),
-      amountArs: parseNum(formData.get("amountArs")) ?? (income.amountArs ? Number(income.amountArs) : undefined),
-      exchangeRate: parseNum(formData.get("exchangeRate")) ?? (income.exchangeRate ? Number(income.exchangeRate) : undefined),
-      dueDate: income.dueDate?.toISOString().slice(0, 10) ?? null,
-      effectiveDate: formData.get("effectiveDate") as string,
+      projectId: inc.projectId, clientId: inc.clientId, type: inc.type, concept: inc.concept, notes: inc.notes,
+      status: "PAID", amountUsd: parseNum(formData.get("amountUsd")) ?? Number(inc.amountUsd),
+      amountArs: parseNum(formData.get("amountArs")) ?? (inc.amountArs ? Number(inc.amountArs) : undefined),
+      exchangeRate: parseNum(formData.get("exchangeRate")) ?? (inc.exchangeRate ? Number(inc.exchangeRate) : undefined),
+      dueDate: inc.dueDate?.toISOString().slice(0, 10) ?? null, effectiveDate: formData.get("effectiveDate") as string,
     });
-
     await updateIncome(id, data);
     revalidatePath("/incomes");
     return { success: true };
@@ -90,24 +71,21 @@ export async function payIncome(_prev: ActionResult | null, formData: FormData):
   }
 }
 
-export async function createInstallments(_prev: ActionResult | null, formData: FormData): Promise<ActionResult> {
+export async function createIncomeBatch(entries: Array<{
+  type: string; projectId?: string | null; clientId?: string | null;
+  concept: string; notes?: string | null; status: string;
+  amountUsd?: number | null; amountArs?: number | null; exchangeRate?: number | null;
+  dueDate?: string | null; effectiveDate?: string | null;
+}>) {
   try {
     requireAuth();
-    const data = installmentSchema.parse({
-      projectId: formData.get("projectId"),
-      type: formData.get("type"),
-      concept: formData.get("concept"),
-      count: Number(formData.get("count")),
-      firstDueDate: formData.get("firstDueDate"),
-      amountUsd: parseNum(formData.get("amountUsd")),
-      amountArs: parseNum(formData.get("amountArs")),
-      exchangeRate: parseNum(formData.get("exchangeRate")),
-      notes: formData.get("notes") || null,
-    });
-    const result = await generateInstallments(data);
+    for (const entry of entries) {
+      const data = incomeSchema.parse(entry);
+      await createIncome(data);
+    }
     revalidatePath("/incomes");
-    return { success: true, message: `${result.count} cuotas creadas.` } as ActionResult & { message?: string };
+    return { success: true };
   } catch (e) {
-    return { success: false, message: e instanceof Error ? e.message : "Error al generar cuotas." };
+    return { success: false, message: e instanceof Error ? e.message : "Error al guardar lote." };
   }
 }
