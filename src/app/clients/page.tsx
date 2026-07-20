@@ -1,5 +1,4 @@
 import { PageHeader } from "@/components/ui/page-header";
-import { Button } from "@/components/ui/button";
 import { listClients } from "@/server/services/clients";
 import { ClientList } from "./client-list";
 
@@ -18,17 +17,7 @@ export default async function ClientsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Clientes"
-        title="Clientes"
-        description=""
-        meta={null}
-        actions={
-          <form action="/clients?new=1">
-            <Button>Nuevo cliente</Button>
-          </form>
-        }
-      />
+      <PageHeader eyebrow="Clientes" title="Clientes" description="" meta={null} />
       <ClientList clients={JSON.parse(JSON.stringify(clients))} />
     </div>
   );

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
@@ -25,17 +24,6 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
 
   const [isPending, startTransition] = useTransition();
-  const sp = useSearchParams();
-  const router = useRouter();
-  const didOpen = useRef(false);
-
-  useEffect(() => {
-    if (!didOpen.current && sp.get("new") === "1") {
-      didOpen.current = true;
-      setShowForm(true);
-      router.replace("/clients");
-    }
-  }, [sp, router]);
 
   // Refresh client list after server action completes
   const refresh = () => {
@@ -68,10 +56,13 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
 
   return (
     <>
-      {/* Totalizador */}
-      <div className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 flex items-center gap-2">
-        <span className="text-xs font-medium uppercase tracking-wider text-gray-500">Total de clientes</span>
-        <span className="text-lg font-bold tabular-nums text-gray-900">{clients.length}</span>
+      {/* Totalizador y boton nuevo */}
+      <div className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wider text-gray-500">Total de clientes</span>
+          <span className="text-lg font-bold tabular-nums text-gray-900">{clients.length}</span>
+        </div>
+        <Button type="button" onClick={() => { setEditing(null); setShowForm(true); }}>Nuevo cliente</Button>
       </div>
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">

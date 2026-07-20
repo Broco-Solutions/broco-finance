@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModalPortal } from "@/components/ui/modal-portal";
@@ -35,6 +35,19 @@ export function ClientFormModal({
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Reset form state when modal opens (fixes edit mode hydration)
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      name: initial?.name ?? "",
+      contactName: initial?.contactName ?? "",
+      contactEmail: initial?.contactEmail ?? "",
+      contactPhone: initial?.contactPhone ?? "",
+      notes: initial?.notes ?? "",
+    });
+    setError(null);
+  }, [open, initial]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
