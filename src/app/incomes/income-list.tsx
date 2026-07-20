@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useTransition } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,6 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState<Income | null>(null);
   const [payTarget, setPayTarget] = useState<Income | null>(null); const [deleteTarget, setDeleteTarget] = useState<Income | null>(null);
   const [delError, setDelError] = useState<string | null>(null);
-  const [_, startTransition] = useTransition();
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -73,11 +72,26 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
       if (!result.success) throw new Error(result.message);
       setShowForm(false); setEditing(null); reload();
     } else {
-      startTransition(() => { saveIncome(null, mkFd(data, editing?.id)); }); setShowForm(false); setEditing(null); reload();
+      const fd = mkFd(data, editing?.id);
+      const result = await saveIncome(null, fd);
+      if (!result.success) throw new Error(result.message);
+      setShowForm(false); setEditing(null); reload();
     }
   };
-  const handlePay = async (data: Record<string, unknown>) => { if (!payTarget) return; const fd = mkFd({ effectiveDate: data.effectiveDate, amountUsd: data.amountUsd, amountArs: data.amountArs, exchangeRate: data.exchangeRate }, payTarget.id); startTransition(() => { payIncome(null, fd); }); setPayTarget(null); reload(); };
-  const handleDelete = () => { if (!deleteTarget) return; startTransition(() => { removeIncome(null, mkFd({}, deleteTarget.id)); }); setDeleteTarget(null); reload(); };
+  const handlePay = async (data: Record<string, unknown>) => {
+    if (!payTarget) return;
+    const fd = mkFd({ effectiveDate: data.effectiveDate, amountUsd: data.amountUsd, amountArs: data.amountArs, exchangeRate: data.exchangeRate }, payTarget.id);
+    const result = await payIncome(null, fd);
+    if (!result.success) throw new Error(result.message);
+    setPayTarget(null); reload();
+  };
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const fd = mkFd({}, deleteTarget.id);
+    const result = await removeIncome(null, fd);
+    if (!result.success) throw new Error(result.message);
+    setDeleteTarget(null); reload();
+  };
 
   const filtered = incomes.filter(inc => {
     if (filter === "PENDING" && inc.status !== "PENDING") return false;

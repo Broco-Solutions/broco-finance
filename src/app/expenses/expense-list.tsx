@@ -80,7 +80,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
     if (payForm.useArs) { fd.set("amountArs", payForm.amountArs); fd.set("exchangeRate", payForm.exchangeRate); } else fd.set("amountUsd", payForm.amountUsd);
     const result = await payExpense(null, fd);
     if (result.success) { setPayTarget(null); reload(); } else { setFormErr(result.message); } };
-  const handleDelete = () => { if (!delTarget) return; const fd = new FormData(); fd.set("id", delTarget.id); stt(() => { removeExpense(null, fd); }); setDelTarget(null); reload(); };
+  const handleDelete = async () => { if (!delTarget) return; setDelError(null); const fd = new FormData(); fd.set("id", delTarget.id); const result = await removeExpense(null, fd); if (!result.success) { setDelError(result.message); return; } setDelTarget(null); reload(); };
   const handleCatSave = async (ev: React.FormEvent) => { ev.preventDefault(); setCatError(null); const fd = new FormData(); if (catForm.id) fd.set("id", catForm.id); fd.set("name", catForm.name); stt(() => { saveCategory(null, fd); }); setCatForm({ id: "", name: "" }); reload(); };
   const handleCatDel = () => { if (!catDelTarget) return; const fd = new FormData(); fd.set("id", catDelTarget.id); stt(() => { removeCategory(null, fd); }); setCatDelTarget(null); reload(); };
 

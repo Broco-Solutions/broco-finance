@@ -55,6 +55,9 @@ test.describe("Smoke - dates, filters, totalizer", () => {
 
     // Reload and verify
     await page.goto(BASE + "/incomes", { waitUntil: "load" });
+    // Switch filter to "Todos" to see PENDING incomes (default is PAID)
+    await page.locator("select").first().selectOption("all");
+    await page.waitForTimeout(300);
     await expect(page.getByText(concept).first()).toBeVisible({ timeout: 5000 });
 
     // Verify date shows 25/12/2026 not today
