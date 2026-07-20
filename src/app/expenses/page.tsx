@@ -1,14 +1,16 @@
 import { listExpenses } from "@/server/services/expenses";
 import { listCategories } from "@/server/services/expense-categories";
 import { listProjects } from "@/server/services/projects";
+import { listClients } from "@/server/services/clients";
 import { PageHeader } from "@/components/ui/page-header";
 import { ExpenseList } from "./expense-list";
 
 export default async function ExpensesPage() {
-  const [expenses, categories, projects] = await Promise.all([
+  const [expenses, categories, projects, clients] = await Promise.all([
     listExpenses().catch(() => []),
     listCategories().catch(() => []),
     listProjects().catch(() => []),
+    listClients().catch(() => []),
   ]);
 
   return (
@@ -17,7 +19,8 @@ export default async function ExpensesPage() {
       <ExpenseList
         initial={JSON.parse(JSON.stringify(expenses))}
         categories={JSON.parse(JSON.stringify(categories))}
-        projects={JSON.parse(JSON.stringify(projects.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }))))}
+        projects={JSON.parse(JSON.stringify(projects.map((p: { id: string; name: string; clientId?: string }) => ({ id: p.id, name: p.name, clientId: p.clientId }))))}
+        clients={JSON.parse(JSON.stringify(clients.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name }))))}
       />
     </div>
   );

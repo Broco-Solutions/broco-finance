@@ -12,18 +12,19 @@ import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { saveExpense, removeExpense, payExpense } from "./actions";
 import { saveCategory, removeCategory } from "./categories/actions";
-import { formatUsd, formatArs, formatDate, formatExpenseStatus } from "@/lib/utils";
+import { formatUsd, formatArs, formatDate, formatExpenseStatus, toInputDate } from "@/lib/utils";
 
 type E = { id: string; type: string; concept: string; notes: string | null; status: string;
   amountUsd: any; amountArs: any; exchangeRate: any; dueDate: string | Date | null; effectiveDate: string | Date | null;
   expenseCategoryId: string; projectId: string | null;
   category: { id: string; name: string }; project: { id: string; name: string } | null; };
 type Cat = { id: string; name: string; _count: { expenses: number } };
-type Proj = { id: string; name: string };
+type Proj = { id: string; name: string; clientId?: string };
+type Cli = { id: string; name: string };
 
 function fmt(v: any) { return typeof v === "object" && v != null && "toString" in v ? Number(v.toString()) : Number(v ?? 0); }
 
-export function ExpenseList({ initial, categories: cats, projects: projs }: { initial: E[]; categories: Cat[]; projects: Proj[] }) {
+export function ExpenseList({ initial, categories: cats, projects: projs, clients: cls }: { initial: E[]; categories: Cat[]; projects: Proj[]; clients: Cli[] }) {
   const [expenses] = useState<E[]>(initial);
   const [categories, setCategories] = useState<Cat[]>(cats);
   const [fStatus, setFStatus] = useState("all"); const [fType, setFType] = useState(""); const [fCat, setFCat] = useState(""); const [fProj, setFProj] = useState("");
@@ -48,12 +49,14 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
 
   const reload = () => { setTimeout(() => window.location.reload(), 500); };
 
-  const defaultForm = { expenseCategoryId: "", projectId: "", type: "FIXED", concept: "", notes: "", status: "PAID" as "PAID"|"PENDING",
+  const defaultForm = { expenseCategoryId: "", clientId: "", projectId: "", type: "FIXED", concept: "", notes: "", status: "PAID" as "PAID"|"PENDING",
     useArs: false, amountUsd: "", amountArs: "", exchangeRate: "", dueDate: "", effectiveDate: "" };
   const [form, setForm] = useState(defaultForm); const [formErr, setFormErr] = useState<string | null>(null); const [formSaving, setFormSaving] = useState(false);
 
   const openForm = (e?: E) => {
-    if (e) { setEditing(e); setForm({ expenseCategoryId: e.expenseCategoryId, projectId: e.projectId ?? "", type: e.type, concept: e.concept, notes: e.notes ?? "", status: e.status as "PAID"|"PENDING", useArs: e.amountArs != null, amountUsd: e.amountUsd ? String(e.amountUsd) : "", amountArs: e.amountArs ? String(e.amountArs) : "", exchangeRate: e.exchangeRate ? String(e.exchangeRate) : "", dueDate: e.dueDate ? formatDate(e.dueDate).replace(/\//g,"-") : "", effectiveDate: e.effectiveDate ? formatDate(e.effectiveDate).replace(/\//g,"-") : "" }); }
+    if (e) {
+      setEditing(e); setForm({ expenseCategoryId: e.expenseCategoryId, clientId: "", projectId: e.projectId ?? "", type: e.type, concept: e.concept, notes: e.notes ?? "", status: e.status as "PAID"|"PENDING", useArs: e.amountArs != null, amountUsd: e.amountUsd ? String(e.amountUsd) : "", amountArs: e.amountArs ? String(e.amountArs) : "", exchangeRate: e.exchangeRate ? String(e.exchangeRate) : "", dueDate: e.dueDate ? toInputDate(e.dueDate) : "", effectiveDate: e.effectiveDate ? toInputDate(e.effectiveDate) : "" });
+    }
     else { setEditing(null); setForm(defaultForm); }
     setShowForm(true);
   };
@@ -190,7 +193,8 @@ export function ExpenseList({ initial, categories: cats, projects: projs }: { in
       {showForm && <ModalPortal><div className="fixed inset-0 z-[90] overflow-y-auto"><button className="fixed inset-0 bg-black/50" onClick={() => setShowForm(false)} /><div className="relative flex min-h-full items-center justify-center p-4"><div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl"><h2 className="text-lg font-bold">{editing ? "Editar gasto" : "Nuevo gasto"}</h2>
       <form onSubmit={handleFormSubmit} className="mt-4 space-y-3 max-h-[70vh] overflow-y-auto">
         <Select value={form.expenseCategoryId} onChange={(e) => setForm(p => ({...p, expenseCategoryId: e.target.value}))} required><option value="">Categoria *</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
-        <Select value={form.projectId} onChange={(e) => setForm(p => ({...p, projectId: e.target.value}))}><option value="">Sin proyecto</option>{projs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
+        <Select value={form.clientId} onChange={(e) => setForm(p => ({...p, clientId: e.target.value, projectId: ""}))}><option value="">Cliente</option>{cls.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
+        <Select value={form.projectId} onChange={(e) => setForm(p => ({...p, projectId: e.target.value}))} disabled={!form.clientId}><option value="">Proyecto</option>{projs.filter(p => !form.clientId || p.id === form.projectId || p.clientId === form.clientId).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
         <Select value={form.type} onChange={(e) => setForm(p => ({...p, type: e.target.value}))}><option value="FIXED">Fijo</option><option value="VARIABLE">Variable</option></Select>
         <Input placeholder="Concepto *" value={form.concept} onChange={(e) => setForm(p => ({...p, concept: e.target.value}))} required />
         <Input placeholder="Notas" value={form.notes} onChange={(e) => setForm(p => ({...p, notes: e.target.value}))} />
