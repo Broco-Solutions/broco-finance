@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/ui/data-table";
@@ -23,8 +23,6 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
 
-  const [isPending, startTransition] = useTransition();
-
   // Refresh client list after server action completes
   const refresh = () => {
     // revalidatePath handles this, but we reload via navigation or refetch
@@ -39,17 +37,17 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
     fd.set("contactEmail", data.contactEmail ?? "");
     fd.set("contactPhone", data.contactPhone ?? "");
     fd.set("notes", data.notes ?? "");
-    startTransition(() => { saveClient(null, fd); });
+    await saveClient(null, fd);
     setShowForm(false);
     setEditing(null);
     setTimeout(() => window.location.reload(), 500);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
     const fd = new FormData();
     fd.set("id", deleteTarget.id);
-    startTransition(() => { removeClient(null, fd); });
+    await removeClient(null, fd);
     setDeleteTarget(null);
     setTimeout(() => window.location.reload(), 500);
   };
@@ -67,7 +65,7 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
       <DataTable tableClassName="table-fixed" headers={["Nombre", "Contacto", "Email", "Telefono", "Proyectos", "Acciones"]}
-        colGroup={<colgroup><col style={{width:"20%"}} /><col style={{width:"20%"}} /><col style={{width:"20%"}} /><col style={{width:"16%"}} /><col style={{width:"8%"}} /><col style={{width:"16%"}} /></colgroup>}
+        colGroup={<colgroup><col style={{width:"24%"}} /><col style={{width:"16%"}} /><col style={{width:"18%"}} /><col style={{width:"12%"}} /><col style={{width:"8%"}} /><col style={{width:"22%"}} /></colgroup>}
       >
         {clients.map((c) => (
           <tr key={c.id}>
@@ -134,7 +132,7 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
         title="Eliminar cliente"
         description={`¿Eliminar "${deleteTarget?.name}"? Esta accion no se puede deshacer.`}
         confirmLabel="Eliminar"
-        isPending={isPending}
+        isPending={false}
         error={null}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}

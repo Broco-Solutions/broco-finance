@@ -31,6 +31,8 @@ export async function saveClient(
       await createClient(data);
     }
     revalidatePath("/clients");
+    revalidatePath("/projects");
+    revalidatePath("/clients/[id]");
     return { success: true };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al guardar." };
@@ -45,6 +47,8 @@ export async function removeClient(
     requireAuth();
     await deleteClientSvc(formData.get("id") as string);
     revalidatePath("/clients");
+    revalidatePath("/projects");
+    revalidatePath("/clients/[id]");
     return { success: true };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al eliminar." };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { formatUsd, formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,6 @@ export function ProjectList({ initialProjects, clients }: { initialProjects: Pro
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [delError, setDelError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
 
 
 const reload = () => { setTimeout(() => window.location.reload(), 500); };
@@ -75,29 +74,29 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
       fd.set("monthlyRecurringCurrency", (data.monthlyRecurringCurrency as string) || "USD");
       if (data.monthlyRecurringExchangeRate != null) fd.set("monthlyRecurringExchangeRate", String(data.monthlyRecurringExchangeRate));
     }
-    startTransition(() => { saveProject(null, fd); });
+    await saveProject(null, fd);
     setShowForm(false);
     setEditProject(null);
     reload();
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
     setDelError(null);
     const fd = new FormData();
     fd.set("id", deleteTarget.id);
-    startTransition(() => { removeProject(null, fd); });
+    await removeProject(null, fd);
     setDeleteTarget(null);
     reload();
   };
 
-  const handleToggle = (p: Project) => {
+  const handleToggle = async (p: Project) => {
     const fd = new FormData();
     fd.set("id", p.id);
     fd.set("clientId", p.client.id);
     fd.set("name", p.name);
     fd.set("isActive", p.isActive ? "true" : "false");
-    startTransition(() => { saveProject(null, fd); });
+    await saveProject(null, fd);
     reload();
   };
 
@@ -129,7 +128,7 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
       <DataTable tableClassName="table-fixed" headers={["Proyecto", "Cliente", "Estado", "Inicio", "Fin", "Importe acordado", "Importe mensual", "Acciones"]}
-        colGroup={<colgroup><col style={{width:"16%"}} /><col style={{width:"14%"}} /><col style={{width:"7%"}} /><col style={{width:"8%"}} /><col style={{width:"8%"}} /><col style={{width:"12%"}} /><col style={{width:"12%"}} /><col style={{width:"23%"}} /></colgroup>}
+        colGroup={<colgroup><col style={{width:"18%"}} /><col style={{width:"16%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"9%"}} /><col style={{width:"12%"}} /><col style={{width:"12%"}} /><col style={{width:"16%"}} /></colgroup>}
       >
         {filtered.map((p) => (
           <tr key={p.id}>
@@ -198,7 +197,7 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
         title="Eliminar proyecto"
         description={`¿Eliminar "${deleteTarget?.name}"? Si tiene movimientos, mejor marcalo como inactivo.`}
         confirmLabel="Eliminar"
-        isPending={isPending}
+        isPending={false}
         error={delError}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}

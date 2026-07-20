@@ -2,6 +2,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { listClients } from "@/server/services/clients";
 import { ClientList } from "./client-list";
 
+export const dynamic = "force-dynamic";
+
 export default async function ClientsPage() {
   let clients;
   try {

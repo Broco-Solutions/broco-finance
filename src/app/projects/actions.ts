@@ -49,6 +49,7 @@ export async function saveProject(
       await createProject(data);
     }
     revalidatePath("/projects");
+    revalidatePath("/clients/[id]");
     return { success: true };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al guardar." };
@@ -63,6 +64,7 @@ export async function removeProject(
     requireAuth();
     await deleteProjectSvc(formData.get("id") as string);
     revalidatePath("/projects");
+    revalidatePath("/clients/[id]");
     return { success: true };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al eliminar." };
@@ -85,6 +87,7 @@ export async function toggleProjectActive(
       isActive: !isActive,
     });
     revalidatePath("/projects");
+    revalidatePath("/clients/[id]");
     return { success: true };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error." };

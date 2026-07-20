@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -60,6 +60,26 @@ export function ProjectFormModal({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const hasMovements = (initial?._count?.incomes ?? 0) > 0 || (initial?._count?.expenses ?? 0) > 0;
+
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      clientId: initial?.clientId ?? initial?.client?.id ?? "",
+      name: initial?.name ?? "",
+      isActive: initial?.isActive ?? true,
+      startDate: initial?.startDate ?? "",
+      endDate: initial?.endDate ?? "",
+      notes: initial?.notes ?? "",
+      useOneTime: initial?.oneTimeAmountUsd != null || initial?.oneTimeOriginalAmount != null,
+      oneTimeAmount: initial?.oneTimeOriginalAmount?.toString() ?? "",
+      oneTimeCurrency: initial?.oneTimeCurrency ?? "USD",
+      oneTimeExchangeRate: initial?.oneTimeExchangeRate?.toString() ?? "",
+      useMonthly: initial?.monthlyRecurringAmountUsd != null || initial?.monthlyRecurringOriginalAmount != null,
+      monthlyAmount: initial?.monthlyRecurringOriginalAmount?.toString() ?? "",
+      monthlyCurrency: initial?.monthlyRecurringCurrency ?? "USD",
+      monthlyExchangeRate: initial?.monthlyRecurringExchangeRate?.toString() ?? "",
+    });
+  }, [open, initial]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

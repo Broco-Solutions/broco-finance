@@ -3,6 +3,8 @@ import { listClients } from "@/server/services/clients";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProjectList } from "./project-list";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProjectsPage() {
   const [projects, clients] = await Promise.all([
     listProjects().catch(() => []),
