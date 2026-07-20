@@ -82,7 +82,7 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
       <DataTable tableClassName="table-fixed" headers={["Nombre", "Contacto", "Email", "Telefono", "Proyectos", "Acciones"]}
-        colGroup={<colgroup><col style={{width:"24%"}} /><col style={{width:"16%"}} /><col style={{width:"18%"}} /><col style={{width:"12%"}} /><col style={{width:"8%"}} /><col style={{width:"22%"}} /></colgroup>}
+        colGroup={<colgroup><col style={{width:"28%"}} /><col style={{width:"12%"}} /><col style={{width:"14%"}} /><col style={{width:"10%"}} /><col style={{width:"8%"}} /><col style={{width:"28%"}} /></colgroup>}
       >
         {filtered.map((c) => (
           <tr key={c.id}>

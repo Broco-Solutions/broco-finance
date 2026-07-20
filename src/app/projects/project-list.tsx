@@ -149,7 +149,7 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
       <DataTable tableClassName="table-fixed" headers={["Proyecto", "Cliente", "Estado", "Inicio", "Fin", "Importe acordado", "Importe mensual", "Acciones"]}
-        colGroup={<colgroup><col style={{width:"18%"}} /><col style={{width:"16%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"9%"}} /><col style={{width:"12%"}} /><col style={{width:"12%"}} /><col style={{width:"16%"}} /></colgroup>}
+        colGroup={<colgroup><col style={{width:"22%"}} /><col style={{width:"14%"}} /><col style={{width:"7%"}} /><col style={{width:"8%"}} /><col style={{width:"8%"}} /><col style={{width:"12%"}} /><col style={{width:"12%"}} /><col style={{width:"17%"}} /></colgroup>}
       >
         {searched.map((p) => (
           <tr key={p.id}>

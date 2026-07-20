@@ -30,10 +30,10 @@ function computeMoney(input: {
   const ars = input.amountArs; const usd = input.amountUsd; const fx = input.exchangeRate;
   if (ars != null && ars > 0 && fx != null && fx > 0) {
     const a = toDec(ars); const f = toDec(fx);
-    return { amountUsd: new D(a.dividedBy(f).toFixed(6)), amountArs: a, exchangeRate: f };
+    return { amountUsd: new D(a.dividedBy(f).toFixed(0)), amountArs: a, exchangeRate: f };
   }
   if (usd != null && usd > 0 && ars == null && fx == null) {
-    return { amountUsd: toDec(usd), amountArs: null, exchangeRate: null };
+    return { amountUsd: toDec(Math.round(usd)), amountArs: null, exchangeRate: null };
   }
   throw new Error("Ingresa monto USD, o ARS + tipo de cambio.");
 }

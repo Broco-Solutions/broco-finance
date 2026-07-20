@@ -46,13 +46,13 @@ function computeMoney(input: {
   if (ars != null && ars > 0 && fx != null && fx > 0) {
     const arsDec = toDec(ars);
     const fxDec = toDec(fx);
-    const usdDec = new D(arsDec.dividedBy(fxDec).toFixed(6));
+    const usdDec = new D(arsDec.dividedBy(fxDec).toFixed(0));
     return { amountUsd: usdDec, amountArs: arsDec, exchangeRate: fxDec };
   }
 
   // USD only
   if (usd != null && usd > 0 && ars == null && fx == null) {
-    return { amountUsd: toDec(usd), amountArs: null, exchangeRate: null };
+    return { amountUsd: toDec(Math.round(usd)), amountArs: null, exchangeRate: null };
   }
 
   throw new Error("Ingresa monto USD, o ARS + tipo de cambio.");
