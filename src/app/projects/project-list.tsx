@@ -4,6 +4,7 @@ import { useState } from "react";
 import { formatUsd, formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
@@ -51,6 +52,7 @@ export function ProjectList({ initialProjects, clients }: { initialProjects: Pro
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [delError, setDelError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
 
 const reload = () => { setTimeout(() => window.location.reload(), 500); };
@@ -106,14 +108,29 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
     return true;
   });
 
+  const searched = search
+    ? filtered.filter(p =>
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        p.client.name.toLowerCase().includes(search.toLowerCase())
+      )
+    : filtered;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <Select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} className="w-40">
-          <option value="all">Todos</option>
-          <option value="active">Activos</option>
-          <option value="inactive">Inactivos</option>
-        </Select>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <Select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} className="w-40">
+            <option value="all">Todos</option>
+            <option value="active">Activos</option>
+            <option value="inactive">Inactivos</option>
+          </Select>
+          <Input
+            placeholder="Buscar proyecto…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-xs"
+          />
+        </div>
         <Button onClick={() => { setEditProject(null); setShowForm(true); }}>Nuevo proyecto</Button>
       </div>
 
@@ -122,7 +139,7 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
         <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
           {filter === "active" ? "Proyectos activos" : filter === "inactive" ? "Proyectos inactivos" : "Total de proyectos"}
         </span>
-        <span className="text-lg font-bold tabular-nums text-gray-900">{filtered.length}</span>
+        <span className="text-lg font-bold tabular-nums text-gray-900">{searched.length}</span>
       </div>
 
       {/* DESKTOP TABLE */}
@@ -130,7 +147,7 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
       <DataTable tableClassName="table-fixed" headers={["Proyecto", "Cliente", "Estado", "Inicio", "Fin", "Importe acordado", "Importe mensual", "Acciones"]}
         colGroup={<colgroup><col style={{width:"18%"}} /><col style={{width:"16%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"9%"}} /><col style={{width:"12%"}} /><col style={{width:"12%"}} /><col style={{width:"16%"}} /></colgroup>}
       >
-        {filtered.map((p) => (
+        {searched.map((p) => (
           <tr key={p.id}>
             <td className="px-4 py-2.5 align-middle"><div className="line-clamp-2 break-words" title={p.name}><Link href={`/projects/${p.id}`} className="text-cobalt underline">{p.name}</Link></div></td>
             <td className="px-4 py-2.5 align-middle"><div className="line-clamp-2 break-words" title={p.client.name}>{p.client.name}</div></td>
@@ -151,7 +168,7 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
 
       {/* MOBILE CARDS */}
       <div className="space-y-2 md:hidden">
-        {filtered.map((p) => (
+        {searched.map((p) => (
           <div key={p.id} className="rounded-lg border border-gray-200 bg-white p-3 space-y-1.5">
             <div className="flex items-center justify-between">
               <Link href={`/projects/${p.id}`} className="font-medium text-sm text-cobalt underline">{p.name}</Link>

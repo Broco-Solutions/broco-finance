@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/ui/data-table";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { ClientFormModal } from "@/components/screens/client-form-modal";
@@ -22,6 +23,15 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
   const [editing, setEditing] = useState<Client | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Client | null>(null);
+  const [search, setSearch] = useState("");
+
+  const filtered = clients.filter(c =>
+    !search ||
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    (c.contactName ?? "").toLowerCase().includes(search.toLowerCase()) ||
+    (c.contactEmail ?? "").toLowerCase().includes(search.toLowerCase()) ||
+    (c.contactPhone ?? "").toLowerCase().includes(search.toLowerCase())
+  );
 
   // Refresh client list after server action completes
   const refresh = () => {
@@ -54,11 +64,18 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
 
   return (
     <>
-      {/* Totalizador y boton nuevo */}
-      <div className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 flex items-center justify-between">
+      {/* Totalizador, busqueda y boton nuevo */}
+      <div className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium uppercase tracking-wider text-gray-500">Total de clientes</span>
-          <span className="text-lg font-bold tabular-nums text-gray-900">{clients.length}</span>
+          <span className="text-lg font-bold tabular-nums text-gray-900">{filtered.length}</span>
+        </div>
+        <div className="flex items-center gap-2 flex-1 max-w-md">
+          <Input
+            placeholder="Buscar cliente…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
         <Button type="button" onClick={() => { setEditing(null); setShowForm(true); }}>Nuevo cliente</Button>
       </div>
@@ -67,7 +84,7 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
       <DataTable tableClassName="table-fixed" headers={["Nombre", "Contacto", "Email", "Telefono", "Proyectos", "Acciones"]}
         colGroup={<colgroup><col style={{width:"24%"}} /><col style={{width:"16%"}} /><col style={{width:"18%"}} /><col style={{width:"12%"}} /><col style={{width:"8%"}} /><col style={{width:"22%"}} /></colgroup>}
       >
-        {clients.map((c) => (
+        {filtered.map((c) => (
           <tr key={c.id}>
             <td className="px-4 py-2.5 align-middle">
               <div className="line-clamp-2 break-words" title={c.name}>
@@ -95,7 +112,7 @@ export function ClientList({ clients: initial }: { clients: Client[] }) {
 
       {/* MOBILE CARDS */}
       <div className="space-y-2 md:hidden">
-        {clients.map((c) => (
+        {filtered.map((c) => (
           <div key={c.id} className="rounded-lg border border-gray-200 bg-white p-3 space-y-1.5">
             <div className="flex items-center justify-between">
               <Link href={`/clients/${c.id}`} className="font-medium text-sm text-cobalt underline">{c.name}</Link>
