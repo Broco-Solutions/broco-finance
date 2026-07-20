@@ -45,7 +45,6 @@ export function IncomeFormModal({
   const needsProject = form.type === "DEVELOPMENT" || form.type === "MAINTENANCE";
 
   // Reset form when initial changes (fixes edit mode hydration)
-  const initialKey = useMemo(() => JSON.stringify({ id: initial?.id, projectId: initial?.projectId, clientId: initial?.clientId, type: initial?.type, concept: initial?.concept, notes: initial?.notes, status: initial?.status, amountUsd: initial?.amountUsd, amountArs: initial?.amountArs, exchangeRate: initial?.exchangeRate, dueDate: initial?.dueDate, effectiveDate: initial?.effectiveDate, clientIdFromProject: initial?.project?.clientId, clientIdFromClient: initial?.client?.id }), [initial]);
   useEffect(() => {
     if (!open) return;
     const s = (initial?.status ?? "PAID") as "PAID"|"PENDING";
@@ -61,7 +60,7 @@ export function IncomeFormModal({
       dueDate: s === "PENDING" ? d : "", effectiveDate: s === "PAID" ? d : "",
     });
     setMulti(false); setRows([]);
-  }, [open, initialKey]);
+  }, [open, initial]);
 
   // Filter projects by selected client
   const filteredProjects = useMemo(() => {

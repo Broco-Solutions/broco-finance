@@ -1,13 +1,17 @@
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "—";
-  const d = typeof value === "string" ? new Date(value + "T00:00:00") : value;
+  const d = typeof value === "string"
+    ? (value.includes("T") ? new Date(value) : new Date(value + "T00:00:00"))
+    : value;
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 export function formatDateShort(value: string | Date | null | undefined): string {
   if (!value) return "—";
-  const d = typeof value === "string" ? new Date(value + "T00:00:00") : value;
+  const d = typeof value === "string"
+    ? (value.includes("T") ? new Date(value) : new Date(value + "T00:00:00"))
+    : value;
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
 }
