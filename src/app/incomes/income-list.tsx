@@ -24,7 +24,7 @@ function fmt(v: any) { return typeof v === "object" && v != null && "toString" i
 
 export function IncomeList({ initialIncomes, projects, clients }: { initialIncomes: Income[]; projects: { id: string; name: string; clientId?: string }[]; clients: { id: string; name: string }[] }) {
   const [incomes] = useState<Income[]>(initialIncomes);
-  const [filter, setFilter] = useState("all"); const [typeFilter, setTypeFilter] = useState("");
+  const [filter, setFilter] = useState("PAID"); const [typeFilter, setTypeFilter] = useState("");
   const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
   const [fClient, setFClient] = useState(""); const [fProject, setFProject] = useState("");
   const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState<Income | null>(null);
@@ -48,7 +48,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   }, [sp]);
 
   const clearRange = () => { setDateFrom(""); setDateTo(""); router.replace("/incomes"); };
-  const clearFilters = () => { setFilter("all"); setTypeFilter(""); setFClient(""); setFProject(""); clearRange(); };
+  const clearFilters = () => { setFilter("PAID"); setTypeFilter(""); setFClient(""); setFProject(""); clearRange(); };
 
   const reload = () => { setTimeout(() => window.location.reload(), 500); };
   const mkFd = (data: Record<string, unknown>, id?: string) => {

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { ProjectFormModal } from "./project-form-modal";
-import { saveProject, removeProject } from "./actions";
+import { saveProject, removeProject, toggleProjectActive } from "./actions";
 
 type Project = {
   id: string;
@@ -47,7 +47,7 @@ function toISODate(d: string | Date | null): string | null {
 
 export function ProjectList({ initialProjects, clients }: { initialProjects: Project[]; clients: { id: string; name: string }[] }) {
   const [projects, setProjects] = useState<Project[]>(initialProjects);
-  const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
+  const [filter, setFilter] = useState<"all" | "active" | "inactive">("active");
   const [showForm, setShowForm] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
@@ -87,7 +87,11 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
     setDelError(null);
     const fd = new FormData();
     fd.set("id", deleteTarget.id);
-    await removeProject(null, fd);
+    const result = await removeProject(null, fd);
+    if (!result.success) {
+      setDelError(result.message);
+      return;
+    }
     setDeleteTarget(null);
     reload();
   };
@@ -98,7 +102,7 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
     fd.set("clientId", p.client.id);
     fd.set("name", p.name);
     fd.set("isActive", p.isActive ? "true" : "false");
-    await saveProject(null, fd);
+    await toggleProjectActive(null, fd);
     reload();
   };
 
@@ -159,7 +163,9 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
             <td className="px-4 py-2.5 space-x-1 whitespace-nowrap">
               <Button variant="secondary" onClick={() => { setEditProject(p); setShowForm(true); }}>Editar</Button>
               <Button variant="secondary" onClick={() => handleToggle(p)}>{p.isActive ? "Inactivar" : "Activar"}</Button>
-              <Button variant="secondary" className="text-brick" onClick={() => { setDeleteTarget(p); setDelError(null); }}>Eliminar</Button>
+              {p._count.incomes === 0 && p._count.expenses === 0 && (
+                <Button variant="secondary" className="text-brick" onClick={() => { setDeleteTarget(p); setDelError(null); }}>Eliminar</Button>
+              )}
             </td>
           </tr>
         ))}
@@ -180,7 +186,9 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
             <div className="flex gap-1 pt-1">
               <Button variant="secondary" className="text-xs flex-1" onClick={() => { setEditProject(p); setShowForm(true); }}>Editar</Button>
               <Button variant="secondary" className="text-xs flex-1" onClick={() => handleToggle(p)}>{p.isActive ? "Inactivar" : "Activar"}</Button>
-              <Button variant="secondary" className="text-xs flex-1 text-brick" onClick={() => { setDeleteTarget(p); setDelError(null); }}>Eliminar</Button>
+              {p._count.incomes === 0 && p._count.expenses === 0 && (
+                <Button variant="secondary" className="text-xs flex-1 text-brick" onClick={() => { setDeleteTarget(p); setDelError(null); }}>Eliminar</Button>
+              )}
             </div>
           </div>
         ))}

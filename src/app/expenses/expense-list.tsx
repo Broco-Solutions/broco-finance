@@ -28,7 +28,7 @@ function fmt(v: any) { return typeof v === "object" && v != null && "toString" i
 export function ExpenseList({ initial, categories: cats, projects: projs, clients: cls }: { initial: E[]; categories: Cat[]; projects: Proj[]; clients: Cli[] }) {
   const [expenses] = useState<E[]>(initial);
   const [categories, setCategories] = useState<Cat[]>(cats);
-  const [fStatus, setFStatus] = useState("all"); const [fType, setFType] = useState(""); const [fCat, setFCat] = useState(""); const [fProj, setFProj] = useState("");
+  const [fStatus, setFStatus] = useState("PAID"); const [fType, setFType] = useState(""); const [fCat, setFCat] = useState(""); const [fProj, setFProj] = useState("");
   const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
   const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState<E | null>(null);
   const [payTarget, setPayTarget] = useState<E | null>(null);
@@ -46,7 +46,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   const didSync = useRef(false);
   useEffect(() => { if (didSync.current) return; const s = sp.get("status"); if (s === "PAID" || s === "PENDING") setFStatus(s); else if (s === "OVERDUE") setFStatus("OVERDUE"); const f = sp.get("from"), t = sp.get("to"); if (f && t) { setDateFrom(f); setDateTo(t); } didSync.current = true; }, [sp]);
   const clearRange = () => { setDateFrom(""); setDateTo(""); router.replace("/expenses"); };
-  const clearFilters = () => { setFStatus("all"); setFType(""); setFCat(""); setFProj(""); clearRange(); };
+  const clearFilters = () => { setFStatus("PAID"); setFType(""); setFCat(""); setFProj(""); clearRange(); };
 
   const reload = () => { setTimeout(() => window.location.reload(), 500); };
 
