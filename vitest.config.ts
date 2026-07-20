@@ -7,12 +7,14 @@ export default defineConfig({
     environment: "node",
     testTimeout: 15_000,
     hookTimeout: 15_000,
+    setupFiles: ["./tests/setup-env.ts"],
   },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "server-only": path.resolve(__dirname, "./tests/mocks/server-only.ts"),
       "next/cache": path.resolve(__dirname, "./tests/mocks/next-cache.ts"),
+      "next/headers": path.resolve(__dirname, "./tests/mocks/next-headers.ts"),
     },
   },
 });
