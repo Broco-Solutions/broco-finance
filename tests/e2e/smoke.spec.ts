@@ -2,9 +2,9 @@ import { test, expect } from "@playwright/test";
 
 const BASE = "http://localhost:3299";
 
-// Income page: 4 filter selects (status, type, client, project) on left
-// Modal selects start at index 4: type(4), client(5), project(6), status(7)
-const M_TYPE = 4;
+// Income page: 2 filter selects (status, type), then SearchableSelect
+// Modal selects start at index 2: type(2), client(3), project(4), status(5)
+const M_TYPE = 2;
 const M_CLIENT = 5;
 const M_PROJECT = 6;
 
@@ -66,21 +66,35 @@ test.describe("Smoke - dates, filters, totalizer", () => {
   test("filters — client selects projects in cascade", async ({ page }) => {
     await page.goto(BASE + "/incomes", { waitUntil: "load" });
 
-    // Filter selects: 0=status, 1=type, 2=client, 3=project
-    const clientFilter = page.locator("select").nth(2);
-    const projectFilter = page.locator("select").nth(3);
+    // Open the client SearchableSelect
+    const clientTrigger = page.locator("button:has-text('Cliente')").first();
+    await clientTrigger.click();
+    await page.waitForTimeout(300);
 
-    // Select a client
-    const clientOpts = await clientFilter.locator("option").allTextContents();
-    const validClient = clientOpts.find(o => o && o !== "Cliente" && !o.startsWith("Seleccionar"));
-    if (validClient) {
-      await clientFilter.selectOption({ label: validClient });
+    // Check that the dropdown appeared with client options
+    const dropdown = page.locator("div.absolute.z-50").first();
+    await expect(dropdown).toBeVisible({ timeout: 3000 });
+
+    // Click the first non-placeholder option
+    const option = dropdown.locator("button").first();
+    const text = await option.textContent();
+    if (text && text !== "Sin resultados.") {
+      await option.click();
       await page.waitForTimeout(300);
-      await expect(projectFilter).toBeEnabled();
-    }
 
-    // Clear
-    await clientFilter.selectOption("");
+      // Project trigger should be enabled
+      const projTrigger = page.locator("button:has-text('Proyecto')").first();
+      await projTrigger.click();
+      await page.waitForTimeout(200);
+      const projDropdown = page.locator("div.absolute.z-50").first();
+      await expect(projDropdown).toBeVisible({ timeout: 3000 });
+
+      // Close project dropdown
+      await page.keyboard.press("Escape");
+    } else {
+      // Close dropdown
+      await page.keyboard.press("Escape");
+    }
   });
 
   // --- Flujo C: project detail totalizer ---

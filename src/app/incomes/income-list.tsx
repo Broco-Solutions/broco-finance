@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { IncomeFormModal } from "./income-form-modal";
 import { PayIncomeModal } from "./pay-income-modal";
@@ -115,12 +116,8 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
             <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-36 text-xs">
               <option value="">Tipos</option><option value="DEVELOPMENT">Desarrollo</option><option value="MAINTENANCE">Mantenimiento</option><option value="OTHER">Otro</option>
             </Select>
-            <Select value={fClient} onChange={(e) => { setFClient(e.target.value); setFProject(""); }} className="w-36 text-xs">
-              <option value="">Cliente</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </Select>
-            <Select value={fProject} onChange={(e) => setFProject(e.target.value)} className="w-36 text-xs" disabled={!fClient}>
-              <option value="">Proyecto</option>{projects.filter(p => !fClient || p.id === fProject || p.clientId === fClient).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </Select>
+            <SearchableSelect value={fClient} onChange={(v) => { setFClient(v); setFProject(""); }} options={clients} placeholder="Cliente" className="w-36 text-xs" />
+            <SearchableSelect value={fProject} onChange={(v) => setFProject(v)} options={projects.filter(p => !fClient || p.clientId === fClient)} placeholder="Proyecto" className="w-36 text-xs" disabled={!fClient} />
             <div className="flex items-center gap-1">
               <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-32 text-xs h-8" placeholder="Desde" />
               <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-32 text-xs h-8" placeholder="Hasta" />

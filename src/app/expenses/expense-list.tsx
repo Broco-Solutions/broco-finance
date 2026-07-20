@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { saveExpense, removeExpense, payExpense } from "./actions";
@@ -108,8 +109,8 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
         <div className="flex gap-2 flex-wrap">
           <Select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="w-28 text-xs"><option value="all">Todos</option><option value="PAID">Pagados</option><option value="PENDING">Pendientes</option><option value="OVERDUE">Vencidos</option></Select>
           <Select value={fType} onChange={(e) => setFType(e.target.value)} className="w-24 text-xs"><option value="">Tipos</option><option value="FIXED">Fijos</option><option value="VARIABLE">Variables</option></Select>
-          <Select value={fCat} onChange={(e) => setFCat(e.target.value)} className="w-36 text-xs"><option value="">Categorias</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
-          <Select value={fProj} onChange={(e) => setFProj(e.target.value)} className="w-36 text-xs"><option value="">Proyecto</option>{projs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
+          <SearchableSelect value={fCat} onChange={(v) => setFCat(v)} options={categories.map(c => ({ id: c.id, name: c.name }))} placeholder="Categoria" className="w-36 text-xs" />
+          <SearchableSelect value={fProj} onChange={(v) => setFProj(v)} options={projs} placeholder="Proyecto" className="w-36 text-xs" />
           <div className="flex items-center gap-1">
             <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-32 text-xs h-8" placeholder="Desde" />
             <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-32 text-xs h-8" placeholder="Hasta" />

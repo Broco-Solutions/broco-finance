@@ -4,9 +4,9 @@ const BASE = "http://localhost:3299";
 
 // Income page now has 4 filter selects: status, type, client, project
 // Modal selects start at index 4: type, client, project, status
-const MODAL_TYPE = 4;
-const MODAL_CLIENT = 5;
-const MODAL_PROJECT = 6;
+const MODAL_TYPE = 2;
+const MODAL_CLIENT = 3;
+const MODAL_PROJECT = 4;
 // After the first 4 selects, modal form has: type, client, project, status, ...
 // For non-DEVELOPMENT type, the project field disappears, shifting later indices
 
