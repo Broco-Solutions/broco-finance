@@ -60,9 +60,10 @@ export default async function ClientDetailPage({
       <Card>
         <ClientProjectsSection
           clientId={safe.id}
-          clientName={safe.name}
           projects={safeProjects}
           clients={safeClients}
+          incomeTotals={safe._incomeTotals}
+          expenseTotals={safe._expenseTotals}
         />
       </Card>
     </div>
