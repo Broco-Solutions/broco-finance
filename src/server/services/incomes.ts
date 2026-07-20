@@ -46,7 +46,7 @@ function computeMoney(input: {
   if (ars != null && ars > 0 && fx != null && fx > 0) {
     const arsDec = toDec(ars);
     const fxDec = toDec(fx);
-    const usdDec = new D(arsDec.dividedBy(fxDec).toFixed(0));
+    const usdDec = new D(arsDec.dividedBy(fxDec).toFixed(6));
     return { amountUsd: usdDec, amountArs: arsDec, exchangeRate: fxDec };
   }
 
