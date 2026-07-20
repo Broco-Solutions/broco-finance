@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { ModalPortal } from "@/components/ui/modal-portal";
-import { saveExpense, removeExpense, payExpense } from "./actions";
+import { saveExpense, removeExpense, payExpense, createExpenseBatch } from "./actions";
 import { saveCategory, removeCategory } from "./categories/actions";
 import { formatUsd, formatArs, formatDate, formatExpenseStatus, toInputDate } from "@/lib/utils";
 
@@ -53,24 +53,107 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   const defaultForm = { expenseCategoryId: "", clientId: "", projectId: "", type: "FIXED", concept: "", notes: "", status: "PAID" as "PAID"|"PENDING",
     useArs: false, amountUsd: "", amountArs: "", exchangeRate: "", dueDate: "", effectiveDate: "" };
   const [form, setForm] = useState(defaultForm); const [formErr, setFormErr] = useState<string | null>(null); const [formSaving, setFormSaving] = useState(false);
+  const [multi, setMulti] = useState(false);
+  const [count, setCount] = useState(3);
+  const [interval, setInterval] = useState(30);
+  type Row = { status: "PAID"|"PENDING"; date: string; amountUsd: string; amountArs: string; exchangeRate: string };
+  const [rows, setRows] = useState<Row[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const initRows = () => {
+    const baseDate = form.status === "PAID" ? form.effectiveDate : form.dueDate;
+    const d = new Date(baseDate || new Date().toISOString().slice(0,10));
+    const arr: Row[] = [];
+    for (let i = 0; i < count; i++) {
+      const rd = new Date(d.getTime() + i * interval * 86400000);
+      arr.push({ status: form.status, date: rd.toISOString().slice(0, 10), amountUsd: form.amountUsd, amountArs: form.amountArs, exchangeRate: form.exchangeRate });
+    }
+    setRows(arr);
+  };
+
+  const setCountDynamic = (v: number) => {
+    const n = Math.max(2, v || 2);
+    setCount(n);
+    if (n > rows.length) {
+      const base = rows.length > 0 ? new Date(rows[rows.length-1].date) : new Date();
+      const extra: Row[] = [];
+      for (let i = rows.length; i < n; i++) {
+        const rd = new Date(base.getTime() + (i - rows.length + 1) * interval * 86400000);
+        extra.push({ status: form.status, date: rd.toISOString().slice(0,10), amountUsd: form.amountUsd, amountArs: form.amountArs, exchangeRate: form.exchangeRate });
+      }
+      setRows([...rows, ...extra]);
+    } else { setRows(rows.slice(0, n)); }
+  };
+
+  const onFirstDateChange = (d: string) => {
+    if (form.status === "PENDING") setForm(p => ({...p, dueDate: d})); else setForm(p => ({...p, effectiveDate: d}));
+    if (rows.length > 0) {
+      const base = new Date(d);
+      setRows(rows.map((r, i) => ({ ...r, date: new Date(base.getTime() + i * interval * 86400000).toISOString().slice(0,10) })));
+    }
+  };
+
+  const onIntervalChange = (v: number) => {
+    setInterval(v);
+    if (rows.length > 0) {
+      const base = form.status === "PENDING" ? form.dueDate : form.effectiveDate;
+      const d = new Date(base || new Date());
+      setRows(rows.map((r, i) => ({ ...r, date: new Date(d.getTime() + i * v * 86400000).toISOString().slice(0,10) })));
+    }
+  };
+
+  const onAmountChange = (usd: string, ars: string) => {
+    setForm(p => ({...p, amountUsd: usd, amountArs: ars}));
+    setRows(prev => prev.map(r => ({ ...r, amountUsd: usd, amountArs: ars })));
+  };
+
+  const updateRow = (i: number, f: Partial<Row>) => setRows(prev => prev.map((r, j) => j === i ? { ...r, ...f } : r));
+  const removeRow = (i: number) => { if (rows.length > 2) setRows(prev => prev.filter((_, j) => j !== i)); else setCountDynamic(rows.length - 1); };
+  const addRow = () => {
+    const last = rows[rows.length - 1];
+    const d = last ? new Date(last.date) : new Date();
+    d.setDate(d.getDate() + interval);
+    setRows(prev => [...prev, { ...(last || { status: form.status, date: "", amountUsd: form.amountUsd, amountArs: form.amountArs, exchangeRate: form.exchangeRate }), date: d.toISOString().slice(0, 10) }]);
+    setCount(rows.length + 1);
+  };
+
+  const totalUsd = rows.reduce((s, r) => s + (Number(r.amountUsd) || 0), 0);
 
   const openForm = (e?: E) => {
     if (e) {
       setEditing(e); setForm({ expenseCategoryId: e.expenseCategoryId, clientId: "", projectId: e.projectId ?? "", type: e.type, concept: e.concept, notes: e.notes ?? "", status: e.status as "PAID"|"PENDING", useArs: e.amountArs != null, amountUsd: e.amountUsd ? String(e.amountUsd) : "", amountArs: e.amountArs ? String(e.amountArs) : "", exchangeRate: e.exchangeRate ? String(e.exchangeRate) : "", dueDate: e.dueDate ? toInputDate(e.dueDate) : "", effectiveDate: e.effectiveDate ? toInputDate(e.effectiveDate) : "" });
     }
     else { setEditing(null); setForm(defaultForm); }
+    setMulti(false); setRows([]);
     setShowForm(true);
   };
 
   const handleFormSubmit = async (ev: React.FormEvent) => { ev.preventDefault(); setFormErr(null); setFormSaving(true);
-    try { const fd = new FormData(); if (editing) fd.set("id", editing.id);
-      fd.set("expenseCategoryId", form.expenseCategoryId); if (form.projectId) fd.set("projectId", form.projectId);
-      fd.set("type", form.type); fd.set("concept", form.concept); if (form.notes) fd.set("notes", form.notes);
-      fd.set("status", form.status); if (form.status === "PENDING") fd.set("dueDate", form.dueDate); if (form.status === "PAID") fd.set("effectiveDate", form.effectiveDate);
-      if (form.useArs) { fd.set("amountArs", form.amountArs); fd.set("exchangeRate", form.exchangeRate); } else fd.set("amountUsd", form.amountUsd);
-      const result = await saveExpense(null, fd);
-      if (!result.success) { setFormErr(result.message); return; }
-      setShowForm(false); reload();
+    try {
+      if (multi) {
+        const entries = rows.map(r => ({
+          expenseCategoryId: form.expenseCategoryId, projectId: form.projectId || null,
+          type: form.type, concept: form.concept, notes: form.notes || null,
+          status: r.status,
+          amountUsd: r.amountUsd ? Number(r.amountUsd) : undefined,
+          amountArs: r.amountArs ? Number(r.amountArs) : undefined,
+          exchangeRate: form.useArs ? (r.exchangeRate ? Number(r.exchangeRate) : undefined) : undefined,
+          dueDate: r.status === "PENDING" ? r.date : null,
+          effectiveDate: r.status === "PAID" ? r.date : null,
+        }));
+        const result = await createExpenseBatch(entries);
+        if (!result.success) { setFormErr(result.message); return; }
+        setShowForm(false); reload();
+      } else {
+        const fd = new FormData(); if (editing) fd.set("id", editing.id);
+        fd.set("expenseCategoryId", form.expenseCategoryId); if (form.projectId) fd.set("projectId", form.projectId);
+        fd.set("type", form.type); fd.set("concept", form.concept); if (form.notes) fd.set("notes", form.notes);
+        fd.set("status", form.status); if (form.status === "PENDING") fd.set("dueDate", form.dueDate); if (form.status === "PAID") fd.set("effectiveDate", form.effectiveDate);
+        if (form.useArs) { fd.set("amountArs", form.amountArs); fd.set("exchangeRate", form.exchangeRate); } else fd.set("amountUsd", form.amountUsd);
+        const result = await saveExpense(null, fd);
+        if (!result.success) { setFormErr(result.message); return; }
+        setShowForm(false); reload();
+      }
     } catch (err) { setFormErr(err instanceof Error ? err.message : "Error."); } finally { setFormSaving(false); }
   };
 
@@ -203,9 +286,49 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
         {form.status === "PENDING" && <Input type="date" value={form.dueDate} onChange={(e) => setForm(p => ({...p, dueDate: e.target.value}))} required />}
         {form.status === "PAID" && <Input type="date" value={form.effectiveDate} onChange={(e) => setForm(p => ({...p, effectiveDate: e.target.value}))} required />}
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.useArs} onChange={(e) => setForm(p => ({...p, useArs: e.target.checked}))} />Cargar en ARS</label>
-        {form.useArs ? (<><Input placeholder="ARS" type="number" step="any" value={form.amountArs} onChange={(e) => setForm(p => ({...p, amountArs: e.target.value}))} /><Input placeholder="TC" type="number" step="any" value={form.exchangeRate} onChange={(e) => setForm(p => ({...p, exchangeRate: e.target.value}))} /></>) : (<Input placeholder="USD" type="number" step="any" value={form.amountUsd} onChange={(e) => setForm(p => ({...p, amountUsd: e.target.value}))} />)}
+        {form.useArs ? (<><Input placeholder="ARS" type="number" step="any" value={form.amountArs} onChange={(e) => { setForm(p => ({...p, amountArs: e.target.value})); onAmountChange("", e.target.value); }} /><Input placeholder="TC" type="number" step="any" value={form.exchangeRate} onChange={(e) => setForm(p => ({...p, exchangeRate: e.target.value}))} /></>) : (<Input placeholder="USD" type="number" step="any" value={form.amountUsd} onChange={(e) => { setForm(p => ({...p, amountUsd: e.target.value})); onAmountChange(e.target.value, ""); }} />)}
+
+        {/* Multi-expense checkbox */}
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" checked={multi} onChange={(e) => { setMulti(e.target.checked); if (e.target.checked) { setCount(3); setInterval(30); setTimeout(initRows, 0); } }} />
+          Agregar varios gastos
+        </label>
+
+        {multi && (
+          <div className="space-y-3 pl-4 border-l-2 border-brand/20 min-w-0">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 min-w-0"><label className="text-xs text-gray-500">Cantidad (mín 2)</label><Input type="number" min={2} value={String(count)} onChange={(e) => setCountDynamic(Number(e.target.value)||2)} /></div>
+              <div className="flex-1 min-w-0"><label className="text-xs text-gray-500">Intervalo (días)</label><Input type="number" min={1} value={String(interval)} onChange={(e) => onIntervalChange(Math.max(1, Number(e.target.value)||1))} /></div>
+            </div>
+
+            <Select value={form.status} onChange={(e) => setForm(p => ({...p, status: e.target.value as "PAID"|"PENDING"}))}><option value="PAID">Pagado</option><option value="PENDING">Pendiente</option></Select>
+            <Input type="date" value={form.status === "PENDING" ? form.dueDate : form.effectiveDate} onChange={(e) => onFirstDateChange(e.target.value)} placeholder="Primera fecha" required />
+
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.useArs} onChange={(e) => setForm((p) => ({ ...p, useArs: e.target.checked }))} /> Cargar en ARS</label>
+            {form.useArs ? (
+              <div className="space-y-2"><Input placeholder="Monto ARS" type="number" step="any" value={form.amountArs} onChange={(e) => { setForm(p => ({...p, amountArs: e.target.value})); onAmountChange("", e.target.value); }} required /><Input placeholder="Tipo de cambio" type="number" step="any" value={form.exchangeRate} onChange={(e) => setForm(p => ({...p, exchangeRate: e.target.value}))} required /></div>
+            ) : (
+              <Input placeholder="Monto USD" type="number" step="any" value={form.amountUsd} onChange={(e) => { setForm(p => ({...p, amountUsd: e.target.value})); onAmountChange(e.target.value, ""); }} required />
+            )}
+
+            <div className="space-y-2 max-h-[40vh] overflow-y-auto overflow-x-auto">
+              {rows.map((r, i) => (
+                <div key={i} className="flex gap-1 items-center text-xs border rounded-lg p-1.5 bg-gray-50">
+                  <span className="w-5 text-gray-400">{i+1}</span>
+                  <Select value={r.status} onChange={(e) => updateRow(i, { status: e.target.value as "PAID"|"PENDING" })} className="w-20 text-xs h-7"><option value="PAID">Pagado</option><option value="PENDING">Pendiente</option></Select>
+                  <Input type="date" value={r.date} onChange={(e) => updateRow(i, { date: e.target.value })} className="w-32 text-xs h-7" />
+                  {form.useArs ? (<><Input type="number" step="any" value={r.amountArs} onChange={(e) => updateRow(i, { amountArs: e.target.value })} className="w-24 text-xs h-7" placeholder="ARS" /><Input type="number" step="any" value={r.exchangeRate} onChange={(e) => updateRow(i, { exchangeRate: e.target.value })} className="w-20 text-xs h-7" placeholder="TC" /></>) : (<Input type="number" step="any" value={r.amountUsd} onChange={(e) => updateRow(i, { amountUsd: e.target.value })} className="w-24 text-xs h-7" placeholder="USD" />)}
+                  <button type="button" onClick={() => removeRow(i)} className="text-red-400 hover:text-red-600 text-lg leading-none px-1" title="Eliminar fila">×</button>
+                </div>
+              ))}
+            </div>
+            <Button variant="secondary" type="button" className="text-xs" onClick={addRow}>+ Agregar fila</Button>
+            <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2">Se crearán {rows.length} gastos{form.useArs ? "" : ` — Total USD ${totalUsd.toLocaleString("es-AR", {minimumFractionDigits:2})}`}</div>
+          </div>
+        )}
+
         {formErr && <p className="text-sm text-red-600">{formErr}</p>}
-        <div className="flex justify-end gap-2 pt-2"><Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancelar</Button><Button type="submit" disabled={formSaving}>Guardar</Button></div>
+        <div className="flex justify-end gap-2 pt-2"><Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancelar</Button><Button type="submit" disabled={formSaving}>{multi ? `Guardar ${rows.length} gastos` : "Guardar"}</Button></div>
       </form></div></div></div></ModalPortal>}
 
       {/* Pay modal */}

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isAuthenticated } from "@/lib/auth";
-import { createExpense, updateExpense, deleteExpense, expenseSchema, getExpense } from "@/server/services/expenses";
+import { createExpense, updateExpense, deleteExpense, expenseSchema, getExpense, createExpenseBatch as batchCreate } from "@/server/services/expenses";
 
 type R = { success: true } | { success: false; message: string };
 function pn(v: FormDataEntryValue | null) { if (!v || v === "") return undefined; const n = Number(v); return Number.isFinite(n) ? n : undefined; }
@@ -44,4 +44,18 @@ export async function payExpense(_prev: R | null, fd: FormData): Promise<R> {
     revalidatePath("/expenses");
     return { success: true };
   } catch (e) { return { success: false, message: e instanceof Error ? e.message : "Error." }; }
+}
+
+export async function createExpenseBatch(entries: Array<{
+  expenseCategoryId: string; projectId?: string | null; type: string;
+  concept: string; notes?: string | null; status: string;
+  amountUsd?: number | null; amountArs?: number | null; exchangeRate?: number | null;
+  dueDate?: string | null; effectiveDate?: string | null;
+}>): Promise<R> {
+  try {
+    if (!isAuthenticated()) throw new Error("Sesion expirada.");
+    await batchCreate(entries);
+    revalidatePath("/expenses");
+    return { success: true };
+  } catch (e) { return { success: false, message: e instanceof Error ? e.message : "Error al guardar lote." }; }
 }

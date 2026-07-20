@@ -102,3 +102,35 @@ export async function deleteExpense(id: string) {
   await prisma.expense.delete({ where: { id } });
   revalidatePath("/expenses");
 }
+
+export type BatchEntry = {
+  expenseCategoryId: string; projectId?: string | null; type: string;
+  concept: string; notes?: string | null; status: string;
+  amountUsd?: number | null; amountArs?: number | null; exchangeRate?: number | null;
+  dueDate?: string | null; effectiveDate?: string | null;
+};
+
+export async function createExpenseBatch(entries: BatchEntry[]) {
+  await prisma.$transaction(async (tx) => {
+    for (const entry of entries) {
+      const data = expenseSchema.parse(entry);
+      if (data.status === "PENDING" && !data.dueDate) throw new Error("La fecha de vencimiento es obligatoria.");
+      if (data.status === "PAID" && !data.effectiveDate) throw new Error("La fecha de pago es obligatoria.");
+      const money = computeMoney(data);
+      await tx.expense.create({
+        data: {
+          expenseCategoryId: data.expenseCategoryId,
+          projectId: data.projectId ?? null,
+          type: data.type as "FIXED" | "VARIABLE",
+          concept: data.concept,
+          notes: data.notes?.trim() || null,
+          status: data.status as "PAID" | "PENDING",
+          ...money,
+          dueDate: data.dueDate ? new Date(data.dueDate) : null,
+          effectiveDate: data.status === "PAID" ? new Date(data.effectiveDate!) : null,
+        },
+      });
+    }
+  });
+  revalidatePath("/expenses");
+}
