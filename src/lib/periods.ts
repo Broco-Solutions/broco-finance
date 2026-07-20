@@ -1,7 +1,7 @@
 import { todayArg } from "@/lib/dates";
 
 export type Period = { from: Date; to: Date; label: string; prevFrom: Date; prevTo: Date };
-export type PeriodPreset = "this-month" | "last-month" | "this-year" | "custom";
+export type PeriodPreset = "this-month" | "last-month" | "this-year" | "all" | "custom";
 
 function daysBetween(a: Date, b: Date) { return Math.round((b.getTime() - a.getTime()) / 86400000) + 1; }
 
@@ -38,6 +38,15 @@ export function resolvePeriod(preset: string | null, fromStr: string | null, toS
     const prevTo = new Date(from.getTime() - 86400000);
     const prevFrom = new Date(prevTo.getTime() - (days - 1) * 86400000);
     return { from, to, label: `${fromStr} – ${toStr}`, prevFrom, prevTo };
+  }
+
+  if (preset === "all") {
+    const from = new Date(2025, 8, 9);
+    const to = today;
+    const days = daysBetween(from, to);
+    const prevTo = new Date(from.getTime() - 1);
+    const prevFrom = new Date(prevTo.getTime() - (days - 1) * 86400000);
+    return { from, to, label: "Total", prevFrom, prevTo };
   }
 
   // Default: this-month

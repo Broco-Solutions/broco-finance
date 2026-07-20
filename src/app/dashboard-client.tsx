@@ -65,7 +65,7 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
       {/* Period selector */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex rounded-lg border border-gray-200 bg-white p-0.5">
-          {[{k:"this-month",l:"Este mes"},{k:"last-month",l:"Mes anterior"},{k:"this-year",l:"Este año"},{k:"custom",l:"Personalizado"}].map(o => (
+          {[{k:"this-month",l:"Este mes"},{k:"last-month",l:"Mes anterior"},{k:"this-year",l:"Este año"},{k:"all",l:"Total"},{k:"custom",l:"Personalizado"}].map(o => (
             <button key={o.k} onClick={() => applyPreset(o.k)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${preset === o.k ? "bg-brand text-white" : "text-gray-600 hover:bg-gray-100"}`}>{o.l}</button>
           ))}
         </div>
