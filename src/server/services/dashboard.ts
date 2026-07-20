@@ -6,11 +6,40 @@ export async function getDashboard(from: Date, to: Date) {
   const today = todayArg();
   const in30 = new Date(today.getTime() + 30 * 86400000);
 
-  const [paidIncomes, paidExpenses, pendingIncomes, pendingExpenses, overdueIncomes, overdueExpenses,
-    upcomingIncomes, upcomingExpenses, overdueIncList, overdueExpList,
-    globalPendingInc, globalPendingExp,
-    catBreakdown, clientBreakdown,
-  ] = await Promise.all([
+  // Generate projection months: next month + 5 more
+  const projMonths: { start: Date; end: Date; label: string }[] = [];
+  for (let i = 1; i <= 6; i++) {
+    const m = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const end = new Date(m.getFullYear(), m.getMonth() + 1, 0);
+    projMonths.push({
+      start: m,
+      end,
+      label: m.toLocaleDateString("es-AR", { month: "short", year: "numeric" }),
+    });
+  }
+
+  const projectionQueries = projMonths.flatMap(({ start, end }) => [
+    prisma.income.aggregate({
+      where: {
+        OR: [
+          { status: "PENDING", dueDate: { gte: start, lte: end } },
+          { status: "PAID", effectiveDate: { gte: start, lte: end } },
+        ],
+      },
+      _sum: { amountUsd: true },
+    }),
+    prisma.expense.aggregate({
+      where: {
+        OR: [
+          { status: "PENDING", dueDate: { gte: start, lte: end } },
+          { status: "PAID", effectiveDate: { gte: start, lte: end } },
+        ],
+      },
+      _sum: { amountUsd: true },
+    }),
+  ]);
+
+  const mainResults = await Promise.all([
     prisma.income.aggregate({ where: { status: "PAID", effectiveDate: { gte: from, lte: to } }, _sum: { amountUsd: true }, _count: true }),
     prisma.expense.aggregate({ where: { status: "PAID", effectiveDate: { gte: from, lte: to } }, _sum: { amountUsd: true }, _count: true }),
     prisma.income.aggregate({ where: { status: "PENDING", dueDate: { gte: from, lte: to } }, _sum: { amountUsd: true }, _count: true }),
@@ -29,6 +58,14 @@ export async function getDashboard(from: Date, to: Date) {
     // Client breakdown for period
     prisma.income.findMany({ where: { status: "PAID", effectiveDate: { gte: from, lte: to }, clientId: { not: null } }, include: { client: { select: { id: true, name: true } }, project: { select: { id: true, name: true } } }, orderBy: { client: { name: "asc" } } }),
   ]);
+  const projResults = await Promise.all(projectionQueries);
+
+  const [
+    paidIncomes, paidExpenses, pendingIncomes, pendingExpenses, overdueIncomes, overdueExpenses,
+    upcomingIncomes, upcomingExpenses, overdueIncList, overdueExpList,
+    globalPendingInc, globalPendingExp,
+    catBreakdown, clientBreakdown,
+  ] = mainResults;
 
   // Process category breakdown
   const categories = await prisma.expenseCategory.findMany({ select: { id: true, name: true } });
@@ -68,5 +105,11 @@ export async function getDashboard(from: Date, to: Date) {
     overdueExpenses: overdueExpList.map(e => ({ id: e.id, concept: e.concept, dueDate: e.dueDate?.toISOString().slice(0,10)??null, amountUsd: Number(e.amountUsd), categoryName: e.category.name, projectName: e.project?.name??null })),
     categoryBreakdown: { total: catTotal, items: catData },
     clientBreakdown: { total: clientData.reduce((s, c) => s + c.total, 0), items: clientData },
+    projection: projMonths.map((m, i) => ({
+      month: m.label,
+      incomesUsd: Number(projResults[i * 2]._sum.amountUsd ?? 0),
+      expensesUsd: Number(projResults[i * 2 + 1]._sum.amountUsd ?? 0),
+      netUsd: Number(projResults[i * 2]._sum.amountUsd ?? 0) - Number(projResults[i * 2 + 1]._sum.amountUsd ?? 0),
+    })),
   };
 }

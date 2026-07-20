@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUpRight, ArrowDownRight, PlusCircle, Receipt, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { ArrowUpRight, ArrowDownRight, PlusCircle, Receipt, AlertTriangle, TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, Line, ComposedChart, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -94,10 +94,10 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
         </Link>
         <KpiCard title="Resultado neto" value={k.netUsd} prevValue={prevData.kpis.netUsd} prevLabel={prevLabel} />
         <Link href="/incomes?status=PENDING" className="block">
-          <KpiCard title="Pendiente de cobro" value={k.globalPendingIncomesUsd} detail="Total pendiente actual" global />
+          <KpiCard title="Pendiente de cobro" value={k.pendingIncomesUsd} detail={`Total actual: ${formatUsd(k.globalPendingIncomesUsd)}`} global />
         </Link>
         <Link href="/expenses?status=PENDING" className="block">
-          <KpiCard title="Pendiente de pago" value={k.globalPendingExpensesUsd} detail="Total pendiente actual" global />
+          <KpiCard title="Pendiente de pago" value={k.pendingExpensesUsd} detail={`Total actual: ${formatUsd(k.globalPendingExpensesUsd)}`} global />
         </Link>
       </div>
 
@@ -106,14 +106,55 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Ingresos y gastos</h3>
         <div className="h-56 sm:h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={[{ name: "", Ingresos: k.paidIncomesUsd, Gastos: k.paidExpensesUsd }]} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+            <BarChart data={[{ name: "", Ingresos: k.paidIncomesUsd, Gastos: k.paidExpensesUsd }]} margin={{ top: 20, right: 5, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)} />
+              <XAxis dataKey="name" tick={false} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`} />
               <Tooltip formatter={(v: any) => formatUsd(v)} />
-              <Bar dataKey="Ingresos" fill="#3b82f6" radius={[4,4,0,0]} />
-              <Bar dataKey="Gastos" fill="#ef4444" radius={[4,4,0,0]} />
+              <Bar dataKey="Ingresos" fill="#10b981" radius={[4,4,0,0]}>
+                <LabelList dataKey="Ingresos" position="top" formatter={(v: any) => formatUsd(Number(v))} style={{ fontSize: 10 }} />
+              </Bar>
+              <Bar dataKey="Gastos" fill="#ef4444" radius={[4,4,0,0]}>
+                <LabelList dataKey="Gastos" position="top" formatter={(v: any) => formatUsd(Number(v))} style={{ fontSize: 10 }} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* Proyeccion mensual */}
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Proyeccion proximos 6 meses</h3>
+        <div className="h-56 sm:h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={data.projection} margin={{ top: 20, right: 5, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`} />
+              <Tooltip formatter={(v: any) => formatUsd(v)} labelFormatter={(l) => l} />
+              <Legend iconType="rect" iconSize={10} />
+              <Bar dataKey="incomesUsd" name="Ingresos" fill="#10b981" radius={[3,3,0,0]} maxBarSize={24}>
+                <LabelList dataKey="incomesUsd" position="top" formatter={(v: any) => v >= 1000 ? `${(Number(v)/1000).toFixed(0)}k` : String(v)} style={{ fontSize: 9, fill: "#10b981" }} />
+              </Bar>
+              <Bar dataKey="expensesUsd" name="Gastos" fill="#ef4444" radius={[3,3,0,0]} maxBarSize={24}>
+                <LabelList dataKey="expensesUsd" position="top" formatter={(v: any) => v >= 1000 ? `${(Number(v)/1000).toFixed(0)}k` : String(v)} style={{ fontSize: 9, fill: "#ef4444" }} />
+              </Bar>
+              <Line type="monotone" dataKey="netUsd" name="Neto" stroke="#6366f1" strokeWidth={2} dot={{ r: 3, fill: "#6366f1" }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        {/* Resumen en tabla */}
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          {data.projection.map((p) => (
+            <div key={p.month} className="rounded-lg border border-gray-100 p-2 text-center text-xs">
+              <div className="font-medium text-gray-500 mb-1">{p.month}</div>
+              <div className="text-emerald-600 font-semibold">{formatUsd(p.incomesUsd)}</div>
+              <div className="text-red-500 font-semibold">{formatUsd(p.expensesUsd)}</div>
+              <div className={`font-bold mt-0.5 ${p.netUsd >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                {formatUsd(p.netUsd)}
+              </div>
+            </div>
+          ))}
         </div>
       </Card>
 
