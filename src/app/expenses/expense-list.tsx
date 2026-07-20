@@ -190,7 +190,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
       </div>
 
       {/* Expense form modal */}
-      {showForm && <ModalPortal><div className="fixed inset-0 z-[90] overflow-y-auto"><button className="fixed inset-0 bg-black/50" onClick={() => setShowForm(false)} /><div className="relative flex min-h-full items-center justify-center p-4"><div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl"><h2 className="text-lg font-bold">{editing ? "Editar gasto" : "Nuevo gasto"}</h2>
+      {showForm && <ModalPortal><div className="fixed inset-0 z-[90] overflow-y-auto"><button className="fixed inset-0 bg-black/50" onClick={() => setShowForm(false)} /><div className="relative flex min-h-full items-center justify-center p-4"><div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl overflow-x-hidden"><h2 className="text-lg font-bold">{editing ? "Editar gasto" : "Nuevo gasto"}</h2>
       <form onSubmit={handleFormSubmit} className="mt-4 space-y-3 max-h-[70vh] overflow-y-auto">
         <Select value={form.expenseCategoryId} onChange={(e) => setForm(p => ({...p, expenseCategoryId: e.target.value}))} required><option value="">Categoria *</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
         <Select value={form.clientId} onChange={(e) => setForm(p => ({...p, clientId: e.target.value, projectId: ""}))}><option value="">Cliente</option>{cls.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
@@ -208,7 +208,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
       </form></div></div></div></ModalPortal>}
 
       {/* Pay modal */}
-      {payTarget && <ModalPortal><div className="fixed inset-0 z-[90] overflow-y-auto"><button className="fixed inset-0 bg-black/50" onClick={() => setPayTarget(null)} /><div className="relative flex min-h-full items-center justify-center p-4"><div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl"><h2 className="text-lg font-bold">Pagar</h2><p className="text-sm text-gray-500 mt-1">{payTarget.concept}</p>
+      {payTarget && <ModalPortal><div className="fixed inset-0 z-[90] overflow-y-auto"><button className="fixed inset-0 bg-black/50" onClick={() => setPayTarget(null)} /><div className="relative flex min-h-full items-center justify-center p-4"><div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl overflow-x-hidden"><h2 className="text-lg font-bold">Pagar</h2><p className="text-sm text-gray-500 mt-1">{payTarget.concept}</p>
       <form onSubmit={handlePay} className="mt-4 space-y-3">
         <Input type="date" value={payForm.effectiveDate} onChange={(e) => setPayForm(p => ({...p, effectiveDate: e.target.value}))} required />
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={payForm.useArs} onChange={(e) => setPayForm(p => ({...p, useArs: e.target.checked}))} />ARS</label>
@@ -217,7 +217,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
       </form></div></div></div></ModalPortal>}
 
       {/* Category management */}
-      {showCatMgmt && <ModalPortal><div className="fixed inset-0 z-[90] overflow-y-auto"><button className="fixed inset-0 bg-black/50" onClick={() => setShowCatMgmt(false)} /><div className="relative flex min-h-full items-center justify-center p-4"><div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl"><h2 className="text-lg font-bold">Categorias</h2>
+      {showCatMgmt && <ModalPortal><div className="fixed inset-0 z-[90] overflow-y-auto"><button className="fixed inset-0 bg-black/50" onClick={() => setShowCatMgmt(false)} /><div className="relative flex min-h-full items-center justify-center p-4"><div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl overflow-x-hidden"><h2 className="text-lg font-bold">Categorias</h2>
       <div className="mt-3 space-y-1 max-h-64 overflow-y-auto">{categories.map(c => <div key={c.id} className="flex items-center justify-between rounded border p-2 text-sm"><span>{c.name} <span className="text-gray-400">({c._count.expenses})</span></span><div className="space-x-1"><Button variant="secondary" className="text-xs" onClick={() => setCatForm({ id: c.id, name: c.name })}>Editar</Button><Button variant="secondary" className="text-xs text-brick" onClick={() => setCatDelTarget(c)}>Elim.</Button></div></div>)}</div>
       <form onSubmit={handleCatSave} className="mt-3 flex gap-2"><Input placeholder="Nombre" value={catForm.name} onChange={(e) => setCatForm(p => ({...p, name: e.target.value}))} required /><Button type="submit" className="text-xs">{catForm.id ? "Guardar" : "Crear"}</Button></form>
       {catError && <p className="text-sm text-red-600 mt-1">{catError}</p>}

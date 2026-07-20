@@ -38,7 +38,7 @@ export function PayIncomeModal({
       <div className="fixed inset-0 z-[90] overflow-y-auto px-4 py-6">
         <button className="fixed inset-0 bg-ink/45 backdrop-blur-sm" onClick={onClose} />
         <div className="relative flex min-h-full items-start justify-center sm:items-center">
-          <div className="w-full max-w-md rounded-[1.5rem] bg-white p-6 shadow-[0_24px_80px_rgba(16,21,34,0.18)]">
+          <div className="w-full max-w-md rounded-[1.5rem] bg-white p-6 shadow-[0_24px_80px_rgba(16,21,34,0.18)] overflow-x-hidden">
             <h2 className="font-display text-2xl text-ink">Marcar como cobrado</h2>
             <p className="mt-2 text-sm text-ink/50">{income.concept}</p>
             {income.client && <p className="text-sm text-ink/50">Cliente: {income.client.name}</p>}

@@ -35,6 +35,7 @@ export async function saveIncome(_prev: ActionResult | null, formData: FormData)
 
     const id = formData.get("id") as string | null;
     if (id) { await updateIncome(id, data); } else { await createIncome(data); }
+    revalidatePath("/incomes");
     return { success: true };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al guardar." };
@@ -45,6 +46,7 @@ export async function removeIncome(_prev: ActionResult | null, formData: FormDat
   try {
     requireAuth();
     await deleteIncome(formData.get("id") as string);
+    revalidatePath("/incomes");
     return { success: true };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al eliminar." };

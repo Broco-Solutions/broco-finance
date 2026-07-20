@@ -4,6 +4,8 @@ import { listClients } from "@/server/services/clients";
 import { PageHeader } from "@/components/ui/page-header";
 import { IncomeList } from "./income-list";
 
+export const dynamic = "force-dynamic";
+
 export default async function IncomesPage() {
   const [incomes, projects, clients] = await Promise.all([
     listIncomes().catch(() => []),

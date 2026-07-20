@@ -5,6 +5,8 @@ import { listClients } from "@/server/services/clients";
 import { PageHeader } from "@/components/ui/page-header";
 import { ExpenseList } from "./expense-list";
 
+export const dynamic = "force-dynamic";
+
 export default async function ExpensesPage() {
   const [expenses, categories, projects, clients] = await Promise.all([
     listExpenses().catch(() => []),

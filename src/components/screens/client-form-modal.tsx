@@ -75,7 +75,7 @@ export function ClientFormModal({
           type="button"
         />
         <div className="relative flex min-h-full items-start justify-center sm:items-center">
-          <div className="w-full max-w-lg rounded-[1.5rem] bg-white p-6 shadow-[0_24px_80px_rgba(16,21,34,0.18)]">
+          <div className="w-full max-w-lg rounded-[1.5rem] bg-white p-6 shadow-[0_24px_80px_rgba(16,21,34,0.18)] overflow-x-hidden">
             <h2 className="font-display text-2xl text-ink">{title}</h2>
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               <Input

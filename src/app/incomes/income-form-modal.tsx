@@ -149,7 +149,7 @@ export function IncomeFormModal({
       <div className="fixed inset-0 z-[90] overflow-y-auto px-4 py-6">
         <button className="fixed inset-0 bg-ink/45 backdrop-blur-sm" onClick={onClose} />
         <div className="relative flex min-h-full items-start justify-center sm:items-center">
-          <div className="w-full max-w-lg rounded-[1.5rem] bg-white p-6 shadow-[0_24px_80px_rgba(16,21,34,0.18)]">
+          <div className="w-full max-w-lg rounded-[1.5rem] bg-white p-6 shadow-[0_24px_80px_rgba(16,21,34,0.18)] overflow-x-hidden">
             <h2 className="font-display text-2xl text-ink">{title}</h2>
             <form onSubmit={handleSubmit} className="mt-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <Select value={form.type} onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}>
@@ -198,10 +198,10 @@ export function IncomeFormModal({
               </label>
 
               {multi && (
-                <div className="space-y-3 pl-4 border-l-2 border-brand/20">
-                  <div className="flex gap-3">
-                    <div className="flex-1"><label className="text-xs text-gray-500">Cantidad (mín 2)</label><Input type="number" min={2} value={String(count)} onChange={(e) => setCountDynamic(Number(e.target.value)||2)} /></div>
-                    <div className="flex-1"><label className="text-xs text-gray-500">Intervalo (días)</label><Input type="number" min={1} value={String(interval)} onChange={(e) => onIntervalChange(Math.max(1, Number(e.target.value)||1))} /></div>
+                <div className="space-y-3 pl-4 border-l-2 border-brand/20 min-w-0">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex-1 min-w-0"><label className="text-xs text-gray-500">Cantidad (mín 2)</label><Input type="number" min={2} value={String(count)} onChange={(e) => setCountDynamic(Number(e.target.value)||2)} /></div>
+                    <div className="flex-1 min-w-0"><label className="text-xs text-gray-500">Intervalo (días)</label><Input type="number" min={1} value={String(interval)} onChange={(e) => onIntervalChange(Math.max(1, Number(e.target.value)||1))} /></div>
                   </div>
 
                   <Select value={form.status} onChange={(e) => setForm(p => ({...p, status: e.target.value as "PAID"|"PENDING"}))}><option value="PAID">Cobrado</option><option value="PENDING">Pendiente</option></Select>
@@ -214,7 +214,7 @@ export function IncomeFormModal({
                     <Input placeholder="Monto USD" type="number" step="any" value={form.amountUsd} onChange={(e) => { setForm(p => ({...p, amountUsd: e.target.value})); onAmountChange(e.target.value, ""); }} required />
                   )}
 
-                  <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+                  <div className="space-y-2 max-h-[40vh] overflow-y-auto overflow-x-auto">
                     {rows.map((r, i) => (
                       <div key={i} className="flex gap-1 items-center text-xs border rounded-lg p-1.5 bg-gray-50">
                         <span className="w-5 text-gray-400">{i+1}</span>
