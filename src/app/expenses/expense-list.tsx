@@ -108,8 +108,8 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
         <div className="flex gap-2 flex-wrap">
           <Select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className="w-28 text-xs"><option value="all">Todos</option><option value="PAID">Pagados</option><option value="PENDING">Pendientes</option><option value="OVERDUE">Vencidos</option></Select>
           <Select value={fType} onChange={(e) => setFType(e.target.value)} className="w-24 text-xs"><option value="">Tipos</option><option value="FIXED">Fijos</option><option value="VARIABLE">Variables</option></Select>
-          <Select value={fCat} onChange={(e) => setFCat(e.target.value)} className="w-36 text-xs"><option value="">Cats</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
-          <Select value={fProj} onChange={(e) => setFProj(e.target.value)} className="w-36 text-xs"><option value="">Proys</option>{projs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
+          <Select value={fCat} onChange={(e) => setFCat(e.target.value)} className="w-36 text-xs"><option value="">Categorias</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
+          <Select value={fProj} onChange={(e) => setFProj(e.target.value)} className="w-36 text-xs"><option value="">Proyecto</option>{projs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
           <div className="flex items-center gap-1">
             <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-32 text-xs h-8" placeholder="Desde" />
             <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-32 text-xs h-8" placeholder="Hasta" />
@@ -118,7 +118,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" className="text-xs" onClick={() => setShowCatMgmt(true)}>Categorias</Button>
-          <Button className="text-xs" onClick={() => openForm()}>Nuevo gasto</Button>
+          <Button onClick={() => openForm()}>Nuevo gasto</Button>
         </div>
       </div>
 
@@ -151,7 +151,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
               <td className="px-4 py-2.5"><Badge tone={formatExpenseStatus(e.status, e.dueDate) === "Pagado" ? "success" : formatExpenseStatus(e.status, e.dueDate) === "Vencido" ? "danger" : "warning"}>{formatExpenseStatus(e.status, e.dueDate)}</Badge></td>
               <td className="px-4 py-2.5 text-sm tabular-nums whitespace-nowrap">{e.status === "PAID" ? formatDate(e.effectiveDate) : formatDate(e.dueDate)}</td>
               <td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(fmt(e.amountUsd))}</td>
-              <td className="px-4 py-2.5 text-sm text-right tabular-nums">{e.amountArs ? formatArs(fmt(e.amountArs)) : "—"}</td>
+              <td className="px-4 py-2.5 text-sm text-right tabular-nums">{e.amountArs ? `${formatArs(fmt(e.amountArs))} · TC ${fmt(e.exchangeRate)}` : "—"}</td>
               <td className="px-4 py-2.5 space-x-1 whitespace-nowrap">
                 {e.status === "PENDING" && <Button variant="secondary" className="text-xs" onClick={() => openPay(e)}>Pagar</Button>}
                 <Button variant="secondary" className="text-xs" onClick={() => openForm(e)}>Editar</Button>
@@ -178,7 +178,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
               <span>{e.project?.name ?? "Sin proyecto"}</span>
               <span>{e.status === "PAID" ? formatDate(e.effectiveDate) : formatDate(e.dueDate)}</span>
             </div>
-            {e.amountArs && <div className="text-xs text-gray-500 text-right">{formatArs(fmt(e.amountArs))}</div>}
+            {e.amountArs && <div className="text-xs text-gray-500 text-right">{formatArs(fmt(e.amountArs))} · TC {fmt(e.exchangeRate)}</div>}
             <div className="flex gap-1 pt-1">
               {e.status === "PENDING" && <Button variant="secondary" className="text-xs flex-1" onClick={() => openPay(e)}>Pagar</Button>}
               <Button variant="secondary" className="text-xs flex-1" onClick={() => openForm(e)}>Editar</Button>

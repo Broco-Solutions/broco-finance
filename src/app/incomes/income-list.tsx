@@ -25,6 +25,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   const [incomes] = useState<Income[]>(initialIncomes);
   const [filter, setFilter] = useState("all"); const [typeFilter, setTypeFilter] = useState("");
   const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
+  const [fClient, setFClient] = useState(""); const [fProject, setFProject] = useState("");
   const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState<Income | null>(null);
   const [payTarget, setPayTarget] = useState<Income | null>(null); const [deleteTarget, setDeleteTarget] = useState<Income | null>(null);
   const [delError, setDelError] = useState<string | null>(null);
@@ -46,7 +47,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   }, [sp]);
 
   const clearRange = () => { setDateFrom(""); setDateTo(""); router.replace("/incomes"); };
-  const clearFilters = () => { setFilter("all"); setTypeFilter(""); clearRange(); };
+  const clearFilters = () => { setFilter("all"); setTypeFilter(""); setFClient(""); setFProject(""); clearRange(); };
 
   const reload = () => { setTimeout(() => window.location.reload(), 500); };
   const mkFd = (data: Record<string, unknown>, id?: string) => {
@@ -82,6 +83,8 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
     if (filter === "PAID" && inc.status !== "PAID") return false;
     if (filter === "OVERDUE") { if (inc.status !== "PENDING") return false; const t = new Date(); const d = inc.dueDate ? new Date(inc.dueDate) : null; return d && d < t; }
     if (typeFilter && inc.type !== typeFilter) return false;
+    if (fClient && inc.clientId !== fClient) return false;
+    if (fProject && inc.projectId !== fProject) return false;
     // Date range filter
     if (dateFrom || dateTo) {
       const from = dateFrom ? new Date(dateFrom + "T00:00:00") : null;
@@ -105,21 +108,27 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-2 flex-wrap">
-          <Select value={filter} onChange={(e) => setFilter(e.target.value)} className="w-28 text-xs">
-            <option value="all">Todos</option><option value="PAID">Cobrados</option><option value="PENDING">Pendientes</option><option value="OVERDUE">Vencidos</option>
-          </Select>
-          <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-36 text-xs">
-            <option value="">Todos los tipos</option><option value="DEVELOPMENT">Desarrollo</option><option value="MAINTENANCE">Mantenimiento</option><option value="OTHER">Otro</option>
-          </Select>
-          <div className="flex items-center gap-1">
-            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-32 text-xs h-8" placeholder="Desde" />
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-32 text-xs h-8" placeholder="Hasta" />
-            {(dateFrom || dateTo) && <Button variant="ghost" className="text-xs" onClick={clearRange}>Limpiar fechas</Button>}
+          <div className="flex gap-2 flex-wrap">
+            <Select value={filter} onChange={(e) => setFilter(e.target.value)} className="w-28 text-xs">
+              <option value="all">Todos</option><option value="PAID">Cobrados</option><option value="PENDING">Pendientes</option><option value="OVERDUE">Vencidos</option>
+            </Select>
+            <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-36 text-xs">
+              <option value="">Tipos</option><option value="DEVELOPMENT">Desarrollo</option><option value="MAINTENANCE">Mantenimiento</option><option value="OTHER">Otro</option>
+            </Select>
+            <Select value={fClient} onChange={(e) => { setFClient(e.target.value); setFProject(""); }} className="w-36 text-xs">
+              <option value="">Cliente</option>{clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+            <Select value={fProject} onChange={(e) => setFProject(e.target.value)} className="w-36 text-xs" disabled={!fClient}>
+              <option value="">Proyecto</option>{projects.filter(p => !fClient || p.id === fProject || p.clientId === fClient).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+            <div className="flex items-center gap-1">
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-32 text-xs h-8" placeholder="Desde" />
+              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-32 text-xs h-8" placeholder="Hasta" />
+              {(dateFrom || dateTo) && <Button variant="ghost" className="text-xs" onClick={clearRange}>Limpiar fechas</Button>}
+            </div>
           </div>
-        </div>
         <div className="flex gap-2 flex-wrap">
-          <Button className="text-xs" onClick={() => { setEditing(null); setShowForm(true); }}>Nuevo ingreso</Button>
+          <Button onClick={() => { setEditing(null); setShowForm(true); }}>Nuevo ingreso</Button>
         </div>
       </div>
 
@@ -128,7 +137,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
         <span className="text-gray-500">Total filtrado · <span className="font-medium">{filtered.length} movimientos</span></span>
         <span className="font-bold tabular-nums text-gray-900">{formatUsd(filteredTotal)}</span>
       </div>
-      {(dateFrom || dateTo || filter !== "all" || typeFilter) && (
+      {(dateFrom || dateTo || filter !== "all" || typeFilter || fClient || fProject) && (
         <div className="flex items-center gap-2 flex-wrap">
           {dateFrom && dateTo && <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{dateFrom.split("-").reverse().join("/")} – {dateTo.split("-").reverse().join("/")}</span>}
           {filter !== "all" && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{filter === "PAID" ? "Cobrados" : filter === "PENDING" ? "Pendientes" : "Vencidos"}</span>}
@@ -152,7 +161,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
               <td className="px-4 py-2.5"><Badge tone={statusTone(inc.status, inc.dueDate)}>{statusLabel(inc.status, inc.dueDate)}</Badge></td>
               <td className="px-4 py-2.5 text-sm tabular-nums whitespace-nowrap">{inc.status === "PAID" ? formatDate(inc.effectiveDate) : formatDate(inc.dueDate)}</td>
               <td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(fmt(inc.amountUsd))}</td>
-              <td className="px-4 py-2.5 text-sm text-right tabular-nums">{inc.amountArs ? formatArs(fmt(inc.amountArs)) : "—"}</td>
+              <td className="px-4 py-2.5 text-sm text-right tabular-nums">{inc.amountArs ? `${formatArs(fmt(inc.amountArs))} · TC ${fmt(inc.exchangeRate)}` : "—"}</td>
               <td className="px-4 py-2.5 space-x-1 whitespace-nowrap">
                 {inc.status === "PENDING" && <Button variant="secondary" className="text-xs" onClick={() => setPayTarget(inc)}>Cobrar</Button>}
                 <Button variant="secondary" className="text-xs" onClick={() => { setEditing(inc); setShowForm(true); }}>Editar</Button>
@@ -179,7 +188,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
               <span>{inc.client?.name ?? "—"}{inc.project ? ` · ${inc.project.name}` : ""}</span>
               <span>{inc.status === "PAID" ? formatDate(inc.effectiveDate) : formatDate(inc.dueDate)}</span>
             </div>
-            {inc.amountArs && <div className="text-xs text-gray-500 text-right">{formatArs(fmt(inc.amountArs))}</div>}
+            {inc.amountArs && <div className="text-xs text-gray-500 text-right">{formatArs(fmt(inc.amountArs))} · TC {fmt(inc.exchangeRate)}</div>}
             <div className="flex gap-1 pt-1">
               {inc.status === "PENDING" && <Button variant="secondary" className="text-xs flex-1" onClick={() => setPayTarget(inc)}>Cobrar</Button>}
               <Button variant="secondary" className="text-xs flex-1" onClick={() => { setEditing(inc); setShowForm(true); }}>Editar</Button>

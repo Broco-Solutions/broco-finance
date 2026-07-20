@@ -190,7 +190,35 @@ export async function getProject(id: string) {
     },
   });
   if (!project) throw new Error("Proyecto no encontrado.");
-  return project;
+
+  const [incAll, incPaid, incPending, expAll, expPaid, expPending] = await Promise.all([
+    prisma.income.aggregate({ where: { projectId: id }, _sum: { amountUsd: true, amountArs: true } }),
+    prisma.income.aggregate({ where: { projectId: id, status: "PAID" }, _sum: { amountUsd: true, amountArs: true } }),
+    prisma.income.aggregate({ where: { projectId: id, status: "PENDING" }, _sum: { amountUsd: true, amountArs: true } }),
+    prisma.expense.aggregate({ where: { projectId: id }, _sum: { amountUsd: true, amountArs: true } }),
+    prisma.expense.aggregate({ where: { projectId: id, status: "PAID" }, _sum: { amountUsd: true, amountArs: true } }),
+    prisma.expense.aggregate({ where: { projectId: id, status: "PENDING" }, _sum: { amountUsd: true, amountArs: true } }),
+  ]);
+
+  return {
+    ...project,
+    _incomeTotals: {
+      all: incAll._sum.amountUsd ?? 0,
+      paid: incPaid._sum.amountUsd ?? 0,
+      pending: incPending._sum.amountUsd ?? 0,
+      allArs: incAll._sum.amountArs ?? 0,
+      paidArs: incPaid._sum.amountArs ?? 0,
+      pendingArs: incPending._sum.amountArs ?? 0,
+    },
+    _expenseTotals: {
+      all: expAll._sum.amountUsd ?? 0,
+      paid: expPaid._sum.amountUsd ?? 0,
+      pending: expPending._sum.amountUsd ?? 0,
+      allArs: expAll._sum.amountArs ?? 0,
+      paidArs: expPaid._sum.amountArs ?? 0,
+      pendingArs: expPending._sum.amountArs ?? 0,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
