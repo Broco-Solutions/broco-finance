@@ -42,8 +42,8 @@ export async function getDashboard(from: Date, to: Date) {
   const mainResults = await Promise.all([
     prisma.income.aggregate({ where: { status: "PAID", effectiveDate: { gte: from, lte: to } }, _sum: { amountUsd: true }, _count: true }),
     prisma.expense.aggregate({ where: { status: "PAID", effectiveDate: { gte: from, lte: to } }, _sum: { amountUsd: true }, _count: true }),
-    prisma.income.aggregate({ where: { status: "PENDING", dueDate: { gte: from, lte: to } }, _sum: { amountUsd: true }, _count: true }),
-    prisma.expense.aggregate({ where: { status: "PENDING", dueDate: { gte: from, lte: to } }, _sum: { amountUsd: true }, _count: true }),
+    prisma.income.aggregate({ where: { status: "PENDING", dueDate: { gte: from } }, _sum: { amountUsd: true }, _count: true }),
+    prisma.expense.aggregate({ where: { status: "PENDING", dueDate: { gte: from } }, _sum: { amountUsd: true }, _count: true }),
     prisma.income.aggregate({ where: { status: "PENDING", dueDate: { lt: today } }, _sum: { amountUsd: true }, _count: true }),
     prisma.expense.aggregate({ where: { status: "PENDING", dueDate: { lt: today } }, _sum: { amountUsd: true }, _count: true }),
     prisma.income.findMany({ where: { status: "PENDING", dueDate: { gte: today, lte: in30 } }, orderBy: { dueDate: "asc" }, take: 10, include: { client: { select: { name: true } }, project: { select: { name: true } } } }),
