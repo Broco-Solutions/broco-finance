@@ -21,11 +21,11 @@ export function resolvePeriod(preset: string | null, fromStr: string | null, toS
 
   if (preset === "this-year") {
     const from = new Date(y, 0, 1);
-    const to = today;
+    const to = new Date(y, 11, 31);
     const days = daysBetween(from, to);
     const prevTo = new Date(y - 1, 0, days);
     const prevFrom = new Date(y - 1, 0, 1);
-    return { from, to, label: `Ene – ${today.toLocaleDateString("es-AR", { month: "short" })} ${y}`, prevFrom, prevTo };
+    return { from, to, label: `Ene – Dic ${y}`, prevFrom, prevTo };
   }
 
   if (preset === "custom" && fromStr && toStr) {
@@ -51,7 +51,7 @@ export function resolvePeriod(preset: string | null, fromStr: string | null, toS
 
   // Default: this-month
   const from = new Date(y, m, 1);
-  const to = today;
+  const to = new Date(y, m + 1, 0);
   const days = daysBetween(from, to);
   const prevM = m === 0 ? 11 : m - 1;
   const prevY = m === 0 ? y - 1 : y;
@@ -59,7 +59,7 @@ export function resolvePeriod(preset: string | null, fromStr: string | null, toS
   const clampedDays = Math.min(days, prevMonthDays);
   const prevTo = new Date(prevY, prevM, clampedDays);
   const prevFrom = new Date(prevY, prevM, 1);
-  return { from, to, label: `${toLocaleMonth(y, m)} (al ${today.getDate()})`, prevFrom, prevTo };
+  return { from, to, label: toLocaleMonth(y, m), prevFrom, prevTo };
 }
 
 function toLocaleMonth(y: number, m: number) {
