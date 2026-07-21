@@ -2,8 +2,11 @@ import "server-only";
 import { prisma } from "@/server/prisma";
 import { todayArg } from "@/lib/dates";
 
-export async function getDashboard(from: Date, to: Date) {
+export async function getDashboard(_from: Date, _to: Date) {
   const today = todayArg();
+  // Normalize to UTC midnight so Prisma compares correctly with @db.Date columns
+  const from = new Date(Date.UTC(_from.getFullYear(), _from.getMonth(), _from.getDate()));
+  const to = new Date(Date.UTC(_to.getFullYear(), _to.getMonth(), _to.getDate()));
   const in30 = new Date(today.getTime() + 30 * 86400000);
 
   // Generate projection months: next month + 5 more
