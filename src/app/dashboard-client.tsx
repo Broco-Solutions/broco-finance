@@ -84,8 +84,8 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
         </div>
       </div>
 
-      {/* KPIs row 1 */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+      {/* KPIs row 1 — Ingresos, Gastos, Neto */}
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
         <Link href={`/incomes?${incomeParams}`} className="block">
           <KpiCard title="Ingresos" value={k.paidIncomesUsd} prevValue={prevData.kpis.paidIncomesUsd} detail={`${k.paidIncomesCount} mov.`} prevLabel={prevLabel} clickable />
         </Link>
@@ -93,12 +93,40 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
           <KpiCard title="Gastos" value={k.paidExpensesUsd} prevValue={prevData.kpis.paidExpensesUsd} detail={`${k.paidExpensesCount} mov.`} prevLabel={prevLabel} clickable invertGreen />
         </Link>
         <KpiCard title="Resultado neto" value={k.netUsd} prevValue={prevData.kpis.netUsd} prevLabel={prevLabel} />
-        <Link href="/incomes?status=PENDING" className="block">
-          <KpiCard title="Pendiente de cobro" value={k.pendingIncomesUsd} detail={`Total actual: ${formatUsd(k.globalPendingIncomesUsd)}`} global />
-        </Link>
-        <Link href="/expenses?status=PENDING" className="block">
-          <KpiCard title="Pendiente de pago" value={k.pendingExpensesUsd} detail={`Total actual: ${formatUsd(k.globalPendingExpensesUsd)}`} global />
-        </Link>
+      </div>
+
+      {/* KPIs row 2 — Cobros y Pagos (pendiente + vencido) */}
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+        <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Cobros</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[10px] text-gray-400 mb-0.5">Pendiente</div>
+              <div className="text-lg font-bold text-gray-900 tabular-nums">{formatUsd(period === "all" ? k.globalPendingIncomesUsd : k.pendingIncomesUsd)}</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">Total actual: {formatUsd(k.globalPendingIncomesUsd)}</div>
+            </div>
+            <Link href="/incomes?status=PENDING" className="block">
+              <div className="text-[10px] text-red-500 mb-0.5">Vencido</div>
+              <div className="text-lg font-bold text-red-700 tabular-nums">{formatUsd(k.overdueIncomesUsd)}</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">{k.overdueIncomesCount} ingresos</div>
+            </Link>
+          </div>
+        </div>
+        <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Pagos</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[10px] text-gray-400 mb-0.5">Pendiente</div>
+              <div className="text-lg font-bold text-gray-900 tabular-nums">{formatUsd(period === "all" ? k.globalPendingExpensesUsd : k.pendingExpensesUsd)}</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">Total actual: {formatUsd(k.globalPendingExpensesUsd)}</div>
+            </div>
+            <Link href="/expenses?status=PENDING" className="block">
+              <div className="text-[10px] text-red-500 mb-0.5">Vencido</div>
+              <div className="text-lg font-bold text-red-700 tabular-nums">{formatUsd(k.overdueExpensesUsd)}</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">{k.overdueExpensesCount} gastos</div>
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* Main chart */}
