@@ -11,7 +11,7 @@ export function DataTable({
   tableClassName,
   colGroup,
 }: {
-  headers: string[];
+  headers: React.ReactNode[];
   children: React.ReactNode;
   className?: string;
   footer?: React.ReactNode;
@@ -30,9 +30,9 @@ export function DataTable({
           {colGroup}
           <thead className="bg-ink text-paper">
             <tr>
-              {headers.map((header) => (
+              {headers.map((header, idx) => (
                 <th
-                  key={header}
+                  key={typeof header === "string" ? header : `h-${idx}`}
                   className={cn(
                     "px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em]",
                     shouldScroll && "sticky top-0 z-20 bg-ink shadow-[0_1px_0_rgba(255,255,255,0.05)]",

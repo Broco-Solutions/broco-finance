@@ -253,7 +253,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
         <DataTable tableClassName="table-fixed"
-          headers={["☐","Concepto","Categoria","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
+          headers={[<input key="cb" type="checkbox" checked={allSelected} onChange={toggleAll} className="h-3.5 w-3.5" />,"Concepto","Categoria","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
           colGroup={<colgroup><col style={{width:"3%"}} /><col style={{width:"14%"}} /><col style={{width:"13%"}} /><col style={{width:"13%"}} /><col style={{width:"7%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"11%"}} /><col style={{width:"12%"}} /></colgroup>}
           footer={<tr className="bg-gray-50 font-semibold"><td className="px-4 py-2.5 text-xs text-gray-500">Total filtrado · {filtered.length} mov.</td><td /><td /><td /><td /><td /><td /><td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(filteredExpTotal)}</td><td /><td /></tr>}
         >
