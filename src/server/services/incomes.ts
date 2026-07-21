@@ -235,3 +235,17 @@ export async function createIncomeBatch(entries: BatchEntry[]) {
   revalidatePath("/incomes");
 }
 
+export async function bulkUpdateIncomes(ids: string[], updates: {
+  type?: string; status?: string; amountUsd?: number; amountArs?: number; exchangeRate?: number;
+}) {
+  const data: Record<string, unknown> = {};
+  if (updates.type) data.type = updates.type;
+  if (updates.status) data.status = updates.status;
+  if (updates.amountUsd != null) data.amountUsd = updates.amountUsd;
+  if (updates.amountArs != null) data.amountArs = updates.amountArs;
+  if (updates.exchangeRate != null) data.exchangeRate = updates.exchangeRate;
+  if (Object.keys(data).length === 0) return;
+  await prisma.income.updateMany({ where: { id: { in: ids } }, data });
+  revalidatePath("/incomes");
+}
+

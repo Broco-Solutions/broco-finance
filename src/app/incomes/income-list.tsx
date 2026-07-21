@@ -10,9 +10,10 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
 import { IncomeFormModal } from "./income-form-modal";
 import { PayIncomeModal } from "./pay-income-modal";
-import { saveIncome, removeIncome, payIncome, createIncomeBatch } from "./actions";
+import { saveIncome, removeIncome, payIncome, createIncomeBatch, bulkUpdateIncomes } from "./actions";
 import { formatUsd, formatArs, formatDate, formatDateShort, formatIncomeStatus, formatIncomeType } from "@/lib/utils";
 
 type Income = { id: string; type: string; concept: string; notes: string | null; status: string;
@@ -30,6 +31,12 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState<Income | null>(null);
   const [payTarget, setPayTarget] = useState<Income | null>(null); const [deleteTarget, setDeleteTarget] = useState<Income | null>(null);
   const [delError, setDelError] = useState<string | null>(null);
+  // Bulk selection
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkField, setBulkField] = useState("");
+  const [bulkValue, setBulkValue] = useState("");
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -117,8 +124,34 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
 
   const filteredTotal = filtered.reduce((s, inc) => s + fmt(inc.amountUsd), 0);
 
+  // Bulk selection handlers
+  const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const selectAllFiltered = () => setSelected(new Set(filtered.map(inc => inc.id)));
+  const clearSelection = () => setSelected(new Set());
+  const allSelected = filtered.length > 0 && filtered.every(inc => selected.has(inc.id));
+  const toggleAll = () => allSelected ? clearSelection() : selectAllFiltered();
+  const handleBulkApply = async () => {
+    if (!bulkField || !bulkValue) return;
+    setBulkError(null);
+    const ids = Array.from(selected);
+    const updates: Record<string, unknown> = {};
+    if (bulkField === "type") updates.type = bulkValue;
+    else if (bulkField === "status") updates.status = bulkValue;
+    else if (bulkField === "amount") updates.amountUsd = Number(bulkValue);
+    const result = await bulkUpdateIncomes(ids, updates);
+    if (!result.success) { setBulkError(result.message); return; }
+    setShowBulkConfirm(false);
+    clearSelection();
+    reload();
+  };
+  // Clear selection when filters change
+  useEffect(() => { clearSelection(); }, [sp]);
+
   const statusLabel = (s: string, d: any) => formatIncomeStatus(s, d);
   const statusTone = (s: string, d: any): "success" | "danger" | "warning" | "neutral" => { const l = statusLabel(s, d); if (l === "Cobrado") return "success"; if (l === "Vencido") return "danger"; if (l === "Pendiente") return "warning"; return "neutral"; };
+  const bulkFieldLabels: Record<string, string> = { type: "Tipo", status: "Estado", amount: "Monto USD" };
+  const bulkValueLabels: Record<string, Record<string, string>> = { type: { DEVELOPMENT: "Desarrollo", MAINTENANCE: "Mantenimiento", OTHER: "Otro" }, status: { PAID: "Cobrado", PENDING: "Pendiente" } };
+  const bulkDesc = `${bulkFieldLabels[bulkField] ?? "?"} → ${bulkValueLabels[bulkField]?.[bulkValue] ?? bulkValue}`;
 
   return (
     <div className="space-y-4">
@@ -159,12 +192,13 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
         <DataTable tableClassName="table-fixed"
-          headers={["Concepto","Cliente","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
-          colGroup={<colgroup><col style={{width:"16%"}} /><col style={{width:"14%"}} /><col style={{width:"14%"}} /><col style={{width:"8%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"10%"}} /><col style={{width:"11%"}} /></colgroup>}
+          headers={["☐","Concepto","Cliente","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
+          colGroup={<colgroup><col style={{width:"3%"}} /><col style={{width:"14%"}} /><col style={{width:"14%"}} /><col style={{width:"13%"}} /><col style={{width:"7%"}} /><col style={{width:"7%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"12%"}} /><col style={{width:"11%"}} /></colgroup>}
           footer={<tr className="bg-gray-50 font-semibold"><td className="px-4 py-2.5 text-xs text-gray-500">Total filtrado · {filtered.length} mov.</td><td /><td /><td /><td /><td /><td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(filteredTotal)}</td><td /><td /></tr>}
         >
           {filtered.map(inc => (
             <tr key={inc.id}>
+              <td className="px-2 py-2.5"><input type="checkbox" checked={selected.has(inc.id)} onChange={() => toggleSelect(inc.id)} className="h-3.5 w-3.5" /></td>
               <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={inc.concept}>{inc.concept}</div></td>
               <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={inc.client?.name ?? ""}>{inc.client?.name ?? "—"}</div></td>
               <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={inc.project?.name ?? ""}>{inc.project?.name ?? "—"}</div></td>
@@ -218,6 +252,38 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
       <ConfirmActionModal open={!!deleteTarget} title={deleteTarget?.status === "PAID" ? "Eliminar ingreso cobrado" : "Eliminar ingreso"}
         description={deleteTarget?.status === "PAID" ? "Este ingreso ya esta cobrado. ¿Confirmas que queres eliminarlo?" : `¿Eliminar "${deleteTarget?.concept}"?`}
         confirmLabel="Eliminar" isPending={false} error={delError} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} />
+
+      <BulkActionBar
+        count={selected.size}
+        totalFiltered={filtered.length}
+        onSelectAll={selectAllFiltered}
+        onClear={clearSelection}
+        onApply={() => setShowBulkConfirm(true)}
+        field={bulkField} setField={setBulkField}
+        value={bulkValue} setValue={setBulkValue}
+        fields={[
+          { value: "type", label: "Tipo" },
+          { value: "status", label: "Estado" },
+          { value: "amount", label: "Monto USD" },
+        ]}
+        options={{
+          type: [{ value: "DEVELOPMENT", label: "Desarrollo" }, { value: "MAINTENANCE", label: "Mantenimiento" }, { value: "OTHER", label: "Otro" }],
+          status: [{ value: "PAID", label: "Cobrado" }, { value: "PENDING", label: "Pendiente" }],
+          amount: [],
+        }}
+        disabled={!bulkField || !bulkValue}
+      />
+
+      <ConfirmActionModal
+        open={showBulkConfirm}
+        title={`Actualizar ${selected.size} ingreso${selected.size !== 1 ? "s" : ""}`}
+        description={`Cambiar ${bulkDesc}`}
+        confirmLabel="Aplicar"
+        isPending={false}
+        error={bulkError}
+        onClose={() => { setShowBulkConfirm(false); setBulkError(null); }}
+        onConfirm={handleBulkApply}
+      />
     </div>
   );
 }

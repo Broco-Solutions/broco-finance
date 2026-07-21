@@ -134,3 +134,18 @@ export async function createExpenseBatch(entries: BatchEntry[]) {
   });
   revalidatePath("/expenses");
 }
+
+export async function bulkUpdateExpenses(ids: string[], updates: {
+  expenseCategoryId?: string; type?: string; status?: string; amountUsd?: number; amountArs?: number; exchangeRate?: number;
+}) {
+  const data: Record<string, unknown> = {};
+  if (updates.expenseCategoryId) data.expenseCategoryId = updates.expenseCategoryId;
+  if (updates.type) data.type = updates.type;
+  if (updates.status) data.status = updates.status;
+  if (updates.amountUsd != null) data.amountUsd = updates.amountUsd;
+  if (updates.amountArs != null) data.amountArs = updates.amountArs;
+  if (updates.exchangeRate != null) data.exchangeRate = updates.exchangeRate;
+  if (Object.keys(data).length === 0) return;
+  await prisma.expense.updateMany({ where: { id: { in: ids } }, data });
+  revalidatePath("/expenses");
+}

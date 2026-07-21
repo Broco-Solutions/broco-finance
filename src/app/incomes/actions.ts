@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isAuthenticated } from "@/lib/auth";
-import { createIncome, updateIncome, deleteIncome, incomeSchema, createIncomeBatch as batchCreate } from "@/server/services/incomes";
+import { createIncome, updateIncome, deleteIncome, incomeSchema, createIncomeBatch as batchCreate, bulkUpdateIncomes as bulkUpdateSvc } from "@/server/services/incomes";
 
 type ActionResult = { success: true } | { success: false; message: string };
 
@@ -87,4 +87,13 @@ export async function createIncomeBatch(entries: Array<{
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al guardar lote." };
   }
+}
+
+export async function bulkUpdateIncomes(ids: string[], updates: Record<string, unknown>): Promise<ActionResult> {
+  try {
+    requireAuth();
+    await bulkUpdateSvc(ids, updates as any);
+    revalidatePath("/incomes");
+    return { success: true };
+  } catch (e) { return { success: false, message: e instanceof Error ? e.message : "Error." }; }
 }

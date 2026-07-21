@@ -10,8 +10,9 @@ import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
+import { BulkActionBar } from "@/components/ui/bulk-action-bar";
 import { ModalPortal } from "@/components/ui/modal-portal";
-import { saveExpense, removeExpense, payExpense, createExpenseBatch } from "./actions";
+import { saveExpense, removeExpense, payExpense, createExpenseBatch, bulkUpdateExpenses } from "./actions";
 import { saveCategory, removeCategory } from "./categories/actions";
 import { formatUsd, formatArs, formatDate, formatExpenseStatus, toInputDate } from "@/lib/utils";
 
@@ -37,6 +38,12 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   const [catForm, setCatForm] = useState({ id: "", name: "" }); const [catError, setCatError] = useState<string | null>(null);
   const [catDelTarget, setCatDelTarget] = useState<Cat | null>(null);
   const [_, stt] = useTransition();
+  // Bulk selection
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkField, setBulkField] = useState("");
+  const [bulkValue, setBulkValue] = useState("");
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -186,6 +193,30 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
 
   const filteredExpTotal = filtered.reduce((s, e) => s + fmt(e.amountUsd), 0);
 
+  // Bulk selection handlers
+  const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const selectAllFiltered = () => setSelected(new Set(filtered.map(e => e.id)));
+  const clearSelection = () => setSelected(new Set());
+  const allSelected = filtered.length > 0 && filtered.every(e => selected.has(e.id));
+  const toggleAll = () => allSelected ? clearSelection() : selectAllFiltered();
+  const handleBulkApply = async () => {
+    if (!bulkField || !bulkValue) return;
+    setBulkError(null);
+    const ids = Array.from(selected);
+    const updates: Record<string, unknown> = {};
+    if (bulkField === "type") updates.type = bulkValue;
+    else if (bulkField === "status") updates.status = bulkValue;
+    else if (bulkField === "amount") updates.amountUsd = Number(bulkValue);
+    else if (bulkField === "category") updates.expenseCategoryId = bulkValue;
+    const result = await bulkUpdateExpenses(ids, updates);
+    if (!result.success) { setBulkError(result.message); return; }
+    setShowBulkConfirm(false);
+    clearSelection();
+    reload();
+  };
+  // Clear selection when filters change
+  useEffect(() => { clearSelection(); }, [sp]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -222,12 +253,13 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
       {/* DESKTOP TABLE */}
       <div className="hidden md:block">
         <DataTable tableClassName="table-fixed"
-          headers={["Concepto","Categoria","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
-          colGroup={<colgroup><col style={{width:"16%"}} /><col style={{width:"14%"}} /><col style={{width:"14%"}} /><col style={{width:"7%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"10%"}} /><col style={{width:"12%"}} /></colgroup>}
-          footer={<tr className="bg-gray-50 font-semibold"><td className="px-4 py-2.5 text-xs text-gray-500">Total filtrado · {filtered.length} mov.</td><td /><td /><td /><td /><td /><td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(filteredExpTotal)}</td><td /><td /></tr>}
+          headers={["☐","Concepto","Categoria","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
+          colGroup={<colgroup><col style={{width:"3%"}} /><col style={{width:"14%"}} /><col style={{width:"13%"}} /><col style={{width:"13%"}} /><col style={{width:"7%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"11%"}} /><col style={{width:"12%"}} /></colgroup>}
+          footer={<tr className="bg-gray-50 font-semibold"><td className="px-4 py-2.5 text-xs text-gray-500">Total filtrado · {filtered.length} mov.</td><td /><td /><td /><td /><td /><td /><td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(filteredExpTotal)}</td><td /><td /></tr>}
         >
           {filtered.map(e => (
             <tr key={e.id}>
+              <td className="px-2 py-2.5"><input type="checkbox" checked={selected.has(e.id)} onChange={() => toggleSelect(e.id)} className="h-3.5 w-3.5" /></td>
               <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={e.concept}>{e.concept}</div></td>
               <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={e.category.name}>{e.category.name}</div></td>
               <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={e.project?.name ?? ""}>{e.project?.name ?? "—"}</div></td>
@@ -350,6 +382,40 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
 
       <ConfirmActionModal open={!!delTarget} title={delTarget?.status === "PAID" ? "Eliminar gasto pagado" : "Eliminar gasto"} description={delTarget?.status === "PAID" ? "Este gasto ya esta pagado. ¿Confirmas?" : `¿Eliminar "${delTarget?.concept}"?`} confirmLabel="Eliminar" isPending={false} error={delError} onClose={() => setDelTarget(null)} onConfirm={handleDelete} />
       <ConfirmActionModal open={!!catDelTarget} title="Eliminar categoria" description={`¿Eliminar "${catDelTarget?.name}"?`} confirmLabel="Eliminar" isPending={false} error={null} onClose={() => setCatDelTarget(null)} onConfirm={handleCatDel} />
+
+      <BulkActionBar
+        count={selected.size}
+        totalFiltered={filtered.length}
+        onSelectAll={selectAllFiltered}
+        onClear={clearSelection}
+        onApply={() => setShowBulkConfirm(true)}
+        field={bulkField} setField={setBulkField}
+        value={bulkValue} setValue={setBulkValue}
+        fields={[
+          { value: "category", label: "Categoria" },
+          { value: "type", label: "Tipo" },
+          { value: "status", label: "Estado" },
+          { value: "amount", label: "Monto USD" },
+        ]}
+        options={{
+          category: categories.map(c => ({ value: c.id, label: c.name })),
+          type: [{ value: "FIXED", label: "Fijo" }, { value: "VARIABLE", label: "Variable" }],
+          status: [{ value: "PAID", label: "Pagado" }, { value: "PENDING", label: "Pendiente" }],
+          amount: [],
+        }}
+        disabled={!bulkField || !bulkValue}
+      />
+
+      <ConfirmActionModal
+        open={showBulkConfirm}
+        title={`Actualizar ${selected.size} gasto${selected.size !== 1 ? "s" : ""}`}
+        description={`Cambiar ${({category: "Categoria", type: "Tipo", status: "Estado", amount: "Monto USD"})[bulkField]} a "${bulkValue}"`}
+        confirmLabel="Aplicar"
+        isPending={false}
+        error={bulkError}
+        onClose={() => { setShowBulkConfirm(false); setBulkError(null); }}
+        onConfirm={handleBulkApply}
+      />
     </div>
   );
 }

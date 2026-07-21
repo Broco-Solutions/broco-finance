@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isAuthenticated } from "@/lib/auth";
-import { createExpense, updateExpense, deleteExpense, expenseSchema, getExpense, createExpenseBatch as batchCreate } from "@/server/services/expenses";
+import { createExpense, updateExpense, deleteExpense, expenseSchema, getExpense, createExpenseBatch as batchCreate, bulkUpdateExpenses as bulkUpdateSvc } from "@/server/services/expenses";
 
 type R = { success: true } | { success: false; message: string };
 function pn(v: FormDataEntryValue | null) { if (!v || v === "") return undefined; const n = Number(v); return Number.isFinite(n) ? n : undefined; }
@@ -58,4 +58,13 @@ export async function createExpenseBatch(entries: Array<{
     revalidatePath("/expenses");
     return { success: true };
   } catch (e) { return { success: false, message: e instanceof Error ? e.message : "Error al guardar lote." }; }
+}
+
+export async function bulkUpdateExpenses(ids: string[], updates: Record<string, unknown>): Promise<R> {
+  try {
+    if (!isAuthenticated()) throw new Error("Sesion expirada.");
+    await bulkUpdateSvc(ids, updates as any);
+    revalidatePath("/expenses");
+    return { success: true };
+  } catch (e) { return { success: false, message: e instanceof Error ? e.message : "Error." }; }
 }
