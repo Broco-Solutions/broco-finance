@@ -42,7 +42,6 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkField, setBulkField] = useState("");
   const [bulkValue, setBulkValue] = useState("");
-  const [bulkArs, setBulkArs] = useState("");
   const [bulkExchangeRate, setBulkExchangeRate] = useState("");
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
@@ -226,7 +225,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
     const result = await bulkUpdateExpenses(ids, updates);
     if (!result.success) { setBulkError(result.message); return; }
     setShowBulkConfirm(false);
-    setBulkField(""); setBulkValue(""); setBulkArs(""); setBulkExchangeRate("");
+    setBulkField(""); setBulkValue(""); setBulkExchangeRate("");
     clearSelection();
     reload();
   };
@@ -403,11 +402,11 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
         count={selected.size}
         totalFiltered={filtered.length}
         onSelectAll={selectAllFiltered}
-        onClear={() => { clearSelection(); setBulkField(""); setBulkValue(""); setBulkArs(""); setBulkExchangeRate(""); }}
+        onClear={() => { clearSelection(); setBulkField(""); setBulkValue(""); setBulkExchangeRate(""); }}
         onApply={() => setShowBulkConfirm(true)}
-        field={bulkField} setField={(f) => { setBulkField(f); setBulkValue(""); setBulkArs(""); setBulkExchangeRate(""); }}
+        field={bulkField} setField={(f) => { setBulkField(f); setBulkValue(""); setBulkExchangeRate(""); }}
         value={bulkValue} setValue={setBulkValue}
-        secondaryValue={bulkArs} setSecondaryValue={setBulkArs}
+        secondaryValue={bulkExchangeRate} setSecondaryValue={setBulkExchangeRate}
         secondaryPlaceholder="TC"
         fields={[
           { value: "category", label: "Categoria" },

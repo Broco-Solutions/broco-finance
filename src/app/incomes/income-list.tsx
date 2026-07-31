@@ -35,7 +35,6 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkField, setBulkField] = useState("");
   const [bulkValue, setBulkValue] = useState("");
-  const [bulkArs, setBulkArs] = useState("");
   const [bulkExchangeRate, setBulkExchangeRate] = useState("");
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
@@ -159,7 +158,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
     const result = await bulkUpdateIncomes(ids, updates);
     if (!result.success) { setBulkError(result.message); return; }
     setShowBulkConfirm(false);
-    setBulkField(""); setBulkValue(""); setBulkArs(""); setBulkExchangeRate("");
+    setBulkField(""); setBulkValue(""); setBulkExchangeRate("");
     clearSelection();
     reload();
   };
@@ -168,7 +167,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
 
   const statusLabel = (s: string, d: any) => formatIncomeStatus(s, d);
   const statusTone = (s: string, d: any): "success" | "danger" | "warning" | "neutral" => { const l = statusLabel(s, d); if (l === "Cobrado") return "success"; if (l === "Vencido") return "danger"; if (l === "Pendiente") return "warning"; return "neutral"; };
-  const bulkFieldLabels: Record<string, string> = { type: "Tipo", status: "Estado", amount: "Monto USD" };
+  const bulkFieldLabels: Record<string, string> = { type: "Tipo", status: "Estado", amount: "Monto USD", ars: "Monto ARS + TC" };
   const bulkValueLabels: Record<string, Record<string, string>> = { type: { DEVELOPMENT: "Desarrollo", MAINTENANCE: "Mantenimiento", OTHER: "Otro" }, status: { PAID: "Cobrado", PENDING: "Pendiente" } };
   const bulkDesc = `${bulkFieldLabels[bulkField] ?? "?"} → ${bulkValueLabels[bulkField]?.[bulkValue] ?? bulkValue}`;
 
@@ -276,11 +275,11 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
         count={selected.size}
         totalFiltered={filtered.length}
         onSelectAll={selectAllFiltered}
-        onClear={() => { clearSelection(); setBulkField(""); setBulkValue(""); setBulkArs(""); setBulkExchangeRate(""); }}
+        onClear={() => { clearSelection(); setBulkField(""); setBulkValue(""); setBulkExchangeRate(""); }}
         onApply={() => setShowBulkConfirm(true)}
-        field={bulkField} setField={(f) => { setBulkField(f); setBulkValue(""); setBulkArs(""); setBulkExchangeRate(""); }}
+        field={bulkField} setField={(f) => { setBulkField(f); setBulkValue(""); setBulkExchangeRate(""); }}
         value={bulkValue} setValue={setBulkValue}
-        secondaryValue={bulkArs} setSecondaryValue={setBulkArs}
+        secondaryValue={bulkExchangeRate} setSecondaryValue={setBulkExchangeRate}
         secondaryPlaceholder="TC"
         fields={[
           { value: "type", label: "Tipo" },
