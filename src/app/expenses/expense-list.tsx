@@ -42,6 +42,8 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkField, setBulkField] = useState("");
   const [bulkValue, setBulkValue] = useState("");
+  const [bulkArs, setBulkArs] = useState("");
+  const [bulkExchangeRate, setBulkExchangeRate] = useState("");
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const router = useRouter();
@@ -51,11 +53,22 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   useEffect(() => { if (!didOpen.current && sp.get("new") === "1") { didOpen.current = true; setShowForm(true); router.replace("/expenses"); } }, [sp, router]);
   // Sync filters from query params
   const didSync = useRef(false);
-  useEffect(() => { if (didSync.current) return; const s = sp.get("status"); if (s === "PAID" || s === "PENDING") setFStatus(s); else if (s === "OVERDUE") setFStatus("OVERDUE"); const f = sp.get("from"), t = sp.get("to"); if (f && t) { setDateFrom(f); setDateTo(t); } didSync.current = true; }, [sp]);
+  useEffect(() => { if (didSync.current) return; const s = sp.get("status"); if (s === "PAID" || s === "PENDING") setFStatus(s); else if (s === "OVERDUE") setFStatus("OVERDUE"); const f = sp.get("from"), t = sp.get("to"); if (f && t) { setDateFrom(f); setDateTo(t); } const ty = sp.get("type"); if (ty) setFType(ty); const c = sp.get("cat"); if (c) setFCat(c); const pj = sp.get("project"); if (pj) setFProj(pj); didSync.current = true; }, [sp]);
   const clearRange = () => { setDateFrom(""); setDateTo(""); router.replace("/expenses"); };
   const clearFilters = () => { setFStatus("PAID"); setFType(""); setFCat(""); setFProj(""); clearRange(); };
 
-  const reload = () => { setTimeout(() => window.location.reload(), 500); };
+  const reload = () => {
+    const p = new URLSearchParams();
+    if (fStatus !== "PAID") p.set("status", fStatus);
+    if (fType) p.set("type", fType);
+    if (fCat) p.set("cat", fCat);
+    if (fProj) p.set("project", fProj);
+    if (dateFrom) p.set("from", dateFrom);
+    if (dateTo) p.set("to", dateTo);
+    const qs = p.toString();
+    setTimeout(() => { window.location.href = window.location.pathname + (qs ? `?${qs}` : ""); }, 500);
+  };
+  const reloadRaw = () => { setTimeout(() => window.location.reload(), 500); };
 
   const defaultForm = { expenseCategoryId: "", clientId: "", projectId: "", type: "FIXED", concept: "", notes: "", status: "PAID" as "PAID"|"PENDING",
     useArs: false, amountUsd: "", amountArs: "", exchangeRate: "", dueDate: "", effectiveDate: "" };
@@ -201,6 +214,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   const toggleAll = () => allSelected ? clearSelection() : selectAllFiltered();
   const handleBulkApply = async () => {
     if (!bulkField || !bulkValue) return;
+    if (bulkField === "ars" && !bulkExchangeRate) return;
     setBulkError(null);
     const ids = Array.from(selected);
     const updates: Record<string, unknown> = {};
@@ -208,9 +222,11 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
     else if (bulkField === "status") updates.status = bulkValue;
     else if (bulkField === "amount") updates.amountUsd = Number(bulkValue);
     else if (bulkField === "category") updates.expenseCategoryId = bulkValue;
+    else if (bulkField === "ars") { updates.amountArs = Number(bulkValue); updates.exchangeRate = Number(bulkExchangeRate); }
     const result = await bulkUpdateExpenses(ids, updates);
     if (!result.success) { setBulkError(result.message); return; }
     setShowBulkConfirm(false);
+    setBulkField(""); setBulkValue(""); setBulkArs(""); setBulkExchangeRate("");
     clearSelection();
     reload();
   };
@@ -387,21 +403,24 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
         count={selected.size}
         totalFiltered={filtered.length}
         onSelectAll={selectAllFiltered}
-        onClear={clearSelection}
+        onClear={() => { clearSelection(); setBulkField(""); setBulkValue(""); setBulkArs(""); setBulkExchangeRate(""); }}
         onApply={() => setShowBulkConfirm(true)}
-        field={bulkField} setField={setBulkField}
+        field={bulkField} setField={(f) => { setBulkField(f); setBulkValue(""); setBulkArs(""); setBulkExchangeRate(""); }}
         value={bulkValue} setValue={setBulkValue}
+        secondaryValue={bulkArs} setSecondaryValue={setBulkArs}
+        secondaryPlaceholder="TC"
         fields={[
           { value: "category", label: "Categoria" },
           { value: "type", label: "Tipo" },
           { value: "status", label: "Estado" },
           { value: "amount", label: "Monto USD" },
+          { value: "ars", label: "Monto ARS + TC" },
         ]}
         options={{
           category: categories.map(c => ({ value: c.id, label: c.name })),
           type: [{ value: "FIXED", label: "Fijo" }, { value: "VARIABLE", label: "Variable" }],
           status: [{ value: "PAID", label: "Pagado" }, { value: "PENDING", label: "Pendiente" }],
-          amount: [],
+          amount: [], ars: [],
         }}
         disabled={!bulkField || !bulkValue}
       />

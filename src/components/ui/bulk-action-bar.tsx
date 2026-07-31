@@ -14,6 +14,9 @@ type Props = {
   setField: (f: string) => void;
   value: string;
   setValue: (v: string) => void;
+  secondaryValue?: string;
+  setSecondaryValue?: (v: string) => void;
+  secondaryPlaceholder?: string;
   fields: Array<{ value: string; label: string }>;
   options: Record<string, Array<{ value: string; label: string }>>;
   disabled: boolean;
@@ -21,11 +24,15 @@ type Props = {
 
 export function BulkActionBar({
   count, totalFiltered, onSelectAll, onClear, onApply,
-  field, setField, value, setValue, fields, options, disabled,
+  field, setField, value, setValue,
+  secondaryValue, setSecondaryValue, secondaryPlaceholder,
+  fields, options, disabled,
 }: Props) {
   if (count === 0) return null;
 
   const currentOptions = options[field] || [];
+  const needsSecondary = (field === "ars" || field === "amountArs") && setSecondaryValue;
+  const disabledButton = disabled || (needsSecondary && !secondaryValue);
 
   return (
     <div className="fixed bottom-0 inset-x-0 z-50 border-t border-gray-200 bg-white/95 backdrop-blur p-3 shadow-lg">
@@ -51,11 +58,14 @@ export function BulkActionBar({
                 {currentOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </Select>
             ) : (
-              <Input type="number" step="any" value={value} onChange={(e) => setValue(e.target.value)} className="w-28 text-xs" placeholder="Monto" />
+              <Input type="number" step="any" value={value} onChange={(e) => setValue(e.target.value)} className="w-24 text-xs" placeholder="Monto" />
+            )}
+            {needsSecondary && setSecondaryValue && (
+              <Input type="number" step="any" value={secondaryValue ?? ""} onChange={(e) => setSecondaryValue(e.target.value)} className="w-20 text-xs" placeholder={secondaryPlaceholder ?? "TC"} />
             )}
           </>
         )}
-        <Button onClick={onApply} disabled={disabled} className="text-xs">Aplicar</Button>
+        <Button onClick={onApply} disabled={disabledButton} className="text-xs">Aplicar</Button>
         <Button variant="ghost" onClick={onClear} className="text-xs">Cancelar</Button>
       </div>
     </div>

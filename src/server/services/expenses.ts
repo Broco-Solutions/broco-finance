@@ -142,9 +142,16 @@ export async function bulkUpdateExpenses(ids: string[], updates: {
   if (updates.expenseCategoryId) data.expenseCategoryId = updates.expenseCategoryId;
   if (updates.type) data.type = updates.type;
   if (updates.status) data.status = updates.status;
-  if (updates.amountUsd != null) data.amountUsd = updates.amountUsd;
-  if (updates.amountArs != null) data.amountArs = updates.amountArs;
-  if (updates.exchangeRate != null) data.exchangeRate = updates.exchangeRate;
+  if (updates.amountArs != null && updates.exchangeRate != null) {
+    const money = computeMoney({ amountArs: updates.amountArs, exchangeRate: updates.exchangeRate });
+    data.amountUsd = money.amountUsd;
+    data.amountArs = money.amountArs;
+    data.exchangeRate = money.exchangeRate;
+  } else if (updates.amountUsd != null) {
+    data.amountUsd = updates.amountUsd;
+    data.amountArs = null;
+    data.exchangeRate = null;
+  }
   if (Object.keys(data).length === 0) return;
   await prisma.expense.updateMany({ where: { id: { in: ids } }, data });
   revalidatePath("/expenses");

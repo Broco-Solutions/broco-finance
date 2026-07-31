@@ -35,6 +35,8 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkField, setBulkField] = useState("");
   const [bulkValue, setBulkValue] = useState("");
+  const [bulkArs, setBulkArs] = useState("");
+  const [bulkExchangeRate, setBulkExchangeRate] = useState("");
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const router = useRouter();
@@ -50,13 +52,27 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
     const s = sp.get("status"); if (s === "PAID" || s === "PENDING") setFilter(s); else if (s === "OVERDUE") setFilter("OVERDUE");
     const f = sp.get("from"), t = sp.get("to");
     if (f && t) { setDateFrom(f); setDateTo(t); }
+    const ty = sp.get("typeFilter"); if (ty) setTypeFilter(ty);
+    const cl = sp.get("client"); if (cl) setFClient(cl);
+    const pj = sp.get("project"); if (pj) setFProject(pj);
     didSync.current = true;
   }, [sp]);
 
   const clearRange = () => { setDateFrom(""); setDateTo(""); router.replace("/incomes"); };
   const clearFilters = () => { setFilter("PAID"); setTypeFilter(""); setFClient(""); setFProject(""); clearRange(); };
 
-  const reload = () => { setTimeout(() => window.location.reload(), 500); };
+  const reload = () => {
+    const p = new URLSearchParams();
+    if (filter !== "PAID") p.set("status", filter);
+    if (typeFilter) p.set("typeFilter", typeFilter);
+    if (fClient) p.set("client", fClient);
+    if (fProject) p.set("project", fProject);
+    if (dateFrom) p.set("from", dateFrom);
+    if (dateTo) p.set("to", dateTo);
+    const qs = p.toString();
+    setTimeout(() => { window.location.href = window.location.pathname + (qs ? `?${qs}` : ""); }, 500);
+  };
+  const reloadRaw = () => { setTimeout(() => window.location.reload(), 500); };
   const mkFd = (data: Record<string, unknown>, id?: string) => {
     const fd = new FormData(); if (id) fd.set("id", id);
     Object.entries(data).forEach(([k,v]) => { if (v != null && v !== "") fd.set(k, String(v)); });
@@ -132,15 +148,18 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   const toggleAll = () => allSelected ? clearSelection() : selectAllFiltered();
   const handleBulkApply = async () => {
     if (!bulkField || !bulkValue) return;
+    if (bulkField === "ars" && !bulkExchangeRate) return;
     setBulkError(null);
     const ids = Array.from(selected);
     const updates: Record<string, unknown> = {};
     if (bulkField === "type") updates.type = bulkValue;
     else if (bulkField === "status") updates.status = bulkValue;
     else if (bulkField === "amount") updates.amountUsd = Number(bulkValue);
+    else if (bulkField === "ars") { updates.amountArs = Number(bulkValue); updates.exchangeRate = Number(bulkExchangeRate); }
     const result = await bulkUpdateIncomes(ids, updates);
     if (!result.success) { setBulkError(result.message); return; }
     setShowBulkConfirm(false);
+    setBulkField(""); setBulkValue(""); setBulkArs(""); setBulkExchangeRate("");
     clearSelection();
     reload();
   };
@@ -257,19 +276,22 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
         count={selected.size}
         totalFiltered={filtered.length}
         onSelectAll={selectAllFiltered}
-        onClear={clearSelection}
+        onClear={() => { clearSelection(); setBulkField(""); setBulkValue(""); setBulkArs(""); setBulkExchangeRate(""); }}
         onApply={() => setShowBulkConfirm(true)}
-        field={bulkField} setField={setBulkField}
+        field={bulkField} setField={(f) => { setBulkField(f); setBulkValue(""); setBulkArs(""); setBulkExchangeRate(""); }}
         value={bulkValue} setValue={setBulkValue}
+        secondaryValue={bulkArs} setSecondaryValue={setBulkArs}
+        secondaryPlaceholder="TC"
         fields={[
           { value: "type", label: "Tipo" },
           { value: "status", label: "Estado" },
           { value: "amount", label: "Monto USD" },
+          { value: "ars", label: "Monto ARS + TC" },
         ]}
         options={{
           type: [{ value: "DEVELOPMENT", label: "Desarrollo" }, { value: "MAINTENANCE", label: "Mantenimiento" }, { value: "OTHER", label: "Otro" }],
           status: [{ value: "PAID", label: "Cobrado" }, { value: "PENDING", label: "Pendiente" }],
-          amount: [],
+          amount: [], ars: [],
         }}
         disabled={!bulkField || !bulkValue}
       />
