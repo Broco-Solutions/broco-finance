@@ -24,7 +24,8 @@ type Income = { id: string; type: string; concept: string; notes: string | null;
 function fmt(v: any) { return typeof v === "object" && v != null && "toString" in v ? Number(v.toString()) : Number(v ?? 0); }
 
 export function IncomeList({ initialIncomes, projects, clients }: { initialIncomes: Income[]; projects: { id: string; name: string; clientId?: string }[]; clients: { id: string; name: string }[] }) {
-  const [incomes] = useState<Income[]>(initialIncomes);
+  const [incomes, setIncomes] = useState<Income[]>(initialIncomes);
+  useEffect(() => { setIncomes(initialIncomes); }, [initialIncomes]);
   const [filter, setFilter] = useState("PAID"); const [typeFilter, setTypeFilter] = useState("");
   const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
   const [fClient, setFClient] = useState(""); const [fProject, setFProject] = useState("");
@@ -60,18 +61,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   const clearRange = () => { setDateFrom(""); setDateTo(""); router.replace("/incomes"); };
   const clearFilters = () => { setFilter("PAID"); setTypeFilter(""); setFClient(""); setFProject(""); clearRange(); };
 
-  const reload = () => {
-    const p = new URLSearchParams();
-    if (filter !== "PAID") p.set("status", filter);
-    if (typeFilter) p.set("typeFilter", typeFilter);
-    if (fClient) p.set("client", fClient);
-    if (fProject) p.set("project", fProject);
-    if (dateFrom) p.set("from", dateFrom);
-    if (dateTo) p.set("to", dateTo);
-    const qs = p.toString();
-    setTimeout(() => { window.location.href = window.location.pathname + (qs ? `?${qs}` : ""); }, 500);
-  };
-  const reloadRaw = () => { setTimeout(() => window.location.reload(), 500); };
+  const reload = () => { setTimeout(() => { router.refresh(); }, 300); };
   const mkFd = (data: Record<string, unknown>, id?: string) => {
     const fd = new FormData(); if (id) fd.set("id", id);
     Object.entries(data).forEach(([k,v]) => { if (v != null && v !== "") fd.set(k, String(v)); });

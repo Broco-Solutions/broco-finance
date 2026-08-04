@@ -33,7 +33,7 @@ function computeMoney(input: {
     return { amountUsd: new D(a.dividedBy(f).toFixed(6)), amountArs: a, exchangeRate: f };
   }
   if (usd != null && usd > 0 && ars == null && fx == null) {
-    return { amountUsd: toDec(Math.round(usd)), amountArs: null, exchangeRate: null };
+    return { amountUsd: toDec(usd), amountArs: null, exchangeRate: null };
   }
   throw new Error("Ingresa monto USD, o ARS + tipo de cambio.");
 }

@@ -27,7 +27,8 @@ type Cli = { id: string; name: string };
 function fmt(v: any) { return typeof v === "object" && v != null && "toString" in v ? Number(v.toString()) : Number(v ?? 0); }
 
 export function ExpenseList({ initial, categories: cats, projects: projs, clients: cls }: { initial: E[]; categories: Cat[]; projects: Proj[]; clients: Cli[] }) {
-  const [expenses] = useState<E[]>(initial);
+  const [expenses, setExpenses] = useState<E[]>(initial);
+  useEffect(() => { setExpenses(initial); }, [initial]);
   const [categories, setCategories] = useState<Cat[]>(cats);
   const [fStatus, setFStatus] = useState("PAID"); const [fType, setFType] = useState(""); const [fCat, setFCat] = useState(""); const [fProj, setFProj] = useState("");
   const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
@@ -56,18 +57,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   const clearRange = () => { setDateFrom(""); setDateTo(""); router.replace("/expenses"); };
   const clearFilters = () => { setFStatus("PAID"); setFType(""); setFCat(""); setFProj(""); clearRange(); };
 
-  const reload = () => {
-    const p = new URLSearchParams();
-    if (fStatus !== "PAID") p.set("status", fStatus);
-    if (fType) p.set("type", fType);
-    if (fCat) p.set("cat", fCat);
-    if (fProj) p.set("project", fProj);
-    if (dateFrom) p.set("from", dateFrom);
-    if (dateTo) p.set("to", dateTo);
-    const qs = p.toString();
-    setTimeout(() => { window.location.href = window.location.pathname + (qs ? `?${qs}` : ""); }, 500);
-  };
-  const reloadRaw = () => { setTimeout(() => window.location.reload(), 500); };
+  const reload = () => { setTimeout(() => { router.refresh(); }, 300); };
 
   const defaultForm = { expenseCategoryId: "", clientId: "", projectId: "", type: "FIXED", concept: "", notes: "", status: "PAID" as "PAID"|"PENDING",
     useArs: false, amountUsd: "", amountArs: "", exchangeRate: "", dueDate: "", effectiveDate: "" };
