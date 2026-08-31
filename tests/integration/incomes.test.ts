@@ -12,6 +12,9 @@ const prisma = new PrismaClient({ datasources: { db: { url: TEST_DB_URL } } });
 
 let clientId: string;
 let projectId: string;
+let devTypeId: string;
+let maintTypeId: string;
+let otherTypeId: string;
 let testIds: string[] = [];
 
 beforeAll(async () => {
@@ -20,6 +23,10 @@ beforeAll(async () => {
   clientId = c.id;
   const p = await createProject({ clientId, name: `test-inc-proj-${Date.now()}`, isActive: true });
   projectId = p.id;
+  const typeDev = await prisma.incomeType.upsert({ where: { name: "Desarrollo" }, update: {}, create: { name: "Desarrollo", requiresProject: true } });
+  const typeMaint = await prisma.incomeType.upsert({ where: { name: "Mantenimiento" }, update: {}, create: { name: "Mantenimiento", requiresProject: true } });
+  const typeOther = await prisma.incomeType.upsert({ where: { name: "Otro" }, update: {}, create: { name: "Otro", requiresProject: false } });
+  devTypeId = typeDev.id; maintTypeId = typeMaint.id; otherTypeId = typeOther.id;
 });
 
 afterAll(async () => {
@@ -35,9 +42,9 @@ afterAll(async () => {
 function track(id: string) { testIds.push(id); }
 
 describe.skipIf(skip)("Ingresos - integracion", () => {
-  it("1. crea DEVELOPMENT con proyecto y cliente derivado", async () => {
+  it("1. crea tipo con proyecto y cliente derivado", async () => {
     const inc = await createIncome({
-      type: "DEVELOPMENT", concept: "Test Dev", status: "PAID",
+      typeId: devTypeId, concept: "Test Dev", status: "PAID",
       projectId, amountUsd: 500, effectiveDate: "2026-01-15",
     });
     track(inc.id);
@@ -45,9 +52,9 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
     expect(inc.projectId).toBe(projectId);
   });
 
-  it("2. crea OTHER sin cliente ni proyecto", async () => {
+  it("2. crea tipo Otro sin cliente ni proyecto", async () => {
     const inc = await createIncome({
-      type: "OTHER", concept: "Test Other Solo", status: "PAID",
+      typeId: otherTypeId, concept: "Test Other Solo", status: "PAID",
       amountUsd: 100, effectiveDate: "2026-01-15",
     });
     track(inc.id);
@@ -55,18 +62,18 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
     expect(inc.projectId).toBeNull();
   });
 
-  it("3. crea OTHER con cliente directo", async () => {
+  it("3. crea Otro con cliente directo", async () => {
     const inc = await createIncome({
-      type: "OTHER", concept: "Test Other Client", status: "PAID",
+      typeId: otherTypeId, concept: "Test Other Client", status: "PAID",
       amountUsd: 200, effectiveDate: "2026-01-15", clientId,
     });
     track(inc.id);
     expect(inc.clientId).toBe(clientId);
   });
 
-  it("4. crea OTHER con proyecto (cliente derivado)", async () => {
+  it("4. crea Otro con proyecto (cliente derivado)", async () => {
     const inc = await createIncome({
-      type: "OTHER", concept: "Test Other Proj", status: "PAID",
+      typeId: otherTypeId, concept: "Test Other Proj", status: "PAID",
       amountUsd: 300, effectiveDate: "2026-01-15", projectId,
     });
     track(inc.id);
@@ -76,7 +83,7 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
 
   it("5. crea ingreso USD", async () => {
     const inc = await createIncome({
-      type: "OTHER", concept: "USD only", status: "PAID",
+      typeId: otherTypeId, concept: "USD only", status: "PAID",
       amountUsd: 1000, effectiveDate: "2026-01-15",
     });
     track(inc.id);
@@ -87,7 +94,7 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
 
   it("6. crea ingreso ARS y verifica USD calculado", async () => {
     const inc = await createIncome({
-      type: "OTHER", concept: "ARS calc", status: "PAID",
+      typeId: otherTypeId, concept: "ARS calc", status: "PAID",
       amountArs: 100000, exchangeRate: 800, effectiveDate: "2026-01-15",
     });
     track(inc.id);
@@ -97,7 +104,7 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
 
   it("7. crea pendiente", async () => {
     const inc = await createIncome({
-      type: "OTHER", concept: "Pending test", status: "PENDING",
+      typeId: otherTypeId, concept: "Pending test", status: "PENDING",
       amountUsd: 50, dueDate: "2026-12-01",
     });
     track(inc.id);
@@ -108,12 +115,12 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
 
   it("8. marca pendiente como cobrado conservando dueDate", async () => {
     const inc = await createIncome({
-      type: "OTHER", concept: "To Pay", status: "PENDING",
+      typeId: otherTypeId, concept: "To Pay", status: "PENDING",
       amountUsd: 75, dueDate: "2026-06-01",
     });
     track(inc.id);
     const paid = await updateIncome(inc.id, {
-      type: "OTHER", concept: inc.concept, status: "PAID",
+      typeId: otherTypeId, concept: inc.concept, status: "PAID",
       amountUsd: 80, effectiveDate: "2026-05-15", dueDate: inc.dueDate?.toISOString().slice(0, 10) ?? null,
     });
     expect(paid.status).toBe("PAID");
@@ -124,12 +131,12 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
 
   it("9. edita ingreso cobrado", async () => {
     const inc = await createIncome({
-      type: "OTHER", concept: "Editable", status: "PAID",
+      typeId: otherTypeId, concept: "Editable", status: "PAID",
       amountUsd: 100, effectiveDate: "2026-01-01",
     });
     track(inc.id);
     const updated = await updateIncome(inc.id, {
-      type: "OTHER", concept: "Edited", status: "PAID",
+      typeId: otherTypeId, concept: "Edited", status: "PAID",
       amountUsd: 200, effectiveDate: "2026-02-01",
     });
     expect(updated.concept).toBe("Edited");
@@ -138,7 +145,7 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
 
   it("10. elimina ingreso pendiente", async () => {
     const inc = await createIncome({
-      type: "OTHER", concept: "To Delete", status: "PENDING",
+      typeId: otherTypeId, concept: "To Delete", status: "PENDING",
       amountUsd: 10, dueDate: "2026-12-01",
     });
     await deleteIncome(inc.id);
@@ -147,7 +154,7 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
 
   it("11. elimina ingreso cobrado", async () => {
     const inc = await createIncome({
-      type: "OTHER", concept: "Paid Delete", status: "PAID",
+      typeId: otherTypeId, concept: "Paid Delete", status: "PAID",
       amountUsd: 10, effectiveDate: "2026-01-01",
     });
     await deleteIncome(inc.id);
@@ -156,9 +163,9 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
 
   it("12. crea lote de ingresos via batch", async () => {
     const result = await createIncomeBatch([
-      { type: "DEVELOPMENT", projectId, concept: "Lote", status: "PENDING", amountUsd: 100, dueDate: "2026-02-01" },
-      { type: "DEVELOPMENT", projectId, concept: "Lote", status: "PENDING", amountUsd: 100, dueDate: "2026-03-01" },
-      { type: "DEVELOPMENT", projectId, concept: "Lote", status: "PENDING", amountUsd: 100, dueDate: "2026-04-01" },
+      { typeId: devTypeId, projectId, concept: "Lote", status: "PENDING", amountUsd: 100, dueDate: "2026-02-01" },
+      { typeId: devTypeId, projectId, concept: "Lote", status: "PENDING", amountUsd: 100, dueDate: "2026-03-01" },
+      { typeId: devTypeId, projectId, concept: "Lote", status: "PENDING", amountUsd: 100, dueDate: "2026-04-01" },
     ]);
     expect(result.success).toBe(true);
     const incomes = await prisma.income.findMany({ where: { concept: "Lote" } });
@@ -168,47 +175,45 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
 
   it("13. calculo OVERDUE sin persistir", async () => {
     const inc = await createIncome({
-      type: "OTHER", concept: "Old pending", status: "PENDING",
+      typeId: otherTypeId, concept: "Old pending", status: "PENDING",
       amountUsd: 5, dueDate: "2020-01-01",
     });
     track(inc.id);
     const fetched = await getIncome(inc.id);
     expect(fetched.status).toBe("PENDING"); // never persisted as OVERDUE
-    // OVERDUE is derived: dueDate < today
     const today = new Date();
     expect(new Date(fetched.dueDate!) < today).toBe(true);
   });
 
-  it("14. MAINTENANCE requiere proyecto", async () => {
+  it("14. tipo que requiere proyecto falla sin proyecto", async () => {
     await expect(
-      createIncome({ type: "MAINTENANCE", concept: "No proj", status: "PAID", amountUsd: 100, effectiveDate: "2026-01-01" }),
-    ).rejects.toThrow("requieren proyecto");
+      createIncome({ typeId: maintTypeId, concept: "No proj", status: "PAID", amountUsd: 100, effectiveDate: "2026-01-01" }),
+    ).rejects.toThrow("requiere un proyecto asociado");
   });
 
   it("15. cambiar proyecto actualiza el cliente", async () => {
     const p2 = await prisma.project.create({ data: { clientId, name: `inc-proj2-${Date.now()}`, isActive: true } });
-    const inc = await createIncome({ type: "DEVELOPMENT", concept: "Move", status: "PAID", projectId, amountUsd: 100, effectiveDate: "2026-01-01" });
+    const inc = await createIncome({ typeId: devTypeId, concept: "Move", status: "PAID", projectId, amountUsd: 100, effectiveDate: "2026-01-01" });
     track(inc.id);
     expect(inc.clientId).toBe(clientId);
-    const updated = await updateIncome(inc.id, { type: "DEVELOPMENT", concept: inc.concept, status: "PAID", projectId: p2.id, amountUsd: 100, effectiveDate: "2026-01-01" });
-    expect(updated.clientId).toBe(clientId); // both projects belong to same client
+    const updated = await updateIncome(inc.id, { typeId: devTypeId, concept: inc.concept, status: "PAID", projectId: p2.id, amountUsd: 100, effectiveDate: "2026-01-01" });
+    expect(updated.clientId).toBe(clientId);
     expect(updated.projectId).toBe(p2.id);
-    // Move income back to original project before cleaning p2
-    await updateIncome(inc.id, { type: "DEVELOPMENT", concept: inc.concept, status: "PAID", projectId, amountUsd: 100, effectiveDate: "2026-01-01" });
+    await updateIncome(inc.id, { typeId: devTypeId, concept: inc.concept, status: "PAID", projectId, amountUsd: 100, effectiveDate: "2026-01-01" });
     await prisma.project.delete({ where: { id: p2.id } });
   });
 
-  it("16. quitar proyecto de OTHER limpia cliente derivado", async () => {
-    const inc = await createIncome({ type: "OTHER", concept: "Other Proj", status: "PAID", projectId, amountUsd: 100, effectiveDate: "2026-01-01" });
+  it("16. quitar proyecto de Otro limpia cliente derivado", async () => {
+    const inc = await createIncome({ typeId: otherTypeId, concept: "Other Proj", status: "PAID", projectId, amountUsd: 100, effectiveDate: "2026-01-01" });
     track(inc.id);
     expect(inc.clientId).toBe(clientId);
-    const updated = await updateIncome(inc.id, { type: "OTHER", concept: inc.concept, status: "PAID", amountUsd: 100, effectiveDate: "2026-01-01" });
+    const updated = await updateIncome(inc.id, { typeId: otherTypeId, concept: inc.concept, status: "PAID", amountUsd: 100, effectiveDate: "2026-01-01" });
     expect(updated.clientId).toBeNull();
   });
 
   it("17. batch con proyecto invalido falla parcialmente", async () => {
     const result = await createIncomeBatch([
-      { type: "DEVELOPMENT", projectId: "00000000-0000-0000-0000-000000000000", concept: "Bad", status: "PAID", amountUsd: 100, effectiveDate: "2026-01-01" },
+      { typeId: devTypeId, projectId: "00000000-0000-0000-0000-000000000000", concept: "Bad", status: "PAID", amountUsd: 100, effectiveDate: "2026-01-01" },
     ]);
     expect(result.success).toBe(false);
   });
@@ -216,8 +221,8 @@ describe.skipIf(skip)("Ingresos - integracion", () => {
   it("18. batch con fechas en intervalos de 30 dias", async () => {
     const name = `Interval-${Date.now()}`;
     const result = await createIncomeBatch([
-      { type: "OTHER", concept: name, status: "PENDING", amountUsd: 10, dueDate: "2027-01-31" },
-      { type: "OTHER", concept: name, status: "PENDING", amountUsd: 10, dueDate: "2027-03-02" },
+      { typeId: otherTypeId, concept: name, status: "PENDING", amountUsd: 10, dueDate: "2027-01-31" },
+      { typeId: otherTypeId, concept: name, status: "PENDING", amountUsd: 10, dueDate: "2027-03-02" },
     ]);
     expect(result.success).toBe(true);
     const incs = await prisma.income.findMany({ where: { concept: name }, orderBy: { dueDate: "asc" } });

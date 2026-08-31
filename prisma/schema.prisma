@@ -12,12 +12,6 @@ enum Currency {
   ARS
 }
 
-enum IncomeType {
-  DEVELOPMENT
-  MAINTENANCE
-  OTHER
-}
-
 enum ExpenseType {
   FIXED
   VARIABLE
@@ -71,11 +65,24 @@ model Project {
   @@map("projects")
 }
 
+model IncomeType {
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String
+  requiresProject Boolean   @default(false) @map("requires_project")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  incomes         Income[]
+
+  @@unique([name])
+  @@map("income_types")
+}
+
 model Income {
   id            String          @id @default(uuid()) @db.Uuid
   clientId      String?         @map("client_id") @db.Uuid
   projectId     String?         @map("project_id") @db.Uuid
-  type          IncomeType      @map("income_type")
+  typeId        String          @map("type_id") @db.Uuid
   concept       String
   notes         String?
   status        FinancialStatus @default(PAID)
@@ -88,10 +95,11 @@ model Income {
   updatedAt     DateTime        @updatedAt @map("updated_at")
   client        Client?         @relation(fields: [clientId], references: [id], onDelete: Restrict)
   project       Project?        @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  type          IncomeType      @relation(fields: [typeId], references: [id], onDelete: Restrict)
 
   @@index([clientId])
   @@index([projectId])
-  @@index([type])
+  @@index([typeId])
   @@index([status, dueDate])
   @@index([status, effectiveDate])
   @@map("incomes")

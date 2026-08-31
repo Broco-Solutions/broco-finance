@@ -1,5 +1,6 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
+import { ensureIncomeTypes } from "../helpers/income-types";
 
 const url = process.env.DATABASE_URL_TEST;
 const skip = !url;
@@ -7,6 +8,13 @@ const skip = !url;
 describe.skipIf(skip)("dashboard KPIs y totales", () => {
   const prisma = new PrismaClient({ datasources: { db: { url } } });
   const ids: string[] = [];
+  let otherTypeId = "";
+
+  beforeAll(async () => {
+    if (skip) return;
+    const types = await ensureIncomeTypes(prisma);
+    otherTypeId = types.other;
+  });
 
   afterAll(async () => {
     for (const id of ids) { try { await prisma.income.delete({ where: { id } }).catch(()=>{}); } catch {} }
@@ -14,8 +22,8 @@ describe.skipIf(skip)("dashboard KPIs y totales", () => {
   });
 
   it("pendiente global incluye todos los PENDING independiente del periodo", async () => {
-    const old = await prisma.income.create({ data: { type: "OTHER", concept: "global-old", status: "PENDING", amountUsd: 5, dueDate: new Date("2020-01-01") } }); ids.push(old.id);
-    const future = await prisma.income.create({ data: { type: "OTHER", concept: "global-future", status: "PENDING", amountUsd: 5, dueDate: new Date("2030-01-01") } }); ids.push(future.id);
+    const old = await prisma.income.create({ data: { typeId: otherTypeId, concept: "global-old", status: "PENDING", amountUsd: 5, dueDate: new Date("2020-01-01") } }); ids.push(old.id);
+    const future = await prisma.income.create({ data: { typeId: otherTypeId, concept: "global-future", status: "PENDING", amountUsd: 5, dueDate: new Date("2030-01-01") } }); ids.push(future.id);
     const allPending = await prisma.income.aggregate({ where: { status: "PENDING" }, _sum: { amountUsd: true } });
     expect(Number(allPending._sum.amountUsd ?? 0)).toBeGreaterThanOrEqual(10);
   });

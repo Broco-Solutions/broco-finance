@@ -11,19 +11,26 @@ import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { BulkActionBar } from "@/components/ui/bulk-action-bar";
+import { ModalPortal } from "@/components/ui/modal-portal";
 import { IncomeFormModal } from "./income-form-modal";
 import { PayIncomeModal } from "./pay-income-modal";
 import { saveIncome, removeIncome, payIncome, createIncomeBatch, bulkUpdateIncomes } from "./actions";
-import { formatUsd, formatArs, formatDate, formatDateShort, formatIncomeStatus, formatIncomeType } from "@/lib/utils";
+import { saveIncomeType, removeIncomeType } from "./types/actions";
+import { formatUsd, formatArs, formatDate, formatIncomeStatus } from "@/lib/utils";
 
-type Income = { id: string; type: string; concept: string; notes: string | null; status: string;
+type TY = { id: string; name: string; requiresProject: boolean };
+
+type Income = { id: string; typeId: string; concept: string; notes: string | null; status: string;
   amountUsd: any; amountArs: any; exchangeRate: any; dueDate: string | Date | null; effectiveDate: string | Date | null;
   clientId: string | null; projectId: string | null; client: { id: string; name: string } | null;
-  project: { id: string; name: string; clientId: string } | null; };
+  project: { id: string; name: string; clientId: string } | null;
+  type: { id: string; name: string; requiresProject: boolean } | null; };
 
 function fmt(v: any) { return typeof v === "object" && v != null && "toString" in v ? Number(v.toString()) : Number(v ?? 0); }
 
-export function IncomeList({ initialIncomes, projects, clients }: { initialIncomes: Income[]; projects: { id: string; name: string; clientId?: string }[]; clients: { id: string; name: string }[] }) {
+export function IncomeList({ initialIncomes, projects, clients, incomeTypes }: {
+  initialIncomes: Income[]; projects: { id: string; name: string; clientId?: string }[];
+  clients: { id: string; name: string }[]; incomeTypes: TY[] }) {
   const [incomes, setIncomes] = useState<Income[]>(initialIncomes);
   useEffect(() => { setIncomes(initialIncomes); }, [initialIncomes]);
   const [filter, setFilter] = useState("PAID"); const [typeFilter, setTypeFilter] = useState("");
@@ -33,6 +40,11 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState<Income | null>(null);
   const [payTarget, setPayTarget] = useState<Income | null>(null); const [deleteTarget, setDeleteTarget] = useState<Income | null>(null);
   const [delError, setDelError] = useState<string | null>(null);
+  // Type management
+  const [showTypeMgmt, setShowTypeMgmt] = useState(false);
+  const [typeForm, setTypeForm] = useState({ id: "", name: "", requiresProject: false });
+  const [typeError, setTypeError] = useState<string | null>(null);
+  const [typeDelTarget, setTypeDelTarget] = useState<TY | null>(null);
   // Bulk selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkField, setBulkField] = useState("");
@@ -73,7 +85,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
     const batch = data.batch as Array<Record<string, unknown>> | undefined;
     if (batch) {
       const entries = batch.map(r => ({
-        type: data.type as string, projectId: (data.projectId as string) || null, clientId: (data.clientId as string) || null,
+        typeId: data.typeId as string, projectId: (data.projectId as string) || null, clientId: (data.clientId as string) || null,
         concept: data.concept as string, notes: (data.notes as string) || null, status: r.status as string,
         amountUsd: (r.amountUsd as string) ? Number(r.amountUsd) : undefined,
         amountArs: (r.amountArs as string) ? Number(r.amountArs) : undefined,
@@ -106,11 +118,33 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
     setDeleteTarget(null); reload();
   };
 
+  // Type management handlers
+  const handleTypeSave = async (ev: React.FormEvent) => {
+    ev.preventDefault(); setTypeError(null);
+    const fd = new FormData();
+    if (typeForm.id) fd.set("id", typeForm.id);
+    fd.set("name", typeForm.name);
+    fd.set("requiresProject", typeForm.requiresProject ? "true" : "false");
+    const result = await saveIncomeType(null, fd);
+    if (!result.success) { setTypeError(result.message); return; }
+    setTypeForm({ id: "", name: "", requiresProject: false });
+    reload();
+  };
+  const handleTypeDel = async () => {
+    if (!typeDelTarget) return;
+    const fd = new FormData();
+    fd.set("id", typeDelTarget.id);
+    const result = await removeIncomeType(null, fd);
+    if (!result.success) { setTypeError(result.message); return; }
+    setTypeDelTarget(null);
+    reload();
+  };
+
   const filtered = incomes.filter(inc => {
     if (filter === "PENDING" && inc.status !== "PENDING") return false;
     if (filter === "PAID" && inc.status !== "PAID") return false;
     if (filter === "OVERDUE") { if (inc.status !== "PENDING") return false; const t = new Date(); const d = inc.dueDate ? new Date(inc.dueDate) : null; return d && d < t; }
-    if (typeFilter && inc.type !== typeFilter) return false;
+    if (typeFilter && inc.typeId !== typeFilter) return false;
     if (fClient && inc.clientId !== fClient) return false;
     if (fProject && inc.projectId !== fProject) return false;
     if (search && !inc.concept.toLowerCase().includes(search.toLowerCase())) return false;
@@ -143,7 +177,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
     setBulkError(null);
     const ids = Array.from(selected);
     const updates: Record<string, unknown> = {};
-    if (bulkField === "type") updates.type = bulkValue;
+    if (bulkField === "type") updates.typeId = bulkValue;
     else if (bulkField === "status") updates.status = bulkValue;
     else if (bulkField === "amount") updates.amountUsd = Number(bulkValue);
     else if (bulkField === "ars") { updates.amountArs = Number(bulkValue); updates.exchangeRate = Number(bulkExchangeRate); }
@@ -159,8 +193,9 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
 
   const statusLabel = (s: string, d: any) => formatIncomeStatus(s, d);
   const statusTone = (s: string, d: any): "success" | "danger" | "warning" | "neutral" => { const l = statusLabel(s, d); if (l === "Cobrado") return "success"; if (l === "Vencido") return "danger"; if (l === "Pendiente") return "warning"; return "neutral"; };
+  const typeName = (id: string) => incomeTypes.find(t => t.id === id)?.name ?? "—";
   const bulkFieldLabels: Record<string, string> = { type: "Tipo", status: "Estado", amount: "Monto USD", ars: "Monto ARS + TC" };
-  const bulkValueLabels: Record<string, Record<string, string>> = { type: { DEVELOPMENT: "Desarrollo", MAINTENANCE: "Mantenimiento", OTHER: "Otro" }, status: { PAID: "Cobrado", PENDING: "Pendiente" } };
+  const bulkValueLabels: Record<string, Record<string, string>> = { type: Object.fromEntries(incomeTypes.map(t => [t.id, t.name])), status: { PAID: "Cobrado", PENDING: "Pendiente" } };
   const bulkDesc = `${bulkFieldLabels[bulkField] ?? "?"} → ${bulkValueLabels[bulkField]?.[bulkValue] ?? bulkValue}`;
 
   return (
@@ -171,7 +206,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
               <option value="all">Todos</option><option value="PAID">Cobrados</option><option value="PENDING">Pendientes</option><option value="OVERDUE">Vencidos</option>
             </Select>
             <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="w-36 text-xs">
-              <option value="">Tipos</option><option value="DEVELOPMENT">Desarrollo</option><option value="MAINTENANCE">Mantenimiento</option><option value="OTHER">Otro</option>
+              <option value="">Tipos</option>{incomeTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </Select>
             <SearchableSelect value={fClient} onChange={(v) => { setFClient(v); setFProject(""); }} options={clients} placeholder="Cliente" className="w-36 text-xs" />
             <SearchableSelect value={fProject} onChange={(v) => setFProject(v)} options={projects.filter(p => !fClient || p.clientId === fClient)} placeholder="Proyecto" className="w-36 text-xs" disabled={!fClient} />
@@ -183,6 +218,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
             </div>
           </div>
         <div className="flex gap-2 flex-wrap">
+          <Button variant="secondary" className="text-xs" onClick={() => setShowTypeMgmt(true)}>Tipos</Button>
           <Button onClick={() => { setEditing(null); setShowForm(true); }}>Nuevo ingreso</Button>
         </div>
       </div>
@@ -204,7 +240,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
       <div className="hidden md:block">
         <DataTable tableClassName="table-fixed"
           headers={[<input key="cb" type="checkbox" checked={allSelected} onChange={toggleAll} className="h-3.5 w-3.5" />,"Concepto","Cliente","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
-          colGroup={<colgroup><col style={{width:"3%"}} /><col style={{width:"14%"}} /><col style={{width:"14%"}} /><col style={{width:"13%"}} /><col style={{width:"7%"}} /><col style={{width:"7%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"12%"}} /><col style={{width:"11%"}} /></colgroup>}
+          colGroup={<colgroup><col style={{width:"3%"}} /><col style={{width:"14%"}} /><col style={{width:"14%"}} /><col style={{width:"13%"}} /><col style={{width:"8%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"12%"}} /><col style={{width:"9%"}} /></colgroup>}
           footer={<tr className="bg-gray-50 font-semibold"><td className="px-4 py-2.5 text-xs text-gray-500">Total filtrado · {filtered.length} mov.</td><td /><td /><td /><td /><td /><td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(filteredTotal)}</td><td /><td /></tr>}
         >
           {filtered.map(inc => (
@@ -213,7 +249,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
               <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={inc.concept}>{inc.concept}</div></td>
               <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={inc.client?.name ?? ""}>{inc.client?.name ?? "—"}</div></td>
               <td className="px-4 py-2.5 text-sm align-middle"><div className="line-clamp-2 break-words" title={inc.project?.name ?? ""}>{inc.project?.name ?? "—"}</div></td>
-              <td className="px-4 py-2.5 text-sm whitespace-nowrap">{formatIncomeType(inc.type)}</td>
+              <td className="px-4 py-2.5 text-sm whitespace-nowrap">{inc.type?.name ?? "—"}</td>
               <td className="px-4 py-2.5"><Badge tone={statusTone(inc.status, inc.dueDate)}>{statusLabel(inc.status, inc.dueDate)}</Badge></td>
               <td className="px-4 py-2.5 text-sm tabular-nums whitespace-nowrap">{inc.status === "PAID" ? formatDate(inc.effectiveDate) : formatDate(inc.dueDate)}</td>
               <td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(fmt(inc.amountUsd))}</td>
@@ -237,7 +273,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
               <Badge tone={statusTone(inc.status, inc.dueDate)}>{statusLabel(inc.status, inc.dueDate)}</Badge>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">{formatIncomeType(inc.type)}</span>
+              <span className="text-gray-500">{inc.type?.name ?? "—"}</span>
               <span className="font-semibold tabular-nums">{formatUsd(fmt(inc.amountUsd))}</span>
             </div>
             <div className="text-xs text-gray-400 flex justify-between">
@@ -255,8 +291,8 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
         {filtered.length === 0 && <p className="text-center text-gray-400 text-sm py-8">Sin ingresos.</p>}
       </div>
 
-      <IncomeFormModal open={showForm} title={editing ? "Editar ingreso" : "Nuevo ingreso"} projects={projects} clients={clients}
-        initial={editing ? { id: editing.id, type: editing.type, concept: editing.concept, notes: editing.notes, status: editing.status, projectId: editing.projectId, clientId: editing.clientId, amountUsd: editing.amountUsd, amountArs: editing.amountArs, exchangeRate: editing.exchangeRate, dueDate: editing.dueDate ? (editing.dueDate instanceof Date ? editing.dueDate.toISOString().slice(0,10) : String(editing.dueDate).slice(0,10)) : null, effectiveDate: editing.effectiveDate ? (editing.effectiveDate instanceof Date ? editing.effectiveDate.toISOString().slice(0,10) : String(editing.effectiveDate).slice(0,10)) : null, client: editing.client, project: editing.project } : undefined}
+      <IncomeFormModal open={showForm} title={editing ? "Editar ingreso" : "Nuevo ingreso"} projects={projects} clients={clients} incomeTypes={incomeTypes}
+        initial={editing ? { id: editing.id, typeId: editing.typeId, concept: editing.concept, notes: editing.notes, status: editing.status, projectId: editing.projectId, clientId: editing.clientId, amountUsd: editing.amountUsd, amountArs: editing.amountArs, exchangeRate: editing.exchangeRate, dueDate: editing.dueDate ? (editing.dueDate instanceof Date ? editing.dueDate.toISOString().slice(0,10) : String(editing.dueDate).slice(0,10)) : null, effectiveDate: editing.effectiveDate ? (editing.effectiveDate instanceof Date ? editing.effectiveDate.toISOString().slice(0,10) : String(editing.effectiveDate).slice(0,10)) : null, client: editing.client, project: editing.project, type: editing.type } : undefined}
         onClose={() => { setShowForm(false); setEditing(null); }} onSave={handleSave} />
 
       <PayIncomeModal open={!!payTarget} income={payTarget} onClose={() => setPayTarget(null)} onConfirm={handlePay} />
@@ -281,7 +317,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
           { value: "ars", label: "Monto ARS + TC" },
         ]}
         options={{
-          type: [{ value: "DEVELOPMENT", label: "Desarrollo" }, { value: "MAINTENANCE", label: "Mantenimiento" }, { value: "OTHER", label: "Otro" }],
+          type: incomeTypes.map(t => ({ value: t.id, label: t.name })),
           status: [{ value: "PAID", label: "Cobrado" }, { value: "PENDING", label: "Pendiente" }],
           amount: [], ars: [],
         }}
@@ -298,6 +334,20 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
         onClose={() => { setShowBulkConfirm(false); setBulkError(null); }}
         onConfirm={handleBulkApply}
       />
+
+      {/* Type management */}
+      {showTypeMgmt && <ModalPortal><div className="fixed inset-0 z-[90] overflow-y-auto"><button className="fixed inset-0 bg-black/50" onClick={() => setShowTypeMgmt(false)} /><div className="relative flex min-h-full items-center justify-center p-4"><div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl overflow-x-hidden"><h2 className="text-lg font-bold">Tipos de ingreso</h2>
+      <div className="mt-3 space-y-1 max-h-64 overflow-y-auto">{incomeTypes.map(t => <div key={t.id} className="flex items-center justify-between rounded border p-2 text-sm"><span>{t.name} {t.requiresProject && <span className="text-gray-400 text-xs">(requiere proyecto)</span>}</span><div className="space-x-1"><Button variant="secondary" className="text-xs" onClick={() => setTypeForm({ id: t.id, name: t.name, requiresProject: t.requiresProject })}>Editar</Button><Button variant="secondary" className="text-xs text-brick" onClick={() => { setTypeDelTarget(t); setTypeError(null); }}>Elim.</Button></div></div>)}</div>
+      <form onSubmit={handleTypeSave} className="mt-3 space-y-2">
+        <Input placeholder="Nombre" value={typeForm.name} onChange={(e) => setTypeForm(p => ({...p, name: e.target.value}))} required />
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={typeForm.requiresProject} onChange={(e) => setTypeForm(p => ({...p, requiresProject: e.target.checked}))} /> Requiere proyecto</label>
+        <div className="flex gap-2"><Button type="submit" className="text-xs">{typeForm.id ? "Guardar" : "Crear"}</Button>{typeForm.id && <Button type="button" variant="ghost" className="text-xs" onClick={() => setTypeForm({ id: "", name: "", requiresProject: false })}>Nuevo</Button>}</div>
+      </form>
+      {typeError && <p className="text-sm text-red-600 mt-1">{typeError}</p>}
+      <div className="flex justify-end mt-3"><Button variant="ghost" onClick={() => { setShowTypeMgmt(false); setTypeForm({ id: "", name: "", requiresProject: false }); }}>Cerrar</Button></div>
+      </div></div></div></ModalPortal>}
+
+      <ConfirmActionModal open={!!typeDelTarget} title="Eliminar tipo" description={`¿Eliminar "${typeDelTarget?.name}"?`} confirmLabel="Eliminar" isPending={false} error={null} onClose={() => setTypeDelTarget(null)} onConfirm={handleTypeDel} />
     </div>
   );
 }

@@ -56,7 +56,7 @@ test.describe("Income modal flows", () => {
     await page.waitForTimeout(300);
 
     const modalTypeSel = page.locator("select").nth(MODAL_TYPE);
-    await modalTypeSel.selectOption("DEVELOPMENT");
+    await modalTypeSel.selectOption({ label: "Desarrollo" });
     await page.waitForTimeout(300);
 
     const modalProjSel = page.locator("select").nth(MODAL_PROJECT);
@@ -84,7 +84,7 @@ test.describe("Income modal flows", () => {
     const modalClientSel = page.locator("select").nth(MODAL_CLIENT);
     const modalProjSel = page.locator("select").nth(MODAL_PROJECT);
 
-    await modalTypeSel.selectOption("DEVELOPMENT");
+    await modalTypeSel.selectOption({ label: "Desarrollo" });
 
     const clientOpts = await modalClientSel.locator("option").allTextContents();
     let firstClient = "";

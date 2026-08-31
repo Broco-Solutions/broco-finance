@@ -5,8 +5,6 @@ const BASE = "http://localhost:3299";
 // Income page: 2 filter selects (status, type), then SearchableSelect
 // Modal selects start at index 2: type(2), client(3), project(4), status(5)
 const M_TYPE = 2;
-const M_CLIENT = 5;
-const M_PROJECT = 6;
 
 test.describe("Smoke - dates, filters, totalizer", () => {
   test.beforeEach(async ({ context }) => {
@@ -24,7 +22,7 @@ test.describe("Smoke - dates, filters, totalizer", () => {
     await expect(page.getByRole("heading", { name: "Nuevo ingreso" })).toBeVisible({ timeout: 5000 });
 
     // Set type to OTHER (no project needed) - modal type is at index 4
-    await page.locator("select").nth(M_TYPE).selectOption("OTHER");
+    await page.locator("select").nth(M_TYPE).selectOption({ label: "Otro" });
     await page.waitForTimeout(200);
 
     // Find the status select in the modal by scanning all selects for PENDIENTE option

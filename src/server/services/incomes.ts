@@ -13,7 +13,7 @@ const D = Prisma.Decimal;
 export const incomeSchema = z.object({
   projectId: z.string().nullable().optional(),
   clientId: z.string().nullable().optional(),
-  type: z.enum(["DEVELOPMENT", "MAINTENANCE", "OTHER"]),
+  typeId: z.string().min(1, "El tipo es obligatorio."),
   concept: z.string().trim().min(1, "El concepto es obligatorio."),
   notes: z.string().trim().nullable().optional(),
   status: z.enum(["PAID", "PENDING"]),
@@ -58,6 +58,28 @@ function computeMoney(input: {
   throw new Error("Ingresa monto USD, o ARS + tipo de cambio.");
 }
 
+async function validateType(typeId: string, projectId?: string | null) {
+  const incomeType = await prisma.incomeType.findUnique({
+    where: { id: typeId },
+    select: { requiresProject: true, isActive: true },
+  });
+  if (!incomeType) throw new Error("Tipo no encontrado.");
+  if (!incomeType.isActive) throw new Error("El tipo seleccionado está inactivo.");
+  if (incomeType.requiresProject && !projectId) {
+    throw new Error("Este tipo requiere un proyecto asociado.");
+  }
+  return incomeType;
+}
+
+function validateDates(data: IncomeInput) {
+  if (data.status === "PENDING" && !data.dueDate) {
+    throw new Error("La fecha de vencimiento es obligatoria para ingresos pendientes.");
+  }
+  if (data.status === "PAID" && !data.effectiveDate) {
+    throw new Error("La fecha de cobro es obligatoria para ingresos pagados.");
+  }
+}
+
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -65,12 +87,12 @@ function computeMoney(input: {
 
 export async function listIncomes(filters?: {
   status?: string;
-  type?: string;
+  typeId?: string;
   clientId?: string;
   projectId?: string;
 }) {
   const where: Record<string, unknown> = {};
-  if (filters?.type) where.type = filters.type;
+  if (filters?.typeId) where.typeId = filters.typeId;
   if (filters?.clientId) where.clientId = filters.clientId;
   if (filters?.projectId) where.projectId = filters.projectId;
 
@@ -85,6 +107,7 @@ export async function listIncomes(filters?: {
     include: {
       client: { select: { id: true, name: true } },
       project: { select: { id: true, name: true } },
+      type: { select: { id: true, name: true, requiresProject: true } },
     },
     orderBy: [{ status: "asc" }, { dueDate: "asc" }, { effectiveDate: "desc" }],
   });
@@ -96,6 +119,7 @@ export async function getIncome(id: string) {
     include: {
       client: { select: { id: true, name: true } },
       project: { select: { id: true, name: true, clientId: true } },
+      type: { select: { id: true, name: true, requiresProject: true } },
     },
   });
   if (!income) throw new Error("Ingreso no encontrado.");
@@ -108,8 +132,9 @@ export async function getIncome(id: string) {
 
 export async function createIncome(input: IncomeInput) {
   const data = incomeSchema.parse(input);
+  await validateType(data.typeId, data.projectId);
 
-  // Resolve client from project for DEVELOPMENT/MAINTENANCE
+  // Resolve client from project
   let clientId = data.clientId ?? null;
   if (data.projectId) {
     const project = await prisma.project.findUnique({
@@ -120,18 +145,7 @@ export async function createIncome(input: IncomeInput) {
     clientId = project.clientId;
   }
 
-  // Validate: DEVELOPMENT/MAINTENANCE require project
-  if ((data.type === "DEVELOPMENT" || data.type === "MAINTENANCE") && !data.projectId) {
-    throw new Error("DEVELOPMENT y MAINTENANCE requieren proyecto.");
-  }
-
-  // Validate status + dates
-  if (data.status === "PENDING" && !data.dueDate) {
-    throw new Error("La fecha de vencimiento es obligatoria para ingresos pendientes.");
-  }
-  if (data.status === "PAID" && !data.effectiveDate) {
-    throw new Error("La fecha de cobro es obligatoria para ingresos pagados.");
-  }
+  validateDates(data);
 
   const money = computeMoney(data);
 
@@ -139,7 +153,7 @@ export async function createIncome(input: IncomeInput) {
     data: {
       clientId,
       projectId: data.projectId ?? null,
-      type: data.type as "DEVELOPMENT" | "MAINTENANCE" | "OTHER",
+      typeId: data.typeId,
       concept: data.concept,
       notes: data.notes?.trim() || null,
       status: data.status as "PAID" | "PENDING",
@@ -154,6 +168,7 @@ export async function createIncome(input: IncomeInput) {
 
 export async function updateIncome(id: string, input: IncomeInput) {
   const data = incomeSchema.parse(input);
+  await validateType(data.typeId, data.projectId);
 
   let clientId = data.clientId ?? null;
   if (data.projectId) {
@@ -165,16 +180,7 @@ export async function updateIncome(id: string, input: IncomeInput) {
     clientId = project.clientId;
   }
 
-  if ((data.type === "DEVELOPMENT" || data.type === "MAINTENANCE") && !data.projectId) {
-    throw new Error("DEVELOPMENT y MAINTENANCE requieren proyecto.");
-  }
-
-  if (data.status === "PENDING" && !data.dueDate) {
-    throw new Error("La fecha de vencimiento es obligatoria para ingresos pendientes.");
-  }
-  if (data.status === "PAID" && !data.effectiveDate) {
-    throw new Error("La fecha de cobro es obligatoria para ingresos pagados.");
-  }
+  validateDates(data);
 
   const money = computeMoney(data);
 
@@ -183,7 +189,7 @@ export async function updateIncome(id: string, input: IncomeInput) {
     data: {
       clientId,
       projectId: data.projectId ?? null,
-      type: data.type as "DEVELOPMENT" | "MAINTENANCE" | "OTHER",
+      typeId: data.typeId,
       concept: data.concept,
       notes: data.notes?.trim() || null,
       status: data.status as "PAID" | "PENDING",
@@ -204,7 +210,7 @@ export async function deleteIncome(id: string) {
 }
 
 export type BatchEntry = {
-  type: string; projectId?: string | null; clientId?: string | null;
+  typeId: string; projectId?: string | null; clientId?: string | null;
   concept: string; notes?: string | null; status: string;
   amountUsd?: number | null; amountArs?: number | null; exchangeRate?: number | null;
   dueDate?: string | null; effectiveDate?: string | null;
@@ -214,6 +220,15 @@ export async function createIncomeBatch(entries: BatchEntry[]) {
   await prisma.$transaction(async (tx) => {
     for (const entry of entries) {
       const data = incomeSchema.parse(entry);
+      const incomeType = await tx.incomeType.findUnique({
+        where: { id: data.typeId },
+        select: { requiresProject: true, isActive: true },
+      });
+      if (!incomeType) throw new Error("Tipo no encontrado.");
+      if (!incomeType.isActive) throw new Error("El tipo seleccionado está inactivo.");
+      if (incomeType.requiresProject && !data.projectId) {
+        throw new Error(`El tipo requiere un proyecto asociado (${data.concept}).`);
+      }
       if (data.status === "PENDING" && !data.dueDate) throw new Error("La fecha de vencimiento es obligatoria.");
       if (data.status === "PAID" && !data.effectiveDate) throw new Error("La fecha de cobro es obligatoria.");
       const money = computeMoney(data);
@@ -221,7 +236,7 @@ export async function createIncomeBatch(entries: BatchEntry[]) {
         data: {
           clientId: data.projectId ? (await tx.project.findUnique({ where: { id: data.projectId }, select: { clientId: true } }))?.clientId ?? data.clientId ?? null : data.clientId ?? null,
           projectId: data.projectId ?? null,
-          type: data.type as "DEVELOPMENT" | "MAINTENANCE" | "OTHER",
+          typeId: data.typeId,
           concept: data.concept,
           notes: data.notes?.trim() || null,
           status: data.status as "PAID" | "PENDING",
@@ -236,10 +251,10 @@ export async function createIncomeBatch(entries: BatchEntry[]) {
 }
 
 export async function bulkUpdateIncomes(ids: string[], updates: {
-  type?: string; status?: string; amountUsd?: number; amountArs?: number; exchangeRate?: number;
+  typeId?: string; status?: string; amountUsd?: number; amountArs?: number; exchangeRate?: number;
 }) {
   const data: Record<string, unknown> = {};
-  if (updates.type) data.type = updates.type;
+  if (updates.typeId) data.typeId = updates.typeId;
   if (updates.status) data.status = updates.status;
   if (updates.amountArs != null && updates.exchangeRate != null) {
     const money = computeMoney({ amountArs: updates.amountArs, exchangeRate: updates.exchangeRate });
@@ -255,4 +270,3 @@ export async function bulkUpdateIncomes(ids: string[], updates: {
   await prisma.income.updateMany({ where: { id: { in: ids } }, data });
   revalidatePath("/incomes");
 }
-

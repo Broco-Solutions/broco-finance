@@ -8,28 +8,30 @@ import { ModalPortal } from "@/components/ui/modal-portal";
 
 type PO = { id: string; name: string; clientId?: string };
 type CO = { id: string; name: string };
+type TY = { id: string; name: string; requiresProject: boolean };
 type Row = { status: "PAID"|"PENDING"; date: string; amountUsd: string; amountArs: string; exchangeRate: string };
 
 export function IncomeFormModal({
-  open, onClose, onSave, initial, title, projects, clients,
+  open, onClose, onSave, initial, title, projects, clients, incomeTypes,
 }: {
   open: boolean; onClose: () => void; onSave: (d: Record<string, unknown>) => Promise<void>;
-  initial?: { id?: string; type?: string; concept?: string; notes?: string | null; status?: string;
+  initial?: { id?: string; typeId?: string; concept?: string; notes?: string | null; status?: string;
     projectId?: string | null; clientId?: string | null;
     amountUsd?: { toString(): string } | number | string | null;
     amountArs?: { toString(): string } | number | string | null;
     exchangeRate?: { toString(): string } | number | string | null;
     dueDate?: string | null; effectiveDate?: string | null;
-    client?: CO | null; project?: PO | null; };
-  title: string; projects: PO[]; clients: CO[];
+    client?: CO | null; project?: PO | null; type?: { id: string; name: string; requiresProject: boolean } | null; };
+  title: string; projects: PO[]; clients: CO[]; incomeTypes: TY[];
 }) {
   const editing = !!initial?.id;
   const useArs = initial?.amountArs != null || initial?.exchangeRate != null;
   const defStatus = (initial?.status ?? "PAID") as "PAID"|"PENDING";
   const defDate = defStatus === "PAID" ? (initial?.effectiveDate ?? "") : (initial?.dueDate ?? "");
   const defClientId = initial?.clientId ?? initial?.project?.clientId ?? initial?.client?.id ?? "";
+  const defTypeId = initial?.typeId ?? initial?.type?.id ?? incomeTypes[0]?.id ?? "";
   const [form, setForm] = useState({
-    type: initial?.type ?? "DEVELOPMENT", concept: initial?.concept ?? "", notes: initial?.notes ?? "",
+    typeId: defTypeId, concept: initial?.concept ?? "", notes: initial?.notes ?? "",
     status: defStatus, clientId: defClientId, projectId: initial?.projectId ?? "",
     useArs, amountUsd: initial?.amountUsd ? String(initial?.amountUsd) : "",
     amountArs: initial?.amountArs ? String(initial?.amountArs) : "",
@@ -42,7 +44,7 @@ export function IncomeFormModal({
   const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const needsProject = form.type === "DEVELOPMENT" || form.type === "MAINTENANCE";
+  const needsProject = incomeTypes.find(t => t.id === form.typeId)?.requiresProject ?? false;
 
   // Reset form when initial changes (fixes edit mode hydration)
   useEffect(() => {
@@ -51,8 +53,9 @@ export function IncomeFormModal({
     const d = s === "PAID" ? (initial?.effectiveDate ?? "") : (initial?.dueDate ?? "");
     const cid = initial?.clientId ?? initial?.project?.clientId ?? initial?.client?.id ?? "";
     const ars = initial?.amountArs != null || initial?.exchangeRate != null;
+    const tid = initial?.typeId ?? initial?.type?.id ?? incomeTypes[0]?.id ?? "";
     setForm({
-      type: initial?.type ?? "DEVELOPMENT", concept: initial?.concept ?? "", notes: initial?.notes ?? "",
+      typeId: tid, concept: initial?.concept ?? "", notes: initial?.notes ?? "",
       status: s, clientId: cid, projectId: initial?.projectId ?? "",
       useArs: ars, amountUsd: initial?.amountUsd ? String(initial?.amountUsd) : "",
       amountArs: initial?.amountArs ? String(initial?.amountArs) : "",
@@ -60,7 +63,7 @@ export function IncomeFormModal({
       dueDate: s === "PENDING" ? d : "", effectiveDate: s === "PAID" ? d : "",
     });
     setMulti(false); setRows([]);
-  }, [open, initial]);
+  }, [open, initial, incomeTypes]);
 
   // Filter projects by selected client
   const filteredProjects = useMemo(() => {
@@ -152,10 +155,9 @@ export function IncomeFormModal({
           <div className="w-full max-w-lg rounded-[1.5rem] bg-white p-6 shadow-[0_24px_80px_rgba(16,21,34,0.18)] overflow-x-hidden">
             <h2 className="font-display text-2xl text-ink">{title}</h2>
             <form onSubmit={handleSubmit} className="mt-6 space-y-4 max-h-[70vh] overflow-y-auto">
-              <Select value={form.type} onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}>
-                <option value="DEVELOPMENT">Desarrollo</option>
-                <option value="MAINTENANCE">Mantenimiento</option>
-                <option value="OTHER">Otro</option>
+              <Select value={form.typeId} onChange={(e) => setForm((p) => ({ ...p, typeId: e.target.value }))} required>
+                <option value="">Seleccionar tipo *</option>
+                {incomeTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Select>
 
               {/* Client → Project selector */}

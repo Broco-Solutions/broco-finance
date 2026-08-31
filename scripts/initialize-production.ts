@@ -46,6 +46,16 @@ async function main() {
   console.log("Base vacia confirmada. Iniciando inicializacion productiva...");
 
   await prisma.$transaction(async (tx) => {
+    console.log("Creando tipos de ingreso...");
+    const typeDev = await tx.incomeType.create({ data: { name: "Desarrollo", requiresProject: true } });
+    const typeMaint = await tx.incomeType.create({ data: { name: "Mantenimiento", requiresProject: true } });
+    const typeOther = await tx.incomeType.create({ data: { name: "Otro", requiresProject: false } });
+    const typeMap: Record<string, string> = {
+      DEVELOPMENT: typeDev.id,
+      MAINTENANCE: typeMaint.id,
+      OTHER: typeOther.id,
+    };
+
     console.log("Creando categorias:", seedCategories.length);
     for (const cat of seedCategories) {
       await tx.expenseCategory.create({ data: { id: cat.id, name: cat.name, isActive: true } });
@@ -68,7 +78,7 @@ async function main() {
       await tx.income.create({
         data: {
           id: inc.id, clientId: inc.clientId, projectId: inc.projectId,
-          type: inc.type as "DEVELOPMENT" | "MAINTENANCE" | "OTHER",
+          typeId: typeMap[inc.type],
           concept: inc.concept, notes: inc.notes, status: "PAID",
           amountUsd: inc.amountUsd, amountArs: inc.amountArs, exchangeRate: inc.exchangeRate,
           effectiveDate: new Date(inc.effectiveDate),

@@ -1,16 +1,18 @@
 import { listIncomes } from "@/server/services/incomes";
 import { listProjects } from "@/server/services/projects";
 import { listClients } from "@/server/services/clients";
+import { listIncomeTypes } from "@/server/services/income-types";
 import { PageHeader } from "@/components/ui/page-header";
 import { IncomeList } from "./income-list";
 
 export const dynamic = "force-dynamic";
 
 export default async function IncomesPage() {
-  const [incomes, projects, clients] = await Promise.all([
+  const [incomes, projects, clients, incomeTypes] = await Promise.all([
     listIncomes().catch(() => []),
     listProjects().catch(() => []),
     listClients().catch(() => []),
+    listIncomeTypes().catch(() => []),
   ]);
 
   return (
@@ -20,6 +22,7 @@ export default async function IncomesPage() {
         initialIncomes={JSON.parse(JSON.stringify(incomes))}
         projects={JSON.parse(JSON.stringify(projects.map((p) => ({ id: p.id, name: p.name, clientId: p.clientId }))))}
         clients={JSON.parse(JSON.stringify(clients.map((c) => ({ id: c.id, name: c.name }))))}
+        incomeTypes={JSON.parse(JSON.stringify(incomeTypes.map((t) => ({ id: t.id, name: t.name, requiresProject: t.requiresProject }))))}
       />
     </div>
   );

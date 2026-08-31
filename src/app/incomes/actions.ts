@@ -22,7 +22,7 @@ export async function saveIncome(_prev: ActionResult | null, formData: FormData)
     const data = incomeSchema.parse({
       projectId: formData.get("projectId") || null,
       clientId: formData.get("clientId") || null,
-      type: formData.get("type"),
+      typeId: formData.get("typeId"),
       concept: formData.get("concept"),
       notes: formData.get("notes") || null,
       status: formData.get("status"),
@@ -59,7 +59,7 @@ export async function payIncome(_prev: ActionResult | null, formData: FormData):
     const id = formData.get("id") as string;
     const inc = await import("@/server/services/incomes").then((m) => m.getIncome(id));
     const data = incomeSchema.parse({
-      projectId: inc.projectId, clientId: inc.clientId, type: inc.type, concept: inc.concept, notes: inc.notes,
+      projectId: inc.projectId, clientId: inc.clientId, typeId: inc.typeId, concept: inc.concept, notes: inc.notes,
       status: "PAID", amountUsd: parseNum(formData.get("amountUsd")) ?? Number(inc.amountUsd),
       amountArs: parseNum(formData.get("amountArs")) ?? (inc.amountArs ? Number(inc.amountArs) : undefined),
       exchangeRate: parseNum(formData.get("exchangeRate")) ?? (inc.exchangeRate ? Number(inc.exchangeRate) : undefined),
@@ -74,7 +74,7 @@ export async function payIncome(_prev: ActionResult | null, formData: FormData):
 }
 
 export async function createIncomeBatch(entries: Array<{
-  type: string; projectId?: string | null; clientId?: string | null;
+  typeId: string; projectId?: string | null; clientId?: string | null;
   concept: string; notes?: string | null; status: string;
   amountUsd?: number | null; amountArs?: number | null; exchangeRate?: number | null;
   dueDate?: string | null; effectiveDate?: string | null;

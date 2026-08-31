@@ -41,9 +41,20 @@ async function main() {
     console.log("Limpiando tablas...");
     await tx.expense.deleteMany();
     await tx.income.deleteMany();
+    await tx.incomeType.deleteMany();
     await tx.project.deleteMany();
     await tx.expenseCategory.deleteMany();
     await tx.client.deleteMany();
+
+    console.log("Creando tipos de ingreso...");
+    const typeDev = await tx.incomeType.create({ data: { name: "Desarrollo", requiresProject: true } });
+    const typeMaint = await tx.incomeType.create({ data: { name: "Mantenimiento", requiresProject: true } });
+    const typeOther = await tx.incomeType.create({ data: { name: "Otro", requiresProject: false } });
+    const typeMap: Record<string, string> = {
+      DEVELOPMENT: typeDev.id,
+      MAINTENANCE: typeMaint.id,
+      OTHER: typeOther.id,
+    };
 
     console.log("Creando categorias:", seedCategories.length);
     for (const cat of seedCategories) {
@@ -85,7 +96,7 @@ async function main() {
           id: inc.id,
           clientId: inc.clientId,
           projectId: inc.projectId,
-          type: inc.type as "DEVELOPMENT" | "MAINTENANCE" | "OTHER",
+          typeId: typeMap[inc.type],
           concept: inc.concept,
           notes: inc.notes,
           status: "PAID",

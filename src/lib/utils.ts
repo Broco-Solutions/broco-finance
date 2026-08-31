@@ -23,7 +23,9 @@ export function formatExpenseStatus(value: string | null | undefined, dueDate?: 
   return "—";
 }
 export function formatIncomeType(v: string | null | undefined) {
-  if (v === "DEVELOPMENT") return "Desarrollo"; if (v === "MAINTENANCE") return "Mantenimiento"; if (v === "OTHER") return "Otro"; return "—";
+  if (!v) return "—";
+  if (v === "DEVELOPMENT") return "Desarrollo"; if (v === "MAINTENANCE") return "Mantenimiento"; if (v === "OTHER") return "Otro";
+  return v;
 }
 export function formatProjectStatus(v: string | boolean | null | undefined) {
   if (v === true || v === "true") return "Activo"; if (v === false || v === "false") return "Inactivo"; return "—";

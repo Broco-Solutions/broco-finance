@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
+import { ensureIncomeTypes } from "../helpers/income-types";
 
 const TEST_DB_URL = process.env.DATABASE_URL_TEST;
 
@@ -28,6 +29,7 @@ describe.skipIf(skip)("constraints SQL", () => {
   let clientId: string;
   let projectId: string;
   let categoryId: string;
+  let otherTypeId: string;
 
   beforeAll(async () => {
     prefix = `sql_${Date.now()}_`;
@@ -39,13 +41,15 @@ describe.skipIf(skip)("constraints SQL", () => {
     projectId = proj.id;
     const cat = await prisma.expenseCategory.create({ data: { name: `${prefix}Category` } });
     categoryId = cat.id;
+    const types = await ensureIncomeTypes(prisma);
+    otherTypeId = types.other;
   });
 
   it("1. rechaza Income PENDING sin dueDate", async () => {
     await expectRejected(
       prisma.income.create({
         data: {
-          type: "OTHER",
+          typeId: otherTypeId,
           concept: "test",
           status: "PENDING",
           amountUsd: 100,
@@ -59,7 +63,7 @@ describe.skipIf(skip)("constraints SQL", () => {
     await expectRejected(
       prisma.income.create({
         data: {
-          type: "OTHER",
+          typeId: otherTypeId,
           concept: "test",
           status: "PENDING",
           amountUsd: 100,
@@ -75,7 +79,7 @@ describe.skipIf(skip)("constraints SQL", () => {
     await expectRejected(
       prisma.income.create({
         data: {
-          type: "OTHER",
+          typeId: otherTypeId,
           concept: "test",
           status: "PAID",
           amountUsd: 100,
@@ -89,7 +93,7 @@ describe.skipIf(skip)("constraints SQL", () => {
     await expectRejected(
       prisma.income.create({
         data: {
-          type: "OTHER",
+          typeId: otherTypeId,
           concept: "test",
           status: "PAID",
           amountUsd: 0,
@@ -104,7 +108,7 @@ describe.skipIf(skip)("constraints SQL", () => {
     await expectRejected(
       prisma.income.create({
         data: {
-          type: "OTHER",
+          typeId: otherTypeId,
           concept: "test",
           status: "PAID",
           amountUsd: 100,
@@ -120,7 +124,7 @@ describe.skipIf(skip)("constraints SQL", () => {
     await expectRejected(
       prisma.income.create({
         data: {
-          type: "OTHER",
+          typeId: otherTypeId,
           concept: "test",
           status: "PAID",
           amountUsd: 100,
@@ -129,36 +133,6 @@ describe.skipIf(skip)("constraints SQL", () => {
         },
       }),
       "Income con exchangeRate sin ARS",
-    );
-  });
-
-  it("7. rechaza DEVELOPMENT sin proyecto", async () => {
-    await expectRejected(
-      prisma.income.create({
-        data: {
-          type: "DEVELOPMENT",
-          concept: "test",
-          status: "PAID",
-          amountUsd: 100,
-          effectiveDate: new Date(),
-        },
-      }),
-      "DEVELOPMENT sin projectId",
-    );
-  });
-
-  it("8. rechaza MAINTENANCE sin proyecto", async () => {
-    await expectRejected(
-      prisma.income.create({
-        data: {
-          type: "MAINTENANCE",
-          concept: "test",
-          status: "PAID",
-          amountUsd: 100,
-          effectiveDate: new Date(),
-        },
-      }),
-      "MAINTENANCE sin projectId",
     );
   });
 
@@ -284,7 +258,7 @@ describe.skipIf(skip)("constraints SQL", () => {
   it("18. acepta Income ARS valido (amountUsd = round(amountArs / exchangeRate, 6))", async () => {
     const income = await prisma.income.create({
       data: {
-        type: "OTHER",
+        typeId: otherTypeId,
         concept: "test ars valid",
         status: "PAID",
         amountUsd: 1.234568,
@@ -300,7 +274,7 @@ describe.skipIf(skip)("constraints SQL", () => {
     await expectRejected(
       prisma.income.create({
         data: {
-          type: "OTHER",
+          typeId: otherTypeId,
           concept: "test ars bad",
           status: "PAID",
           amountUsd: 1.23,  // correcto: ~1.234568, diferencia ~0.004 >> 0.00001
@@ -316,7 +290,7 @@ describe.skipIf(skip)("constraints SQL", () => {
   it("20. acepta Income exclusivamente USD", async () => {
     const income = await prisma.income.create({
       data: {
-        type: "OTHER",
+        typeId: otherTypeId,
         concept: "test usd only",
         status: "PAID",
         amountUsd: 150.50,

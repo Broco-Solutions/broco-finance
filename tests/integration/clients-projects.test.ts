@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { createClient, updateClient, deleteClient } from "@/server/services/clients";
 import { createProject, updateProject, deleteProject } from "@/server/services/projects";
+import { ensureIncomeTypes } from "../helpers/income-types";
 
 const TEST_DB_URL = process.env.DATABASE_URL_TEST;
 const skip = !TEST_DB_URL;
@@ -13,6 +14,7 @@ const prisma = new PrismaClient({
 let clientAId: string;
 let clientBId: string;
 let projectId: string;
+let otherTypeId: string;
 
 beforeAll(async () => {
   if (skip) return;
@@ -21,6 +23,8 @@ beforeAll(async () => {
   clientAId = cA.id;
   const cB = await createClient({ name: `test-int-client-b-${Date.now()}` });
   clientBId = cB.id;
+  const types = await ensureIncomeTypes(prisma);
+  otherTypeId = types.other;
 });
 
 afterAll(async () => {
@@ -144,7 +148,7 @@ describe.skipIf(skip)("Proyectos — integracion", () => {
       data: {
         projectId: p.id,
         clientId: clientAId,
-        type: "OTHER",
+        typeId: otherTypeId,
         concept: "test movement",
         status: "PAID",
         amountUsd: 100,
@@ -165,7 +169,7 @@ describe.skipIf(skip)("Proyectos — integracion", () => {
       data: {
         projectId: p.id,
         clientId: clientAId,
-        type: "OTHER",
+        typeId: otherTypeId,
         concept: "test",
         status: "PAID",
         amountUsd: 50,

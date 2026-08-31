@@ -5,12 +5,13 @@ import { createExpense, updateExpense, deleteExpense, getExpense } from "@/serve
 import { getDashboard } from "@/server/services/dashboard";
 import { createClient } from "@/server/services/clients";
 import { createProject } from "@/server/services/projects";
+import { ensureIncomeTypes } from "../helpers/income-types";
 
 const url = process.env.DATABASE_URL_TEST;
 const skip = !url;
 const prisma = new PrismaClient({ datasources: { db: { url } } });
 
-let catId: string; let catId2: string; let clientId: string; let projectId: string; const ids: string[] = [];
+let catId: string; let catId2: string; let clientId: string; let projectId: string; let otherTypeId: string; const ids: string[] = [];
 
 beforeAll(async () => {
   if (skip) return;
@@ -18,6 +19,8 @@ beforeAll(async () => {
   const c2 = await createCategory({ name: `test-cat2-${Date.now()}` }); catId2 = c2.id;
   const cl = await createClient({ name: `test-exp-client-${Date.now()}` }); clientId = cl.id;
   const p = await createProject({ clientId, name: `test-exp-proj-${Date.now()}`, isActive: true }); projectId = p.id;
+  const types = await ensureIncomeTypes(prisma);
+  otherTypeId = types.other;
 });
 
 afterAll(async () => {
@@ -104,27 +107,27 @@ describe.skipIf(skip)("Dashboard", () => {
     const d = await getDashboard(from, to);
 
     // Create a paid income this month
-    const inc = await prisma.income.create({ data: { type: "OTHER", concept: "Dash test", status: "PAID", amountUsd: 500, effectiveDate: now } }); track(inc.id);
+    const inc = await prisma.income.create({ data: { typeId: otherTypeId, concept: "Dash test", status: "PAID", amountUsd: 500, effectiveDate: now } }); track(inc.id);
     const d2 = await getDashboard(from, to);
     expect(d2.kpis.paidIncomesUsd).toBeGreaterThanOrEqual(d.kpis.paidIncomesUsd);
     await prisma.income.delete({ where: { id: inc.id } });
 
     // Create a pending income with future dueDate → should appear as pending
     const future = new Date(now.getFullYear(), now.getMonth(), 15);
-    const pInc = await prisma.income.create({ data: { type: "OTHER", concept: "Dash pend", status: "PENDING", amountUsd: 100, dueDate: future } }); track(pInc.id);
+    const pInc = await prisma.income.create({ data: { typeId: otherTypeId, concept: "Dash pend", status: "PENDING", amountUsd: 100, dueDate: future } }); track(pInc.id);
     const d3 = await getDashboard(from, to);
     expect(d3.kpis.pendingIncomesUsd).toBeGreaterThanOrEqual(d.kpis.pendingIncomesUsd);
     await prisma.income.delete({ where: { id: pInc.id } });
 
     // Vencido: income PAST due, PENDING
-    const oldInc = await prisma.income.create({ data: { type: "OTHER", concept: "Dash old", status: "PENDING", amountUsd: 10, dueDate: new Date("2020-01-01") } }); track(oldInc.id);
+    const oldInc = await prisma.income.create({ data: { typeId: otherTypeId, concept: "Dash old", status: "PENDING", amountUsd: 10, dueDate: new Date("2020-01-01") } }); track(oldInc.id);
     const d4 = await getDashboard(from, to);
     expect(d4.kpis.overdueIncomesCount).toBeGreaterThanOrEqual(1);
     await prisma.income.delete({ where: { id: oldInc.id } });
 
     // Upcoming
     const in7 = new Date(); in7.setDate(in7.getDate() + 3);
-    const upInc = await prisma.income.create({ data: { type: "OTHER", concept: "Dash 7d", status: "PENDING", amountUsd: 55, dueDate: in7 } }); track(upInc.id);
+    const upInc = await prisma.income.create({ data: { typeId: otherTypeId, concept: "Dash 7d", status: "PENDING", amountUsd: 55, dueDate: in7 } }); track(upInc.id);
     const d5 = await getDashboard(from, to);
     const found = d5.upcomingIncomes.some((x: { id: string }) => x.id === upInc.id);
     expect(found).toBe(true);
