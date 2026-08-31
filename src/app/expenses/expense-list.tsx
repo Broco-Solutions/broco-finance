@@ -32,6 +32,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   const [categories, setCategories] = useState<Cat[]>(cats);
   const [fStatus, setFStatus] = useState("PAID"); const [fType, setFType] = useState(""); const [fCat, setFCat] = useState(""); const [fProj, setFProj] = useState("");
   const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
+  const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState<E | null>(null);
   const [payTarget, setPayTarget] = useState<E | null>(null);
   const [delTarget, setDelTarget] = useState<E | null>(null); const [delError, setDelError] = useState<string | null>(null);
@@ -55,7 +56,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   const didSync = useRef(false);
   useEffect(() => { if (didSync.current) return; const s = sp.get("status"); if (s === "PAID" || s === "PENDING") setFStatus(s); else if (s === "OVERDUE") setFStatus("OVERDUE"); const f = sp.get("from"), t = sp.get("to"); if (f && t) { setDateFrom(f); setDateTo(t); } const ty = sp.get("type"); if (ty) setFType(ty); const c = sp.get("cat"); if (c) setFCat(c); const pj = sp.get("project"); if (pj) setFProj(pj); didSync.current = true; }, [sp]);
   const clearRange = () => { setDateFrom(""); setDateTo(""); router.replace("/expenses"); };
-  const clearFilters = () => { setFStatus("PAID"); setFType(""); setFCat(""); setFProj(""); clearRange(); };
+  const clearFilters = () => { setFStatus("PAID"); setFType(""); setFCat(""); setFProj(""); setSearch(""); clearRange(); };
 
   const reload = () => { setTimeout(() => { router.refresh(); }, 300); };
 
@@ -180,6 +181,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
     if (fStatus === "PENDING" && e.status !== "PENDING") return false; if (fStatus === "PAID" && e.status !== "PAID") return false;
     if (fStatus === "OVERDUE") { if (e.status !== "PENDING") return false; const t = new Date(); const d = e.dueDate ? new Date(e.dueDate) : null; return d && d < t; }
     if (fType && e.type !== fType) return false; if (fCat && e.expenseCategoryId !== fCat) return false; if (fProj && e.projectId !== fProj) return false;
+    if (search && !e.concept.toLowerCase().includes(search.toLowerCase())) return false;
     if (dateFrom || dateTo) {
       const from = dateFrom ? new Date(dateFrom + "T00:00:00") : null;
       const to = dateTo ? new Date(dateTo + "T00:00:00") : null;
@@ -230,6 +232,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
           <Select value={fType} onChange={(e) => setFType(e.target.value)} className="w-24 text-xs"><option value="">Tipos</option><option value="FIXED">Fijos</option><option value="VARIABLE">Variables</option></Select>
           <SearchableSelect value={fCat} onChange={(v) => setFCat(v)} options={categories.map(c => ({ id: c.id, name: c.name }))} placeholder="Categoria" className="w-36 text-xs" />
           <SearchableSelect value={fProj} onChange={(v) => setFProj(v)} options={projs} placeholder="Proyecto" className="w-36 text-xs" />
+          <Input type="text" value={search} onChange={(e) => setSearch(e.target.value)} className="w-36 text-xs" placeholder="Buscar concepto…" />
           <div className="flex items-center gap-1">
             <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-32 text-xs h-8" placeholder="Desde" />
             <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-32 text-xs h-8" placeholder="Hasta" />

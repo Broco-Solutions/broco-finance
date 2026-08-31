@@ -254,13 +254,13 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
           <div className="space-y-1.5 text-sm">
             {data.upcomingIncomes.length === 0 && data.upcomingExpenses.length === 0 && <p className="text-xs text-gray-400 py-2">Sin próximos cobros ni pagos.</p>}
             {data.upcomingIncomes.slice(0,3).map(i => (
-              <Link key={i.id} href="/incomes" className="flex items-center justify-between rounded-lg border border-gray-100 p-2 hover:bg-gray-50">
-                <span className="text-gray-700 truncate text-xs">{i.concept}</span><span className="text-xs text-gray-400 ml-2">{i.dueDate ? formatDateShort(i.dueDate) : "—"}</span><span className="font-medium tabular-nums ml-2 text-xs">{formatUsd(i.amountUsd)}</span>
+              <Link key={i.id} href="/incomes" className="flex items-center gap-2 rounded-lg border border-gray-100 p-2 hover:bg-gray-50">
+                <span className="text-gray-700 truncate text-xs flex-1 min-w-0">{i.concept}</span><span className="text-xs text-gray-400 w-16 shrink-0 text-right">{i.dueDate ? formatDateShort(i.dueDate) : "—"}</span><span className="font-medium tabular-nums w-20 shrink-0 text-right text-xs">{formatUsd(i.amountUsd)}</span>
               </Link>
             ))}
             {data.upcomingExpenses.slice(0,3).map(e => (
-              <Link key={e.id} href="/expenses" className="flex items-center justify-between rounded-lg border border-gray-100 p-2 hover:bg-gray-50">
-                <span className="text-gray-700 truncate text-xs">{e.concept}</span><span className="text-xs text-gray-400 ml-2">{e.dueDate ? formatDateShort(e.dueDate) : "—"}</span><span className="font-medium tabular-nums ml-2 text-xs">{formatUsd(e.amountUsd)}</span>
+              <Link key={e.id} href="/expenses" className="flex items-center gap-2 rounded-lg border border-gray-100 p-2 hover:bg-gray-50">
+                <span className="text-gray-700 truncate text-xs flex-1 min-w-0">{e.concept}</span><span className="text-xs text-gray-400 w-16 shrink-0 text-right">{e.dueDate ? formatDateShort(e.dueDate) : "—"}</span><span className="font-medium tabular-nums w-20 shrink-0 text-right text-xs">{formatUsd(e.amountUsd)}</span>
               </Link>
             ))}
           </div>

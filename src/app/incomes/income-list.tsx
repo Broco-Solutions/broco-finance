@@ -29,6 +29,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   const [filter, setFilter] = useState("PAID"); const [typeFilter, setTypeFilter] = useState("");
   const [dateFrom, setDateFrom] = useState(""); const [dateTo, setDateTo] = useState("");
   const [fClient, setFClient] = useState(""); const [fProject, setFProject] = useState("");
+  const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState<Income | null>(null);
   const [payTarget, setPayTarget] = useState<Income | null>(null); const [deleteTarget, setDeleteTarget] = useState<Income | null>(null);
   const [delError, setDelError] = useState<string | null>(null);
@@ -59,7 +60,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
   }, [sp]);
 
   const clearRange = () => { setDateFrom(""); setDateTo(""); router.replace("/incomes"); };
-  const clearFilters = () => { setFilter("PAID"); setTypeFilter(""); setFClient(""); setFProject(""); clearRange(); };
+  const clearFilters = () => { setFilter("PAID"); setTypeFilter(""); setFClient(""); setFProject(""); setSearch(""); clearRange(); };
 
   const reload = () => { setTimeout(() => { router.refresh(); }, 300); };
   const mkFd = (data: Record<string, unknown>, id?: string) => {
@@ -112,6 +113,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
     if (typeFilter && inc.type !== typeFilter) return false;
     if (fClient && inc.clientId !== fClient) return false;
     if (fProject && inc.projectId !== fProject) return false;
+    if (search && !inc.concept.toLowerCase().includes(search.toLowerCase())) return false;
     // Date range filter
     if (dateFrom || dateTo) {
       const from = dateFrom ? new Date(dateFrom + "T00:00:00") : null;
@@ -173,6 +175,7 @@ export function IncomeList({ initialIncomes, projects, clients }: { initialIncom
             </Select>
             <SearchableSelect value={fClient} onChange={(v) => { setFClient(v); setFProject(""); }} options={clients} placeholder="Cliente" className="w-36 text-xs" />
             <SearchableSelect value={fProject} onChange={(v) => setFProject(v)} options={projects.filter(p => !fClient || p.clientId === fClient)} placeholder="Proyecto" className="w-36 text-xs" disabled={!fClient} />
+            <Input type="text" value={search} onChange={(e) => setSearch(e.target.value)} className="w-36 text-xs" placeholder="Buscar concepto…" />
             <div className="flex items-center gap-1">
               <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-32 text-xs h-8" placeholder="Desde" />
               <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-32 text-xs h-8" placeholder="Hasta" />
