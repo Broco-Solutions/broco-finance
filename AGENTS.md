@@ -4,17 +4,19 @@ Next.js 14 (App Router) + Prisma 6 + PostgreSQL + Tailwind. pnpm. Tests: Vitest 
 
 ## Comandos
 
-- `npm run dev` — dev server (primer puerto libre: 3000, 3001, ...)
-- `npm run build && PORT=3299 npx next start -p 3299` — server para E2E (los specs hardcodean `BASE = "http://localhost:3299"`)
-- `npm test` — Vitest (carga `.env.test` via `tests/setup-env.ts`; alias `@`, mocks `server-only`, `next/cache`, `next/headers`)
-- `npm run lint` / `npx tsc --noEmit` / `npm run build`
+- `pnpm dev` — dev server (primer puerto libre: 3000, 3001, ...)
+- `pnpm build && PORT=3299 npx next start -p 3299` — server para E2E (los specs hardcodean `BASE = "http://localhost:3299"`)
+- `pnpm test` — Vitest (carga `.env.test` via `tests/setup-env.ts`; alias `@`, mocks `server-only`, `next/cache`, `next/headers`)
+- `pnpm lint` / `pnpm exec tsc --noEmit` / `pnpm build`
 - `npx playwright test tests/e2e/ --workers=1` — E2E (workers>1 satura el server)
+
+Package manager canónico: **pnpm**. `package-lock.json` está deliberadamente eliminado del repo; NO usar `npm install`/`npm ci` (regenerarían el lockfile de npm).
 
 ## Base de datos de test
 
 - `docker compose -f docker-compose.test.yml up -d` → Postgres en `localhost:5434` (user `broco_test`, db `broco_finance_test`)
 - `.env.test` define `DATABASE_URL` y `DATABASE_URL_TEST` (ambas → DB test). `.env*` están en gitignore; si no existe `.env`, las server actions/client Prisma fallan al conectar.
-- **Orden para integración:** DB up → `DATABASE_URL=<test> npx prisma db push` → seed. El seed exige `DATABASE_URL ≠ DATABASE_URL_TEST` (usar `DATABASE_URL=postgresql://mock:mock@localhost:9999/broco_finance_prod`). `npm run db:seed:test` ya lo hace.
+- **Orden para integración:** DB up → `DATABASE_URL=<test> npx prisma db push` → seed. El seed exige `DATABASE_URL ≠ DATABASE_URL_TEST` (usar `DATABASE_URL=postgresql://mock:mock@localhost:9999/broco_finance_prod`). `pnpm db:seed:test` ya lo hace.
 - `reconciliation.test.ts` espera totales exactos del seed canónico (24024.94/16181.03).
 - **Fallas de integración pre-existentes (NO arreglar en app code):** `tests/sql/constraints.test.ts` (CHECKs SQL que no existen en la DB), tests de duplicados case-insensitive, reconciliación. Correr `tests/integration/incomes.test.ts` + `thirty-days` + `date-filters` + `dashboard-kpis` para validar cambios de ingresos.
 
@@ -49,4 +51,5 @@ Next.js 14 (App Router) + Prisma 6 + PostgreSQL + Tailwind. pnpm. Tests: Vitest 
 ## Producción
 
 - URL = Prisma Accelerate (`db.prisma.io`). `psql` NO conecta. Usar `$executeRawUnsafe` con **una sentencia por call** (multi-sentencia falla con "cannot insert multiple commands into a prepared statement").
+- **Cambios de esquema:** NO usar `prisma migrate dev` ni `prisma migrate deploy` para features (sin `directUrl`, el proxy de Accelerate no ejecuta DDL). En local/test se usa `prisma db push`; en producción, scripts controlados con `$executeRawUnsafe` (una sentencia por call) y pre-checks de seguridad.
 - `scripts/migrate-income-types.sql` (para psql) y `scripts/migrate-production.ts` (runner Prisma) ejecutan la migración de income_types; pre-checks de seguridad (aborta si ya existe o si quedan NULLs).

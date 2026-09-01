@@ -23,10 +23,11 @@ SESSION_SECRET=...
 ## Aplicacion de migraciones
 
 ```bash
-npm ci
+pnpm install --frozen-lockfile
 npx prisma generate
-npx prisma migrate deploy
 ```
+
+La URL de produccion es Prisma Accelerate (`db.prisma.io`), sin `directUrl`, por lo que **no** se usa `prisma migrate deploy`. Los cambios de esquema se aplican con scripts controlados que ejecutan `$executeRawUnsafe` con **una sentencia por llamada** (ver seccion "Produccion" en AGENTS.md).
 
 ## Ejecucion del seed inicial
 
@@ -35,7 +36,6 @@ El seed esta protegido. Solo se ejecuta en entorno `NODE_ENV=test` con `ALLOW_DE
 Para aplicarlo en produccion (primera vez, base vacia):
 
 ```bash
-npx prisma migrate deploy
 npx tsx prisma/seed.ts
 ```
 
@@ -50,7 +50,7 @@ Si hay datos, no ejecutar el seed.
 ## Build
 
 ```bash
-npm run build
+pnpm build
 ```
 
 ## Despliegue
@@ -60,7 +60,7 @@ Configurar en Vercel (o el proveedor elegido):
 1. Conectar repositorio.
 2. Variables de entorno: `DATABASE_URL`, `APP_PASSWORD`, `SESSION_SECRET`.
 3. Comando de build: `prisma generate && next build`.
-4. Comando post-deploy: `npx prisma migrate deploy`.
+4. Comando post-deploy: aplicar cambios de esquema con scripts controlados (`$executeRawUnsafe`, una sentencia por llamada); no usar `prisma migrate deploy` (sin `directUrl`).
 5. Dominio configurado.
 
 ## Smoke test posterior
@@ -73,16 +73,13 @@ Configurar en Vercel (o el proveedor elegido):
 
 ## Respaldo previo a futuras migraciones
 
-Antes de ejecutar `prisma migrate deploy`:
-
-```bash
-pg_dump "$DATABASE_URL" > backup_$(date +%Y%m%d_%H%M%S).sql
-```
+`psql`/`pg_dump` NO conectan a la URL de Accelerate. El respaldo debe gestionarse con las herramientas del proveedor de la base o vía Prisma; no con `pg_dump "$DATABASE_URL"`.
 
 ## Rollback
 
 ```bash
 git checkout <tag-anterior>
-npx prisma migrate deploy  # Esto revierte a migraciones del tag anterior
 # Restaurar datos desde backup si es necesario
 ```
+
+El rollback de esquema no se hace con `prisma migrate deploy` (ver "Aplicacion de migraciones").
