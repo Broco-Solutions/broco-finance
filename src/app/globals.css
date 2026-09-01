@@ -17,3 +17,21 @@
   .tabular-nums { font-variant-numeric: tabular-nums; }
   .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 }
+
+/* --- Frappe Gantt overrides (Project Planning) --- */
+.gantt-wrapper .bar-wrapper .bar {
+  rx: 3;
+  ry: 3;
+}
+.gantt-wrapper .bar-wrapper.gantt-status-todo .bar { fill: #9ca3af; }
+.gantt-wrapper .bar-wrapper.gantt-status-in-progress .bar { fill: #3b82f6; }
+.gantt-wrapper .bar-wrapper.gantt-status-to-review .bar { fill: #f59e0b; }
+.gantt-wrapper .bar-wrapper.gantt-status-blocked .bar { fill: #ef4444; }
+.gantt-wrapper .bar-wrapper.gantt-status-done .bar { fill: #22c55e; }
+.gantt-wrapper .bar-wrapper.gantt-phase .bar { fill: #cbd5e1; }
+.gantt-wrapper .bar-wrapper.gantt-go-live .bar { fill: #f97316; }
+.gantt-wrapper .bar-wrapper.gantt-milestone .bar { fill: #8b5cf6; }
+.gantt-wrapper .bar-wrapper.gantt-phase .bar-label { font-weight: 600; fill: #475569; }
+.gantt-wrapper .bar-label { font-size: 12px; }
+.gantt-wrapper .upper-text, .gantt-wrapper .lower-text { font-size: 11px; }
+.gantt-wrapper .today-highlight { opacity: 0.6; }

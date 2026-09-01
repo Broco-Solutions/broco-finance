@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { TaskStatusBadge, TaskTypeBadge } from "@/components/projects/task-status-badge";
+import { ProjectGantt } from "@/components/projects/project-gantt";
 import { formatDate } from "@/lib/utils";
 import {
   computeProjectProgress,
@@ -211,6 +212,11 @@ export function ProjectPlanningView({
           </div>
         </Card>
       )}
+
+      <section className="space-y-2">
+        <h2 className="font-display text-xl text-ink">Cronograma</h2>
+        <ProjectGantt phases={phases} tasks={tasks} goLiveDate={projectGoLiveDate} />
+      </section>
 
       <PhaseFormModal
         open={phaseModal.open}

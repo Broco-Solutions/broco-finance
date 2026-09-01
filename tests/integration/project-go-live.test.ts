@@ -31,6 +31,7 @@ describe.skipIf(skip)("goLiveDate en Project", () => {
     const project = await createProject({
       clientId,
       name: `golive-proj-${Date.now()}`,
+      isActive: true,
       startDate: "2026-01-01",
       endDate: "2026-12-31",
       goLiveDate: "2026-06-15",
@@ -46,6 +47,7 @@ describe.skipIf(skip)("goLiveDate en Project", () => {
     const project = await createProject({
       clientId,
       name: `golive-proj-null-${Date.now()}`,
+      isActive: true,
     });
     await prisma.project.delete({ where: { id: project.id } });
     expect(project.goLiveDate).toBeNull();
