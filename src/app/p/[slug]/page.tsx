@@ -13,6 +13,7 @@ import {
 import { ProjectGantt } from "@/components/projects/project-gantt";
 import { TaskStatusLegend } from "@/components/projects/task-status-legend";
 import { PortalPasswordGate } from "./portal-password-gate";
+import { PortalLogoutButton } from "./portal-logout-button";
 
 export const dynamic = "force-dynamic";
 
@@ -81,10 +82,13 @@ export default async function PortalPage({ params }: { params: { slug: string } 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f8fafc] to-white">
       <div className="mx-auto max-w-7xl px-4 py-10 md:py-14">
-        <header className="mb-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt">Broco Solutions</p>
-          <h1 className="mt-2 font-display text-3xl text-ink md:text-4xl">Seguimiento de proyecto</h1>
-          <p className="mt-1 text-ink/50">Sistema de Gestión · {plan.client.name}</p>
+        <header className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt">Broco Solutions</p>
+            <h1 className="mt-2 font-display text-3xl text-ink md:text-4xl">Seguimiento de proyecto</h1>
+            <p className="mt-1 text-ink/50">Sistema de Gestión · {plan.client.name}</p>
+          </div>
+          <PortalLogoutButton slug={params.slug} />
         </header>
 
         <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">

@@ -222,11 +222,57 @@ describe.skipIf(skip)("Acceso del cliente (V1.1)", () => {
     expect(await authorizeClientAccess(slug, oldSession)).toBeNull();
   });
 
-  it("password manual < 12 rechazada; configure dos veces rechaza; auto de 16", async () => {
-    await expect(configureShareAccess(projectBId, "corta")).rejects.toThrow(/12/);
+  it("password manual inválida rechazada; configure dos veces rechaza; auto de 16", async () => {
+    await expect(configureShareAccess(projectBId, "a1b2c")).rejects.toThrow(/6 caracteres/);
+    await expect(configureShareAccess(projectBId, "abcdef")).rejects.toThrow(/letra/);
+    await expect(configureShareAccess(projectBId, "123456")).rejects.toThrow(/letra/);
     const auto = await configureShareAccess(projectBId);
     expect(auto.password).toHaveLength(16);
     expect(generatePassword()).toHaveLength(16);
     await expect(configureShareAccess(projectBId)).rejects.toThrow(/ya tiene acceso/);
+  });
+
+  it("password manual 6 chars con letra+número válida", async () => {
+    const tmpClient = await prisma.client.create({ data: { name: "Tmp Client" } });
+    const tmpProject = await prisma.project.create({
+      data: { clientId: tmpClient.id, name: "Tmp Project" },
+    });
+    const setup = await configureShareAccess(tmpProject.id, "abc123");
+    expect(setup.password).toBe("abc123");
+    await prisma.projectShareLink.deleteMany({ where: { projectId: tmpProject.id } });
+    await prisma.project.delete({ where: { id: tmpProject.id } });
+    await prisma.client.delete({ where: { id: tmpClient.id } });
+  });
+
+  it("sesión de Proyecto A no autoriza Proyecto B", async () => {
+    const gateA = await resolveShareGateBySlug(slug);
+    const linkB = await prisma.projectShareLink.findUnique({
+      where: { projectId: projectBId },
+      select: { slug: true, id: true, accessVersion: true },
+    });
+    const sessionA = signSession({
+      linkId: gateA!.linkId,
+      accessVersion: gateA!.accessVersion,
+      expiresAt: Math.floor(Date.now() / 1000) + 600,
+    });
+    expect(await authorizeClientAccess(linkB!.slug, sessionA)).toBeNull();
+    expect(await getAuthorizedProjectPlan(linkB!.slug, sessionA)).toBeNull();
+  });
+
+  it("logout (sin cookie) niega acceso pero re-login funciona", async () => {
+    const gate = await resolveShareGateBySlug(slug);
+    const session = signSession({
+      linkId: gate!.linkId,
+      accessVersion: gate!.accessVersion,
+      expiresAt: Math.floor(Date.now() / 1000) + 600,
+    });
+    expect(await authorizeClientAccess(slug, session)).not.toBeNull();
+    expect(await authorizeClientAccess(slug, null)).toBeNull();
+    const newSession = signSession({
+      linkId: gate!.linkId,
+      accessVersion: gate!.accessVersion,
+      expiresAt: Math.floor(Date.now() / 1000) + 600,
+    });
+    expect(await authorizeClientAccess(slug, newSession)).not.toBeNull();
   });
 });

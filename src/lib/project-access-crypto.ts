@@ -167,8 +167,16 @@ export function generatePassword(length = 16): string {
   return out;
 }
 
-export const MIN_MANUAL_PASSWORD_LENGTH = 12;
+export const MIN_MANUAL_PASSWORD_LENGTH = 6;
 export const AUTO_PASSWORD_LENGTH = 16;
+
+export function isValidManualPassword(password: string): boolean {
+  return (
+    password.length >= MIN_MANUAL_PASSWORD_LENGTH &&
+    /[a-zA-Z]/.test(password) &&
+    /[0-9]/.test(password)
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Misc

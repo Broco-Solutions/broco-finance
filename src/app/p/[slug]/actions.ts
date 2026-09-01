@@ -48,3 +48,21 @@ export async function portalLoginAction(
 
   return { success: true };
 }
+
+export async function portalLogoutAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const slug = String(formData.get("slug") ?? "").trim();
+  if (!slug) return { success: false, message: "Slug requerido." };
+
+  cookies().set("portal_session", "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: `/p/${slug}`,
+    maxAge: 0,
+  });
+
+  return { success: true };
+}

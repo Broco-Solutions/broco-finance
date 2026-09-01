@@ -11,6 +11,7 @@ import {
   signSession,
   verifySession,
   generatePassword,
+  isValidManualPassword,
   MIN_MANUAL_PASSWORD_LENGTH,
   AUTO_PASSWORD_LENGTH,
 } from "@/lib/project-access-crypto";
@@ -111,7 +112,24 @@ describe("generatePassword", () => {
     expect(pass).toHaveLength(AUTO_PASSWORD_LENGTH);
     expect(pass).toMatch(/^[A-HJKMNP-Za-hjkmnp-z2-9]+$/);
   });
-  it("constante mínima manual = 12", () => {
-    expect(MIN_MANUAL_PASSWORD_LENGTH).toBe(12);
+  it("constante mínima manual = 6", () => {
+    expect(MIN_MANUAL_PASSWORD_LENGTH).toBe(6);
+  });
+});
+
+describe("isValidManualPassword", () => {
+  it("5 chars inválida", () => {
+    expect(isValidManualPassword("a1b2c")).toBe(false);
+  });
+  it("6 chars con letra+número válida", () => {
+    expect(isValidManualPassword("cliente1")).toBe(true);
+    expect(isValidManualPassword("Broco26")).toBe(true);
+    expect(isValidManualPassword("vimarti8")).toBe(true);
+  });
+  it("falta número inválida", () => {
+    expect(isValidManualPassword("cliente")).toBe(false);
+  });
+  it("falta letra inválida", () => {
+    expect(isValidManualPassword("123456")).toBe(false);
   });
 });

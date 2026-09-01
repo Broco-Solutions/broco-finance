@@ -87,8 +87,17 @@ export function ProjectGantt({
   };
 
   const goToday = () => {
-    const gantt = ganttRef.current as { scroll_current: () => void } | null;
-    gantt?.scroll_current();
+    const gantt = ganttRef.current as unknown as {
+      scroll_current: () => void;
+      set_scroll_position: (d: Date) => void;
+    } | null;
+    if (!gantt) return;
+    gantt.scroll_current();
+    setTimeout(() => {
+      try {
+        gantt.set_scroll_position(new Date());
+      } catch {}
+    }, 120);
   };
 
   return (
@@ -112,7 +121,7 @@ export function ProjectGantt({
       </div>
       <div
         ref={containerRef}
-        className="gantt-wrapper overflow-x-auto rounded-lg border border-gray-200 bg-white p-2"
+        className="gantt-wrapper rounded-lg border border-gray-200 bg-white p-2"
       />
     </div>
   );

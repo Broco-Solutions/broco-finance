@@ -7,9 +7,9 @@ import {
   encryptPassword,
   generatePassword,
   hashPassword,
+  isValidManualPassword,
   verifyPassword,
   verifySession,
-  MIN_MANUAL_PASSWORD_LENGTH,
 } from "@/lib/project-access-crypto";
 
 // ---------------------------------------------------------------------------
@@ -52,9 +52,9 @@ async function assertProject(projectId: string) {
 function resolveManualPassword(password: string | undefined): { password: string; auto: boolean } {
   if (password !== undefined && password.trim() !== "") {
     const trimmed = password.trim();
-    if (trimmed.length < MIN_MANUAL_PASSWORD_LENGTH) {
+    if (!isValidManualPassword(trimmed)) {
       throw new Error(
-        `La contraseña debe tener al menos ${MIN_MANUAL_PASSWORD_LENGTH} caracteres.`,
+        "La contraseña debe tener al menos 6 caracteres, con al menos una letra y un número.",
       );
     }
     return { password: trimmed, auto: false };

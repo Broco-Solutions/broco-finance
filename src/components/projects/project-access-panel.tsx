@@ -317,7 +317,7 @@ function ChangePasswordModal({
               <div className="space-y-2">
                 <label className="text-sm font-medium text-ink">Nueva contraseña</label>
                 <Input
-                  placeholder="Mínimo 12 caracteres"
+                  placeholder="Mínimo 6 caracteres (letra y número)"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
