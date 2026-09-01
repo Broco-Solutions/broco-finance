@@ -74,7 +74,7 @@ function taskToGantt(t: TaskDTO): GanttTask {
     start: toISODate(t.startDate),
     end: toISODate(end),
     type: "task",
-    custom_class: (isMilestone ? "gantt-milestone " : "") + statusToClass(t.status),
+    custom_class: isMilestone ? "gantt-milestone" : statusToClass(t.status),
     statusLabel: statusLabel(t.status),
     typeLabel: typeLabel(t.type),
   };
