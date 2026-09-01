@@ -1930,3 +1930,15 @@ Estas funcionalidades sólo deben incorporarse si el uso real de la V1 demuestra
 ---
 
 **Fin del plan V1.**
+
+---
+
+## Decisiones técnicas finales (V1 — cierre)
+
+- **Package manager:** pnpm (único lockfile: `pnpm-lock.yaml`; `package-lock.json` eliminado).
+- **Migraciones:** NO usar `prisma migrate dev/deploy` para features. Local/test: `prisma db push`. Producción: scripts controlados con `$executeRawUnsafe` (una sentencia por call). `scripts/migrate-project-planning.ts` es idempotente (pre-checks por objeto) y validado contra DB descartable (1ra ejecución crea todo; 2da SKIP; `db push` reporta "in sync").
+- **Portal público:** `/p/[token]` público vía middleware con `pathname === "/p" || startsWith("/p/")` (NO `startsWith("/p")`, matchearía `/projects`). AppShell excluye `/p/*` y `/login`. Seguridad por whitelist en `getSharedProjectPlan`.
+- **goLiveDate:** se edita en el formulario de Project; se muestra en Planificación y métricas.
+- **Frappe Gantt 1.2.2:** sin tipo nativo `milestone` (se dibujan como barras de 1 día con clase propia); Go Live como barra-marcador; CSS oficial vía alias en `next.config.mjs`; renderiza solo las barras del rango visible.
+- **Token raw:** solo se conoce al generar/regenerar (no se persiste); tras refresh solo queda el estado del enlace.
+

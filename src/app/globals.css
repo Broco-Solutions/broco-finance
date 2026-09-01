@@ -19,10 +19,6 @@
 }
 
 /* --- Frappe Gantt overrides (Project Planning) --- */
-.gantt-wrapper .bar-wrapper .bar {
-  rx: 3;
-  ry: 3;
-}
 .gantt-wrapper .bar-wrapper.gantt-status-todo .bar { fill: #9ca3af; }
 .gantt-wrapper .bar-wrapper.gantt-status-in-progress .bar { fill: #3b82f6; }
 .gantt-wrapper .bar-wrapper.gantt-status-to-review .bar { fill: #f59e0b; }
@@ -34,4 +30,3 @@
 .gantt-wrapper .bar-wrapper.gantt-phase .bar-label { font-weight: 600; fill: #475569; }
 .gantt-wrapper .bar-label { font-size: 12px; }
 .gantt-wrapper .upper-text, .gantt-wrapper .lower-text { font-size: 11px; }
-.gantt-wrapper .today-highlight { opacity: 0.6; }

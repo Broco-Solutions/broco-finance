@@ -3,13 +3,20 @@ import { NextResponse } from "next/server";
 
 const AUTH_COOKIE = "broco_session";
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/p", "/_next", "/favicon.ico"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/_next", "/favicon.ico"];
+
+function isPublicPortalPath(pathname: string) {
+  return pathname === "/p" || pathname.startsWith("/p/");
+}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApiRequest = pathname.startsWith("/api/");
 
-  if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+  if (
+    PUBLIC_PATHS.some((path) => pathname.startsWith(path)) ||
+    isPublicPortalPath(pathname)
+  ) {
     return NextResponse.next();
   }
 

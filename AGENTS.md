@@ -48,6 +48,12 @@ Package manager canónico: **pnpm**. `package-lock.json` está deliberadamente e
 - E2E agregan cookie `broco_session=ok` (auth del app).
 - Ingresos y Gastos soportan "Agregar varios" (batch rows) con estado `multi`, `count`, `interval`, `rows`.
 
+## Portal público del cliente (/p)
+
+- `/p/[token]` es público y read-only; usa SOLO `getSharedProjectPlan(token)` (whitelist, sin datos financieros ni tareas `clientVisible=false`).
+- **Gotcha de seguridad:** para matchear solo el portal NO usar `pathname.startsWith("/p")` — matchea también `/projects` (los haría públicos/sin sidebar). Usar `pathname === "/p" || pathname.startsWith("/p/")` en `middleware.ts` y `AppShell`.
+- Frappe Gantt (1.2.2): sin tipo nativo `milestone`; milestones y Go Live se dibujan como barras de 1 día con clase propia. La línea de hoy es `.current-highlight`. Frappe solo renderiza las barras del rango visible (aparecen al hacer scroll). El CSS se importa vía alias en `next.config.mjs` (el `exports` de la lib no expone el CSS).
+
 ## Producción
 
 - URL = Prisma Accelerate (`db.prisma.io`). `psql` NO conecta. Usar `$executeRawUnsafe` con **una sentencia por call** (multi-sentencia falla con "cannot insert multiple commands into a prepared statement").
