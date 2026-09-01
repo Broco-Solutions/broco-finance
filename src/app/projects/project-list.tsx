@@ -18,6 +18,7 @@ type Project = {
   isActive: boolean;
   startDate: string | Date | null;
   endDate: string | Date | null;
+  goLiveDate: string | Date | null;
   oneTimeCurrency: string | null;
   oneTimeAmountUsd: { toString(): string } | string | number | null;
   monthlyRecurringCurrency: string | null;
@@ -65,6 +66,7 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
     fd.set("isActive", data.isActive ? "true" : "false");
     if (data.startDate) fd.set("startDate", data.startDate as string);
     if (data.endDate) fd.set("endDate", data.endDate as string);
+    if (data.goLiveDate) fd.set("goLiveDate", data.goLiveDate as string);
     if (data.notes) fd.set("notes", data.notes as string);
     if (data.oneTimeOriginalAmount != null) {
       fd.set("oneTimeOriginalAmount", String(data.oneTimeOriginalAmount));
@@ -205,6 +207,7 @@ const reload = () => { setTimeout(() => window.location.reload(), 500); };
           isActive: editProject.isActive,
           startDate: toISODate(editProject.startDate),
           endDate: toISODate(editProject.endDate),
+          goLiveDate: toISODate(editProject.goLiveDate),
           oneTimeAmountUsd: editProject.oneTimeAmountUsd ? String(editProject.oneTimeAmountUsd) : null,
           oneTimeCurrency: editProject.oneTimeCurrency,
           monthlyRecurringAmountUsd: editProject.monthlyRecurringAmountUsd ? String(editProject.monthlyRecurringAmountUsd) : null,

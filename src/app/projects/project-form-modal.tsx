@@ -26,6 +26,7 @@ export function ProjectFormModal({
     isActive?: boolean;
     startDate?: string | null;
     endDate?: string | null;
+    goLiveDate?: string | null;
     notes?: string | null;
     oneTimeOriginalAmount?: string | number | null;
     oneTimeCurrency?: string | null;
@@ -47,6 +48,7 @@ export function ProjectFormModal({
     isActive: initial?.isActive ?? true,
     startDate: initial?.startDate ?? "",
     endDate: initial?.endDate ?? "",
+    goLiveDate: initial?.goLiveDate ?? "",
     notes: initial?.notes ?? "",
     useOneTime: initial?.oneTimeAmountUsd != null || initial?.oneTimeOriginalAmount != null,
     oneTimeAmount: initial?.oneTimeOriginalAmount?.toString() ?? "",
@@ -69,6 +71,7 @@ export function ProjectFormModal({
       isActive: initial?.isActive ?? true,
       startDate: initial?.startDate ?? "",
       endDate: initial?.endDate ?? "",
+      goLiveDate: initial?.goLiveDate ?? "",
       notes: initial?.notes ?? "",
       useOneTime: initial?.oneTimeAmountUsd != null || initial?.oneTimeOriginalAmount != null,
       oneTimeAmount: initial?.oneTimeOriginalAmount?.toString() ?? "",
@@ -92,6 +95,7 @@ export function ProjectFormModal({
         isActive: form.isActive,
         startDate: form.startDate || null,
         endDate: form.endDate || null,
+        goLiveDate: form.goLiveDate || null,
         notes: form.notes || null,
       };
       if (form.useOneTime) {
@@ -142,6 +146,7 @@ export function ProjectFormModal({
               <Input placeholder="Nombre" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required />
               <Input type="date" placeholder="Fecha de inicio" value={form.startDate} onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))} />
               <Input type="date" placeholder="Fecha de fin" value={form.endDate} onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))} />
+              <Input type="date" placeholder="Fecha de Go Live" value={form.goLiveDate} onChange={(e) => setForm((p) => ({ ...p, goLiveDate: e.target.value }))} />
               <Input placeholder="Notas" value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
 
               <label className="flex items-center gap-2 text-sm">

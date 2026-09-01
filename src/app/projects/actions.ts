@@ -33,6 +33,7 @@ export async function saveProject(
       isActive: formData.get("isActive") === "true",
       startDate: formData.get("startDate") || null,
       endDate: formData.get("endDate") || null,
+      goLiveDate: formData.get("goLiveDate") || null,
       notes: formData.get("notes") || null,
       oneTimeOriginalAmount: parseNumber(formData.get("oneTimeOriginalAmount")),
       oneTimeCurrency: formData.get("oneTimeCurrency") || null,

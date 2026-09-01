@@ -21,7 +21,7 @@ import {
 } from "@/server/services/project-tasks";
 import { generateShareLink, revokeShareLink } from "@/server/services/project-sharing";
 
-type ActionResult = { success: true } | { success: false; message: string };
+export type ActionResult = { success: true } | { success: false; message: string };
 
 async function requireAuth() {
   if (!isAuthenticated()) throw new Error("Sesión expirada.");
