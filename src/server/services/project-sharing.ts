@@ -1,98 +1,266 @@
 import "server-only";
-import { createHash, randomBytes } from "crypto";
 import { prisma } from "@/server/prisma";
 import { revalidatePath } from "next/cache";
+import {
+  buildSlug,
+  decryptPassword,
+  encryptPassword,
+  generatePassword,
+  hashPassword,
+  verifyPassword,
+  verifySession,
+  MIN_MANUAL_PASSWORD_LENGTH,
+} from "@/lib/project-access-crypto";
 
-export type ProjectShareLinkRecord = {
-  id: string;
-  projectId: string;
-  tokenHash: string;
-  createdAt: Date;
+// ---------------------------------------------------------------------------
+// Shared access (V1.1: slug + password + session)
+// ---------------------------------------------------------------------------
+
+export type ShareAccess = {
+  slug: string;
   revokedAt: Date | null;
+  accessVersion: number;
 };
 
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
+export type ShareGate = {
+  linkId: string;
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  revokedAt: Date | null;
+  accessVersion: number;
+};
 
-export async function generateShareLink(projectId: string): Promise<string> {
+export type ShareAuthorization = {
+  linkId: string;
+  projectId: string;
+};
+
+export type ShareAccessSetup = {
+  slug: string;
+  password: string;
+};
+
+async function assertProject(projectId: string) {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { id: true },
   });
   if (!project) throw new Error("Proyecto no encontrado.");
+}
 
-  const token = randomBytes(32).toString("hex");
-  const tokenHash = hashToken(token);
+function resolveManualPassword(password: string | undefined): { password: string; auto: boolean } {
+  if (password !== undefined && password.trim() !== "") {
+    const trimmed = password.trim();
+    if (trimmed.length < MIN_MANUAL_PASSWORD_LENGTH) {
+      throw new Error(
+        `La contraseña debe tener al menos ${MIN_MANUAL_PASSWORD_LENGTH} caracteres.`,
+      );
+    }
+    return { password: trimmed, auto: false };
+  }
+  return { password: generatePassword(), auto: true };
+}
 
-  await prisma.projectShareLink.upsert({
+async function uniqueSlugForProject(clientName: string, projectName: string): Promise<string> {
+  const base = buildSlug(clientName, projectName);
+  const exists = async (s: string) => {
+    const found = await prisma.projectShareLink.findUnique({
+      where: { slug: s },
+      select: { id: true },
+    });
+    return found !== null;
+  };
+  if (!(await exists(base))) return base;
+  for (let i = 2; i < 10000; i++) {
+    const candidate = `${base}-${i}`;
+    if (!(await exists(candidate))) return candidate;
+  }
+  throw new Error("No se pudo generar un slug único.");
+}
+
+export async function configureShareAccess(
+  projectId: string,
+  password?: string,
+): Promise<ShareAccessSetup> {
+  await assertProject(projectId);
+  const existing = await prisma.projectShareLink.findUnique({
     where: { projectId },
-    create: { projectId, tokenHash },
-    update: { tokenHash, revokedAt: null },
+    select: { id: true },
   });
-  revalidatePath(`/projects/${projectId}`);
-  return token;
-}
+  if (existing) throw new Error("El proyecto ya tiene acceso configurado.");
 
-export async function regenerateShareLink(projectId: string): Promise<string> {
-  return generateShareLink(projectId);
-}
-
-export async function revokeShareLink(projectId: string): Promise<boolean> {
-  const link = await prisma.projectShareLink.findUnique({ where: { projectId } });
-  if (!link) return false;
-  await prisma.projectShareLink.update({
-    where: { projectId },
-    data: { revokedAt: new Date() },
-  });
-  revalidatePath(`/projects/${projectId}`);
-  return true;
-}
-
-export async function getShareLink(projectId: string): Promise<ProjectShareLinkRecord | null> {
-  return prisma.projectShareLink.findUnique({ where: { projectId } });
-}
-
-export async function resolveShareToken(token: string): Promise<string | null> {
-  const tokenHash = hashToken(token);
-  const link = await prisma.projectShareLink.findUnique({ where: { tokenHash } });
-  if (!link || link.revokedAt) return null;
-  return link.projectId;
-}
-
-export async function getSharedProjectPlan(token: string) {
-  const projectId = await resolveShareToken(token);
-  if (!projectId) return null;
-
-  return prisma.project.findUnique({
+  const project = await prisma.project.findUnique({
     where: { id: projectId },
+    select: { name: true, client: { select: { name: true } } },
+  });
+  if (!project) throw new Error("Proyecto no encontrado.");
+
+  const { password: resolved, auto } = resolveManualPassword(password);
+  void auto;
+  const slug = await uniqueSlugForProject(project.client.name, project.name);
+  const passwordHash = await hashPassword(resolved);
+  const passwordEncrypted = encryptPassword(resolved);
+
+  await prisma.projectShareLink.create({
+    data: { projectId, slug, passwordHash, passwordEncrypted, accessVersion: 0 },
+  });
+  revalidatePath(`/projects/${projectId}`);
+  return { slug, password: resolved };
+}
+
+export async function getShareAccess(projectId: string): Promise<ShareAccess | null> {
+  const link = await prisma.projectShareLink.findUnique({
+    where: { projectId },
+    select: { slug: true, revokedAt: true, accessVersion: true },
+  });
+  return link;
+}
+
+export async function revealPassword(projectId: string): Promise<string> {
+  const link = await prisma.projectShareLink.findUnique({
+    where: { projectId },
+    select: { passwordEncrypted: true },
+  });
+  if (!link) throw new Error("El proyecto no tiene acceso configurado.");
+  return decryptPassword(link.passwordEncrypted);
+}
+
+export async function changeShareAccessPassword(
+  projectId: string,
+  password?: string,
+): Promise<string> {
+  const link = await prisma.projectShareLink.findUnique({
+    where: { projectId },
+    select: { id: true },
+  });
+  if (!link) throw new Error("El proyecto no tiene acceso configurado.");
+
+  const { password: resolved } = resolveManualPassword(password);
+  const passwordHash = await hashPassword(resolved);
+  const passwordEncrypted = encryptPassword(resolved);
+
+  await prisma.projectShareLink.update({
+    where: { id: link.id },
+    data: { passwordHash, passwordEncrypted, accessVersion: { increment: 1 } },
+  });
+  revalidatePath(`/projects/${projectId}`);
+  return resolved;
+}
+
+export async function revokeShareAccess(projectId: string): Promise<void> {
+  const link = await prisma.projectShareLink.findUnique({
+    where: { projectId },
+    select: { id: true },
+  });
+  if (!link) throw new Error("El proyecto no tiene acceso configurado.");
+  await prisma.projectShareLink.update({
+    where: { id: link.id },
+    data: { revokedAt: new Date(), accessVersion: { increment: 1 } },
+  });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function activateShareAccess(projectId: string): Promise<void> {
+  const link = await prisma.projectShareLink.findUnique({
+    where: { projectId },
+    select: { id: true },
+  });
+  if (!link) throw new Error("El proyecto no tiene acceso configurado.");
+  await prisma.projectShareLink.update({
+    where: { id: link.id },
+    data: { revokedAt: null },
+  });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Client access: gate → authorization → authorized DTO
+// ---------------------------------------------------------------------------
+
+export async function resolveShareGateBySlug(slug: string): Promise<ShareGate | null> {
+  const link = await prisma.projectShareLink.findUnique({
+    where: { slug },
     select: {
       id: true,
-      name: true,
-      startDate: true,
-      endDate: true,
-      goLiveDate: true,
-      updatedAt: true,
-      client: { select: { name: true } },
-      phases: {
-        select: { id: true, name: true, position: true },
-        orderBy: { position: "asc" },
-      },
-      tasks: {
-        select: {
-          id: true,
-          phaseId: true,
-          name: true,
-          description: true,
-          type: true,
-          startDate: true,
-          endDate: true,
-          status: true,
-          position: true,
-        },
-        where: { clientVisible: true },
-        orderBy: { position: "asc" },
+      projectId: true,
+      revokedAt: true,
+      accessVersion: true,
+      project: {
+        select: { name: true, client: { select: { name: true } } },
       },
     },
   });
+  if (!link || link.revokedAt) return null;
+  return {
+    linkId: link.id,
+    projectId: link.projectId,
+    projectName: link.project.name,
+    clientName: link.project.client.name,
+    revokedAt: link.revokedAt,
+    accessVersion: link.accessVersion,
+  };
 }
+
+export async function authorizeClientAccess(
+  slug: string,
+  sessionPayload: string | null | undefined,
+  now?: number,
+): Promise<ShareAuthorization | null> {
+  const parsed = verifySession(sessionPayload, now);
+  if (!parsed) return null;
+
+  const link = await prisma.projectShareLink.findUnique({
+    where: { id: parsed.linkId },
+    select: { id: true, projectId: true, slug: true, revokedAt: true, accessVersion: true },
+  });
+  if (!link || link.revokedAt) return null;
+  if (link.slug !== slug) return null;
+  if (link.accessVersion !== parsed.accessVersion) return null;
+
+  return { linkId: link.id, projectId: link.projectId };
+}
+
+const PORTAL_WHITELIST_SELECT = {
+  id: true,
+  name: true,
+  startDate: true,
+  endDate: true,
+  goLiveDate: true,
+  updatedAt: true,
+  client: { select: { name: true } },
+  phases: {
+    select: { id: true, name: true, position: true },
+    orderBy: { position: "asc" },
+  },
+  tasks: {
+    select: {
+      id: true,
+      phaseId: true,
+      name: true,
+      description: true,
+      type: true,
+      startDate: true,
+      endDate: true,
+      status: true,
+      position: true,
+    },
+    where: { clientVisible: true },
+    orderBy: { position: "asc" },
+  },
+} as const;
+
+export async function getAuthorizedProjectPlan(
+  slug: string,
+  sessionPayload: string | null | undefined,
+  now?: number,
+) {
+  const authorization = await authorizeClientAccess(slug, sessionPayload, now);
+  if (!authorization) return null;
+
+  return prisma.project.findUnique({
+    where: { id: authorization.projectId },
+    select: PORTAL_WHITELIST_SELECT,
+  });
+}
+

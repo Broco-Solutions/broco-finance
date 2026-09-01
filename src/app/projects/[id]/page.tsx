@@ -3,12 +3,14 @@ import type { ProjectPhase, ProjectTask } from "@prisma/client";
 import { getProject } from "@/server/services/projects";
 import { listPhases } from "@/server/services/project-phases";
 import { listTasks } from "@/server/services/project-tasks";
-import { getShareLink } from "@/server/services/project-sharing";
+import { getShareAccess } from "@/server/services/project-sharing";
+import { listClients } from "@/server/services/clients";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { formatUsd, formatArs, formatDate } from "@/lib/utils";
 import { ProjectPlanningView } from "./project-planning-view";
+import { ProjectDetailEdit } from "./project-detail-edit";
 
 export const dynamic = "force-dynamic";
 
@@ -40,16 +42,20 @@ export default async function ProjectDetailPage({
 
   let phases: ProjectPhase[] = [];
   let tasks: ProjectTask[] = [];
-  let shareLinkStatus: "active" | "revoked" | null = null;
+  let shareAccess: { slug: string; revokedAt: Date | null } | null = null;
+  let clients: { id: string; name: string }[] = [];
   if (tab === "planning") {
     const [phasesRes, tasksRes, link] = await Promise.all([
       listPhases(project.id).catch(() => []),
       listTasks(project.id).catch(() => []),
-      getShareLink(project.id).catch(() => null),
+      getShareAccess(project.id).catch(() => null),
     ]);
     phases = phasesRes;
     tasks = tasksRes;
-    shareLinkStatus = link ? (link.revokedAt ? "revoked" : "active") : null;
+    shareAccess = link ? { slug: link.slug, revokedAt: link.revokedAt } : null;
+  } else {
+    const allClients = await listClients().catch(() => []);
+    clients = allClients.map((c) => ({ id: c.id, name: c.name }));
   }
 
   const fmtAmt = (currency: string | null, usd: unknown, orig: unknown, rate: unknown) => {
@@ -87,10 +93,13 @@ export default async function ProjectDetailPage({
           projectStartDate={iso(project.startDate)}
           projectEndDate={iso(project.endDate)}
           projectGoLiveDate={iso(project.goLiveDate)}
-          shareLinkStatus={shareLinkStatus}
+          shareAccess={shareAccess ? JSON.parse(JSON.stringify(shareAccess)) : null}
         />
       ) : (
         <>
+          <div className="flex justify-end">
+            <ProjectDetailEdit project={JSON.parse(JSON.stringify(project))} clients={clients} />
+          </div>
           <Card>
             <h2 className="font-display text-xl text-ink">Datos del proyecto</h2>
             <div className="mt-4 space-y-2 text-sm">

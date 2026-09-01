@@ -1,8 +1,18 @@
 import type { Metadata } from "next";
-import { getSharedProjectPlan } from "@/server/services/project-sharing";
-import { computeProjectProgress, computeElapsedPercent, resolveGoLive } from "@/lib/project-progress";
+import { cookies } from "next/headers";
+import {
+  resolveShareGateBySlug,
+  authorizeClientAccess,
+  getAuthorizedProjectPlan,
+} from "@/server/services/project-sharing";
+import {
+  computeProjectProgress,
+  computeElapsedPercent,
+  resolveGoLive,
+} from "@/lib/project-progress";
 import { ProjectGantt } from "@/components/projects/project-gantt";
 import { TaskStatusLegend } from "@/components/projects/task-status-legend";
+import { PortalPasswordGate } from "./portal-password-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -24,17 +34,36 @@ function goLiveText(g: { hasDate: boolean; daysRemaining: number | null; isToday
 export async function generateMetadata({
   params,
 }: {
-  params: { token: string };
+  params: { slug: string };
 }): Promise<Metadata> {
-  const plan = await getSharedProjectPlan(params.token);
+  const gate = await resolveShareGateBySlug(params.slug);
   return {
-    title: plan ? `${plan.name} | Broco Solutions` : "Broco Solutions",
+    title: gate ? `${gate.projectName} | Broco Solutions` : "Broco Solutions",
     robots: { index: false, follow: false },
   };
 }
 
-export default async function PortalPage({ params }: { params: { token: string } }) {
-  const plan = await getSharedProjectPlan(params.token);
+export default async function PortalPage({ params }: { params: { slug: string } }) {
+  const gate = await resolveShareGateBySlug(params.slug);
+
+  if (!gate) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#f8fafc] to-white px-4">
+        <p className="text-center text-ink/60">Este enlace no está disponible.</p>
+      </main>
+    );
+  }
+
+  const session = cookies().get("portal_session")?.value ?? null;
+  const auth = await authorizeClientAccess(params.slug, session);
+
+  if (!auth) {
+    return (
+      <PortalPasswordGate slug={params.slug} projectName={gate.projectName} clientName={gate.clientName} />
+    );
+  }
+
+  const plan = await getAuthorizedProjectPlan(params.slug, session);
 
   if (!plan) {
     return (
@@ -51,7 +80,7 @@ export default async function PortalPage({ params }: { params: { token: string }
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#f8fafc] to-white">
-      <div className="mx-auto max-w-4xl px-4 py-10 md:py-14">
+      <div className="mx-auto max-w-7xl px-4 py-10 md:py-14">
         <header className="mb-8">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cobalt">Broco Solutions</p>
           <h1 className="mt-2 font-display text-3xl text-ink md:text-4xl">Seguimiento de proyecto</h1>

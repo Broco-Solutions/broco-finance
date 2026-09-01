@@ -19,7 +19,13 @@ import {
   taskUpdateSchema,
   TASK_STATUSES,
 } from "@/server/services/project-tasks";
-import { generateShareLink, revokeShareLink } from "@/server/services/project-sharing";
+import {
+  configureShareAccess,
+  revealPassword,
+  changeShareAccessPassword,
+  revokeShareAccess,
+  activateShareAccess,
+} from "@/server/services/project-sharing";
 
 export type ActionResult = { success: true } | { success: false; message: string };
 
@@ -200,25 +206,57 @@ export async function changeTaskClientVisible(
 }
 
 // ---------------------------------------------------------------------------
-// Share links (internal)
+// Share access (V1.1: slug + password)
 // ---------------------------------------------------------------------------
 
-export async function generateShareLinkAction(
+export async function configureAccessAction(
   _prev: ActionResult | null,
   formData: FormData,
-): Promise<{ success: true; token: string } | { success: false; message: string }> {
+): Promise<{ success: true; slug: string; password: string } | { success: false; message: string }> {
   try {
     requireAuth();
     const projectId = str(formData.get("projectId"));
     if (!projectId) return { success: false, message: "Proyecto no encontrado." };
-    const token = await generateShareLink(projectId);
-    return { success: true, token };
+    const password = str(formData.get("password")) ?? undefined;
+    const result = await configureShareAccess(projectId, password);
+    return { success: true, slug: result.slug, password: result.password };
   } catch (e) {
-    return { success: false, message: e instanceof Error ? e.message : "Error al generar." };
+    return { success: false, message: e instanceof Error ? e.message : "Error al configurar." };
   }
 }
 
-export async function revokeShareLinkAction(
+export async function revealPasswordAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<{ success: true; password: string } | { success: false; message: string }> {
+  try {
+    requireAuth();
+    const projectId = str(formData.get("projectId"));
+    if (!projectId) return { success: false, message: "Proyecto no encontrado." };
+    const password = await revealPassword(projectId);
+    return { success: true, password };
+  } catch (e) {
+    return { success: false, message: e instanceof Error ? e.message : "Error al revelar." };
+  }
+}
+
+export async function changePasswordAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<{ success: true; password: string } | { success: false; message: string }> {
+  try {
+    requireAuth();
+    const projectId = str(formData.get("projectId"));
+    if (!projectId) return { success: false, message: "Proyecto no encontrado." };
+    const password = str(formData.get("password")) ?? undefined;
+    const newPassword = await changeShareAccessPassword(projectId, password);
+    return { success: true, password: newPassword };
+  } catch (e) {
+    return { success: false, message: e instanceof Error ? e.message : "Error al cambiar." };
+  }
+}
+
+export async function deactivateAccessAction(
   _prev: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
@@ -226,9 +264,24 @@ export async function revokeShareLinkAction(
     requireAuth();
     const projectId = str(formData.get("projectId"));
     if (!projectId) return { success: false, message: "Proyecto no encontrado." };
-    await revokeShareLink(projectId);
+    await revokeShareAccess(projectId);
     return { success: true };
   } catch (e) {
-    return { success: false, message: e instanceof Error ? e.message : "Error al revocar." };
+    return { success: false, message: e instanceof Error ? e.message : "Error al desactivar." };
+  }
+}
+
+export async function activateAccessAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    requireAuth();
+    const projectId = str(formData.get("projectId"));
+    if (!projectId) return { success: false, message: "Proyecto no encontrado." };
+    await activateShareAccess(projectId);
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: e instanceof Error ? e.message : "Error al activar." };
   }
 }

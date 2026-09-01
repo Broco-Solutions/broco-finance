@@ -10,7 +10,7 @@ import { ModalPortal } from "@/components/ui/modal-portal";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { TaskStatusBadge, TaskTypeBadge } from "@/components/projects/task-status-badge";
 import { ProjectGantt } from "@/components/projects/project-gantt";
-import { ProjectSharePanel } from "@/components/projects/project-share-panel";
+import { ProjectAccessPanel } from "@/components/projects/project-access-panel";
 import { formatDate } from "@/lib/utils";
 import {
   computeProjectProgress,
@@ -68,7 +68,7 @@ export function ProjectPlanningView({
   projectStartDate,
   projectEndDate,
   projectGoLiveDate,
-  shareLinkStatus,
+  shareAccess,
 }: {
   projectId: string;
   phases: PhaseDTO[];
@@ -76,7 +76,7 @@ export function ProjectPlanningView({
   projectStartDate: string | null;
   projectEndDate: string | null;
   projectGoLiveDate: string | null;
-  shareLinkStatus: "active" | "revoked" | null;
+  shareAccess: { slug: string; revokedAt: string | null } | null;
 }) {
   const router = useRouter();
   const [phases, setPhases] = useState<PhaseDTO[]>(initialPhases);
@@ -136,12 +136,9 @@ export function ProjectPlanningView({
       </div>
 
       <Card>
-        <h2 className="font-display text-xl text-ink">Compartir con cliente</h2>
-        <p className="mt-1 text-sm text-ink/60">
-          Generá un enlace privado y de solo lectura para que el cliente siga el avance del proyecto.
-        </p>
+        <h2 className="font-display text-xl text-ink">Acceso del cliente</h2>
         <div className="mt-3">
-          <ProjectSharePanel projectId={projectId} initialStatus={shareLinkStatus} />
+          <ProjectAccessPanel projectId={projectId} initialAccess={shareAccess} />
         </div>
       </Card>
 

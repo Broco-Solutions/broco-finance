@@ -14,12 +14,10 @@ import {
   setTaskClientVisible,
 } from "@/server/services/project-tasks";
 import {
-  generateShareLink,
-  regenerateShareLink,
-  revokeShareLink,
-  getShareLink,
-  resolveShareToken,
-  getSharedProjectPlan,
+  configureShareAccess,
+  getShareAccess,
+  revokeShareAccess,
+  activateShareAccess,
 } from "@/server/services/project-sharing";
 
 const url = process.env.DATABASE_URL_TEST;
@@ -134,75 +132,28 @@ describe.skipIf(skip)("Project Planning — integración", () => {
     expect(cv.clientVisible).toBe(false);
   });
 
-  it("share link: token raw nunca se persiste; regenerar cambia hash; revocar invalida", async () => {
-    const token = await generateShareLink(projectAId);
-    expect(typeof token).toBe("string");
-    expect(token.length).toBeGreaterThan(20);
+  it("acceso: configurar genera slug/password; revocar/activar conserva slug", async () => {
+    process.env.PROJECT_SHARE_ENCRYPTION_KEY = "a".repeat(64);
+    process.env.PROJECT_SHARE_SESSION_SECRET = "b".repeat(64);
 
-    const link = await getShareLink(projectAId);
-    expect(link).not.toBeNull();
-    expect(link!.tokenHash).not.toBe(token);
-    expect(link!.tokenHash).toHaveLength(64);
+    const setup = await configureShareAccess(projectAId, "clave-planning-12345");
+    expect(setup.slug).toBeTruthy();
+    expect(setup.password).toBe("clave-planning-12345");
 
-    const token2 = await regenerateShareLink(projectAId);
-    const link2 = await getShareLink(projectAId);
-    expect(link2!.tokenHash).not.toBe(link!.tokenHash);
-    expect(link2!.revokedAt).toBeNull();
+    const access = await getShareAccess(projectAId);
+    expect(access).not.toBeNull();
+    expect(access!.slug).toBe(setup.slug);
+    expect(access!.revokedAt).toBeNull();
 
-    expect(await resolveShareToken(token2)).toBe(projectAId);
+    await revokeShareAccess(projectAId);
+    const revoked = await getShareAccess(projectAId);
+    expect(revoked!.revokedAt).not.toBeNull();
+    expect(revoked!.slug).toBe(setup.slug);
+    expect(revoked!.accessVersion).toBeGreaterThan(0);
 
-    expect(await revokeShareLink(projectAId)).toBe(true);
-    expect(await resolveShareToken(token2)).toBeNull();
-    expect(await resolveShareToken("token-inexistente")).toBeNull();
-  });
-
-  it("getSharedProjectPlan filtra clientVisible y no expone campos financieros", async () => {
-    const planToken = await generateShareLink(projectAId);
-    await createTask({
-      projectId: projectAId,
-      name: "Visible",
-      startDate: "2026-01-01",
-      endDate: "2026-01-02",
-      clientVisible: true,
-    });
-    await createTask({
-      projectId: projectAId,
-      name: "Oculta",
-      startDate: "2026-01-03",
-      endDate: "2026-01-04",
-      clientVisible: false,
-    });
-
-    const plan = await getSharedProjectPlan(planToken);
-    expect(plan).not.toBeNull();
-    expect(plan!.id).toBe(projectAId);
-    expect(plan!.client.name).toBeTruthy();
-
-    const names = plan!.tasks.map((t) => t.name);
-    expect(names).toContain("Visible");
-    expect(names).not.toContain("Oculta");
-
-    const forbidden = [
-      "incomes",
-      "expenses",
-      "oneTimeOriginalAmount",
-      "oneTimeCurrency",
-      "oneTimeExchangeRate",
-      "oneTimeAmountUsd",
-      "monthlyRecurringOriginalAmount",
-      "monthlyRecurringCurrency",
-      "monthlyRecurringExchangeRate",
-      "monthlyRecurringAmountUsd",
-      "notes",
-    ];
-    for (const f of forbidden) {
-      expect(f in plan!).toBe(false);
-    }
-
-    expect(Object.keys(plan!)).toEqual(
-      expect.arrayContaining(["id", "name", "startDate", "endDate", "goLiveDate", "updatedAt", "client", "phases", "tasks"]),
-    );
-
-    expect(await getSharedProjectPlan("token-malo")).toBeNull();
+    await activateShareAccess(projectAId);
+    const active = await getShareAccess(projectAId);
+    expect(active!.revokedAt).toBeNull();
+    expect(active!.slug).toBe(setup.slug);
   });
 });
