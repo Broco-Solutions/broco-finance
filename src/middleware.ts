@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 const AUTH_COOKIE = "broco_session";
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/_next", "/favicon.ico"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/p", "/_next", "/favicon.ico"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

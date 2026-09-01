@@ -12,7 +12,7 @@ export type TaskDTO = {
   endDate: string;
   status: GanttStatus;
   position: number;
-  clientVisible: boolean;
+  clientVisible?: boolean;
 };
 
 export type GanttTask = {

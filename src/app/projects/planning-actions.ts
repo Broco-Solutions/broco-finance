@@ -206,13 +206,13 @@ export async function changeTaskClientVisible(
 export async function generateShareLinkAction(
   _prev: ActionResult | null,
   formData: FormData,
-): Promise<ActionResult> {
+): Promise<{ success: true; token: string } | { success: false; message: string }> {
   try {
     requireAuth();
     const projectId = str(formData.get("projectId"));
     if (!projectId) return { success: false, message: "Proyecto no encontrado." };
-    await generateShareLink(projectId);
-    return { success: true };
+    const token = await generateShareLink(projectId);
+    return { success: true, token };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al generar." };
   }

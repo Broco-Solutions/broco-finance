@@ -10,6 +10,7 @@ import { ModalPortal } from "@/components/ui/modal-portal";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { TaskStatusBadge, TaskTypeBadge } from "@/components/projects/task-status-badge";
 import { ProjectGantt } from "@/components/projects/project-gantt";
+import { ProjectSharePanel } from "@/components/projects/project-share-panel";
 import { formatDate } from "@/lib/utils";
 import {
   computeProjectProgress,
@@ -67,6 +68,7 @@ export function ProjectPlanningView({
   projectStartDate,
   projectEndDate,
   projectGoLiveDate,
+  shareLinkStatus,
 }: {
   projectId: string;
   phases: PhaseDTO[];
@@ -74,6 +76,7 @@ export function ProjectPlanningView({
   projectStartDate: string | null;
   projectEndDate: string | null;
   projectGoLiveDate: string | null;
+  shareLinkStatus: "active" | "revoked" | null;
 }) {
   const router = useRouter();
   const [phases, setPhases] = useState<PhaseDTO[]>(initialPhases);
@@ -131,6 +134,16 @@ export function ProjectPlanningView({
         <Metric label="Tiempo transcurrido" value={elapsed === null ? "—" : `${elapsed}%`} />
         <Metric label="Para Go Live" value={goLiveText(goLive)} />
       </div>
+
+      <Card>
+        <h2 className="font-display text-xl text-ink">Compartir con cliente</h2>
+        <p className="mt-1 text-sm text-ink/60">
+          Generá un enlace privado y de solo lectura para que el cliente siga el avance del proyecto.
+        </p>
+        <div className="mt-3">
+          <ProjectSharePanel projectId={projectId} initialStatus={shareLinkStatus} />
+        </div>
+      </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-display text-xl text-ink">Planificación</h2>

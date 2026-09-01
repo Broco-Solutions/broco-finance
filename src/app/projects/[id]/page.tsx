@@ -3,6 +3,7 @@ import type { ProjectPhase, ProjectTask } from "@prisma/client";
 import { getProject } from "@/server/services/projects";
 import { listPhases } from "@/server/services/project-phases";
 import { listTasks } from "@/server/services/project-tasks";
+import { getShareLink } from "@/server/services/project-sharing";
 import { PageHeader } from "@/components/ui/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -39,11 +40,16 @@ export default async function ProjectDetailPage({
 
   let phases: ProjectPhase[] = [];
   let tasks: ProjectTask[] = [];
+  let shareLinkStatus: "active" | "revoked" | null = null;
   if (tab === "planning") {
-    [phases, tasks] = await Promise.all([
+    const [phasesRes, tasksRes, link] = await Promise.all([
       listPhases(project.id).catch(() => []),
       listTasks(project.id).catch(() => []),
+      getShareLink(project.id).catch(() => null),
     ]);
+    phases = phasesRes;
+    tasks = tasksRes;
+    shareLinkStatus = link ? (link.revokedAt ? "revoked" : "active") : null;
   }
 
   const fmtAmt = (currency: string | null, usd: unknown, orig: unknown, rate: unknown) => {
@@ -81,6 +87,7 @@ export default async function ProjectDetailPage({
           projectStartDate={iso(project.startDate)}
           projectEndDate={iso(project.endDate)}
           projectGoLiveDate={iso(project.goLiveDate)}
+          shareLinkStatus={shareLinkStatus}
         />
       ) : (
         <>
