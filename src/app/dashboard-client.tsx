@@ -84,23 +84,23 @@ export function DashboardClient({
     <div className="space-y-5">
       {/* Period selector */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-gray-200 bg-white p-0.5">
+        <div className="flex flex-wrap rounded-lg border border-gray-200 bg-white p-0.5 gap-0.5">
           {[{k:"this-month",l:"Este mes"},{k:"last-month",l:"Mes anterior"},{k:"this-year",l:"Este año"},{k:"all",l:"Total"},{k:"custom",l:"Personalizado"}].map(o => (
             <button key={o.k} onClick={() => applyPreset(o.k)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${preset === o.k ? "bg-brand text-white" : "text-gray-600 hover:bg-gray-100"}`}>{o.l}</button>
           ))}
         </div>
         {preset === "custom" && (
-          <div className="flex items-center gap-2">
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-36 text-xs h-8" />
-            <span className="text-xs text-gray-400">a</span>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-36 text-xs h-8" />
-            <Button variant="secondary" className="text-xs" onClick={applyCustom}>Aplicar</Button>
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="flex-1 sm:flex-none sm:w-36 text-xs h-8 min-w-0" />
+            <span className="text-xs text-gray-400 hidden sm:inline">a</span>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="flex-1 sm:flex-none sm:w-36 text-xs h-8 min-w-0" />
+            <Button variant="secondary" className="text-xs w-full sm:w-auto" onClick={applyCustom}>Aplicar</Button>
           </div>
         )}
-        <Badge tone="neutral">{periodLabel}</Badge>
-        <div className="flex gap-2 ml-auto">
-          <Link href="/incomes?new=1"><Button className="text-sm"><PlusCircle className="mr-1.5 h-4 w-4" />Nuevo ingreso</Button></Link>
-          <Link href="/expenses?new=1"><Button className="text-sm bg-gray-800 text-white hover:bg-gray-900"><Receipt className="mr-1.5 h-4 w-4" />Nuevo gasto</Button></Link>
+        <Badge tone="neutral" className="shrink-0">{periodLabel}</Badge>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto sm:ml-auto sm:flex sm:gap-2">
+          <Link href="/incomes?new=1" className="block"><Button className="w-full sm:w-auto text-sm"><PlusCircle className="mr-1.5 h-4 w-4" />Nuevo ingreso</Button></Link>
+          <Link href="/expenses?new=1" className="block"><Button className="w-full sm:w-auto text-sm bg-gray-800 text-white hover:bg-gray-900"><Receipt className="mr-1.5 h-4 w-4" />Nuevo gasto</Button></Link>
         </div>
       </div>
 
@@ -117,9 +117,9 @@ export function DashboardClient({
 
       {/* KPIs row 2 — Cobros y Pagos (pendiente + vencido) */}
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-        <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+        <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2 min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Cobros</div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <div className="text-[10px] text-gray-400 mb-0.5">Pendiente</div>
               <div className="text-lg font-bold text-gray-900 tabular-nums">{formatUsd(period === "all" ? k.globalPendingIncomesUsd : k.pendingIncomesUsd)}</div>
@@ -132,9 +132,9 @@ export function DashboardClient({
             </Link>
           </div>
         </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+        <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2 min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Pagos</div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <div className="text-[10px] text-gray-400 mb-0.5">Pendiente</div>
               <div className="text-lg font-bold text-gray-900 tabular-nums">{formatUsd(period === "all" ? k.globalPendingExpensesUsd : k.pendingExpensesUsd)}</div>
@@ -150,7 +150,7 @@ export function DashboardClient({
       </div>
 
       {/* Main chart */}
-      <Card className="p-4">
+      <Card className="p-3 sm:p-4 min-w-0">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Ingresos y gastos</h3>
         <div className="h-56 sm:h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -171,7 +171,7 @@ export function DashboardClient({
       </Card>
 
       {/* Proyeccion mensual */}
-      <Card className="p-4">
+      <Card className="p-3 sm:p-4 min-w-0">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Proyeccion proximos 6 meses</h3>
         <div className="h-56 sm:h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -208,7 +208,7 @@ export function DashboardClient({
 
       {/* Category & Client breakdowns */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4 min-w-0">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Gastos por categoria</h3>
           {catChart.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">Sin gastos en este periodo.</p> : (
             <div className="space-y-2">
@@ -222,7 +222,7 @@ export function DashboardClient({
             </div>
           )}
         </Card>
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4 min-w-0">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Ingresos por cliente</h3>
           {cliChart.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">Sin ingresos en este periodo.</p> : (
             <div className="space-y-2">
@@ -251,7 +251,7 @@ export function DashboardClient({
 
       {/* Vencimientos + próximos */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4 min-w-0">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Vencidos</h3>
           <div className="space-y-1.5 text-sm">
             {k.overdueIncomesCount === 0 && k.overdueExpensesCount === 0 && <p className="text-xs text-gray-400 py-2">Sin vencidos.</p>}
@@ -269,8 +269,8 @@ export function DashboardClient({
             )}
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3 gap-2">
+        <Card className="p-3 sm:p-4 min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">Próximos 30 días</h3>
             <div className="flex rounded-lg border border-gray-200 bg-white p-0.5 shrink-0">
               {[
