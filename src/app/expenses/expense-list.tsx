@@ -15,6 +15,7 @@ import { ModalPortal } from "@/components/ui/modal-portal";
 import { saveExpense, removeExpense, payExpense, createExpenseBatch, bulkUpdateExpenses } from "./actions";
 import { saveCategory, removeCategory } from "./categories/actions";
 import { formatUsd, formatArs, formatDate, formatExpenseStatus, toInputDate } from "@/lib/utils";
+import { dateOnlyKey, isDateOnlyInRange } from "@/lib/dates";
 
 type E = { id: string; type: string; concept: string; notes: string | null; status: string;
   amountUsd: any; amountArs: any; exchangeRate: any; dueDate: string | Date | null; effectiveDate: string | Date | null;
@@ -177,23 +178,32 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   const handleCatSave = async (ev: React.FormEvent) => { ev.preventDefault(); setCatError(null); const fd = new FormData(); if (catForm.id) fd.set("id", catForm.id); fd.set("name", catForm.name); stt(() => { saveCategory(null, fd); }); setCatForm({ id: "", name: "" }); reload(); };
   const handleCatDel = () => { if (!catDelTarget) return; const fd = new FormData(); fd.set("id", catDelTarget.id); stt(() => { removeCategory(null, fd); }); setCatDelTarget(null); reload(); };
 
-  const filtered = expenses.filter(e => {
-    if (fStatus === "PENDING" && e.status !== "PENDING") return false; if (fStatus === "PAID" && e.status !== "PAID") return false;
-    if (fStatus === "OVERDUE") { if (e.status !== "PENDING") return false; const t = new Date(); const d = e.dueDate ? new Date(e.dueDate) : null; return d && d < t; }
-    if (fType && e.type !== fType) return false; if (fCat && e.expenseCategoryId !== fCat) return false; if (fProj && e.projectId !== fProj) return false;
-    if (search && !e.concept.toLowerCase().includes(search.toLowerCase())) return false;
-    if (dateFrom || dateTo) {
-      const from = dateFrom ? new Date(dateFrom + "T00:00:00") : null;
-      const to = dateTo ? new Date(dateTo + "T00:00:00") : null;
-      if (from && to && from > to) return true;
-      const targetDate = e.status === "PAID" ? e.effectiveDate : e.dueDate;
-      if (!targetDate) return false;
-      const d = new Date(targetDate);
-      if (from && d < from) return false;
-      if (to && d > to) return false;
-    }
-    return true;
-  });
+  const filtered = [...expenses]
+    .filter((e) => {
+      if (fStatus === "PENDING" && e.status !== "PENDING") return false;
+      if (fStatus === "PAID" && e.status !== "PAID") return false;
+      if (fStatus === "OVERDUE") {
+        if (e.status !== "PENDING") return false;
+        const t = new Date();
+        const d = e.dueDate ? new Date(e.dueDate) : null;
+        return d && d < t;
+      }
+      if (fType && e.type !== fType) return false;
+      if (fCat && e.expenseCategoryId !== fCat) return false;
+      if (fProj && e.projectId !== fProj) return false;
+      if (search && !e.concept.toLowerCase().includes(search.toLowerCase())) return false;
+      if (dateFrom || dateTo) {
+        if (dateFrom && dateTo && dateFrom > dateTo) return true;
+        const targetDate = e.status === "PAID" ? e.effectiveDate : e.dueDate;
+        if (!isDateOnlyInRange(targetDate, dateFrom || null, dateTo || null)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const ka = dateOnlyKey(a.status === "PAID" ? a.effectiveDate : a.dueDate) ?? "";
+      const kb = dateOnlyKey(b.status === "PAID" ? b.effectiveDate : b.dueDate) ?? "";
+      return kb.localeCompare(ka);
+    });
 
   const filteredExpTotal = filtered.reduce((s, e) => s + fmt(e.amountUsd), 0);
 

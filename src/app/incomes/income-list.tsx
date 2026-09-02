@@ -17,6 +17,7 @@ import { PayIncomeModal } from "./pay-income-modal";
 import { saveIncome, removeIncome, payIncome, createIncomeBatch, bulkUpdateIncomes } from "./actions";
 import { saveIncomeType, removeIncomeType } from "./types/actions";
 import { formatUsd, formatArs, formatDate, formatIncomeStatus } from "@/lib/utils";
+import { dateOnlyKey, isDateOnlyInRange } from "@/lib/dates";
 
 type TY = { id: string; name: string; requiresProject: boolean };
 
@@ -140,28 +141,32 @@ export function IncomeList({ initialIncomes, projects, clients, incomeTypes }: {
     reload();
   };
 
-  const filtered = incomes.filter(inc => {
-    if (filter === "PENDING" && inc.status !== "PENDING") return false;
-    if (filter === "PAID" && inc.status !== "PAID") return false;
-    if (filter === "OVERDUE") { if (inc.status !== "PENDING") return false; const t = new Date(); const d = inc.dueDate ? new Date(inc.dueDate) : null; return d && d < t; }
-    if (typeFilter && inc.typeId !== typeFilter) return false;
-    if (fClient && inc.clientId !== fClient) return false;
-    if (fProject && inc.projectId !== fProject) return false;
-    if (search && !inc.concept.toLowerCase().includes(search.toLowerCase())) return false;
-    // Date range filter
-    if (dateFrom || dateTo) {
-      const from = dateFrom ? new Date(dateFrom + "T00:00:00") : null;
-      const to = dateTo ? new Date(dateTo + "T00:00:00") : null;
-      if (from && to && isNaN(from.getTime()) || isNaN(to ? to.getTime() : 0)) return true;
-      if (from && to && from > to) return true; // invalid range, show everything
-      const targetDate = inc.status === "PAID" ? inc.effectiveDate : inc.dueDate;
-      if (!targetDate) return false;
-      const d = new Date(targetDate);
-      if (from && d < from) return false;
-      if (to && d > to) return false;
-    }
-    return true;
-  });
+  const filtered = [...incomes]
+    .filter((inc) => {
+      if (filter === "PENDING" && inc.status !== "PENDING") return false;
+      if (filter === "PAID" && inc.status !== "PAID") return false;
+      if (filter === "OVERDUE") {
+        if (inc.status !== "PENDING") return false;
+        const t = new Date();
+        const d = inc.dueDate ? new Date(inc.dueDate) : null;
+        return d && d < t;
+      }
+      if (typeFilter && inc.typeId !== typeFilter) return false;
+      if (fClient && inc.clientId !== fClient) return false;
+      if (fProject && inc.projectId !== fProject) return false;
+      if (search && !inc.concept.toLowerCase().includes(search.toLowerCase())) return false;
+      if (dateFrom || dateTo) {
+        if (dateFrom && dateTo && dateFrom > dateTo) return true;
+        const targetDate = inc.status === "PAID" ? inc.effectiveDate : inc.dueDate;
+        if (!isDateOnlyInRange(targetDate, dateFrom || null, dateTo || null)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const ka = dateOnlyKey(a.status === "PAID" ? a.effectiveDate : a.dueDate) ?? "";
+      const kb = dateOnlyKey(b.status === "PAID" ? b.effectiveDate : b.dueDate) ?? "";
+      return kb.localeCompare(ka);
+    });
 
   const filteredTotal = filtered.reduce((s, inc) => s + fmt(inc.amountUsd), 0);
 

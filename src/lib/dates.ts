@@ -31,3 +31,30 @@ export function todayArg(): Date {
   const [yy, mm, dd] = f.format(new Date()).split("-").map(Number);
   return new Date(yy, mm - 1, dd);
 }
+
+export function dateOnlyKey(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    return value.toISOString().slice(0, 10);
+  }
+  const s = String(value).trim();
+  if (!s) return null;
+  // already YYYY-MM-DD or ISO
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+export function isDateOnlyInRange(
+  value: string | Date | null | undefined,
+  from: string | null | undefined,
+  to: string | null | undefined,
+): boolean {
+  const key = dateOnlyKey(value);
+  if (!key) return false;
+  if (from && key < from) return false;
+  if (to && key > to) return false;
+  return true;
+}
