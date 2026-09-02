@@ -193,6 +193,219 @@ export async function setTaskClientVisible(id: string, clientVisible: boolean) {
   return task;
 }
 
+export type ApplyTaskChangesInput = {
+  projectId: string;
+  creates: Array<{
+    name: string;
+    description?: string | null;
+    phaseId: string | null;
+    type?: string;
+    startDate: string;
+    endDate: string;
+    status?: string;
+    clientVisible?: boolean;
+  }>;
+  updates: Array<{
+    id: string;
+    name?: string;
+    description?: string | null;
+    phaseId?: string | null;
+    type?: string;
+    startDate?: string;
+    endDate?: string;
+    status?: string;
+    clientVisible?: boolean;
+  }>;
+  deletes: string[];
+};
+
+export async function applyProjectTaskChanges(input: ApplyTaskChangesInput): Promise<void> {
+  const { projectId, creates, updates, deletes } = input;
+
+  // Basic duplicate checks
+  const allUpdateIds = updates.map((u) => u.id);
+  const updateSet = new Set(allUpdateIds);
+  if (updateSet.size !== allUpdateIds.length) throw new Error("IDs duplicados en updates.");
+  const deleteSet = new Set(deletes);
+  if (deleteSet.size !== deletes.length) throw new Error("IDs duplicados en deletes.");
+  for (const id of allUpdateIds) if (deleteSet.has(id)) throw new Error("Una tarea no puede estar en updates y deletes a la vez.");
+
+  await prisma.$transaction(async (tx) => {
+    await assertProjectTx(tx, projectId);
+
+    // Validate phases for creates and updates
+    const phaseIdsToCheck = new Set<string>();
+    for (const c of creates) if (c.phaseId) phaseIdsToCheck.add(c.phaseId);
+    for (const u of updates) if (u.phaseId !== undefined && u.phaseId !== null) phaseIdsToCheck.add(u.phaseId);
+    for (const pid of phaseIdsToCheck) await assertPhaseBelongsToProjectTx(tx, pid, projectId);
+
+    // Validate deletes belong to project
+    if (deletes.length > 0) {
+      const delTasks = await tx.projectTask.findMany({
+        where: { id: { in: deletes } },
+        select: { id: true, projectId: true },
+      });
+      if (delTasks.length !== deletes.length) throw new Error("Tarea a eliminar no encontrada.");
+      for (const t of delTasks) if (t.projectId !== projectId) throw new Error("Tarea no pertenece a este proyecto.");
+    }
+
+    // Validate updates belong to project and collect existing for date resolution
+    const existingMap = new Map<string, { id: string; projectId: string; type: string; startDate: Date; endDate: Date; phaseId: string | null }>();
+    if (updates.length > 0) {
+      const ids = updates.map((u) => u.id);
+      const existing = await tx.projectTask.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, projectId: true, type: true, startDate: true, endDate: true, phaseId: true },
+      });
+      if (existing.length !== ids.length) throw new Error("Tarea a actualizar no encontrada.");
+      for (const e of existing) {
+        if (e.projectId !== projectId) throw new Error("Tarea no pertenece a este proyecto.");
+        existingMap.set(e.id, e);
+      }
+      // Validate each update's fields
+      for (const u of updates) {
+        const existing = existingMap.get(u.id)!;
+        if (u.status !== undefined) z.enum(TASK_STATUSES).parse(u.status);
+        if (u.type !== undefined) z.enum(TASK_TYPES).parse(u.type);
+        if (u.name !== undefined && !u.name.trim()) throw new Error("El nombre de la tarea es obligatorio.");
+        if (u.startDate !== undefined || u.endDate !== undefined || u.type !== undefined) {
+          const type = (u.type ?? existing.type) as ProjectTaskType;
+          const startStr = u.startDate ?? existing.startDate.toISOString().slice(0, 10);
+          const endStr = u.endDate ?? existing.endDate.toISOString().slice(0, 10);
+          resolveTaskDates(type, startStr, endStr);
+        }
+      }
+    }
+
+    // Validate creates
+    for (const c of creates) {
+      const data = taskInputSchema.parse({
+        projectId,
+        phaseId: c.phaseId,
+        name: c.name,
+        description: c.description,
+        type: c.type,
+        startDate: c.startDate,
+        endDate: c.endDate,
+        status: c.status,
+        clientVisible: c.clientVisible,
+      });
+      // phase already checked, dates will be resolved again on create
+      void data;
+      if (c.status !== undefined) z.enum(TASK_STATUSES).parse(c.status);
+      if (c.type !== undefined) z.enum(TASK_TYPES).parse(c.type);
+    }
+
+    // Compute position per phase: max existing position per phase (including those that will be deleted? exclude deletes)
+    const allTasks = await tx.projectTask.findMany({
+      where: { projectId, id: { notIn: deletes.length ? deletes : undefined } },
+      select: { id: true, phaseId: true, position: true },
+    });
+    const maxByPhase = new Map<string | null, number>();
+    for (const t of allTasks) {
+      const key = t.phaseId as string | null;
+      const cur = maxByPhase.get(key) ?? -1;
+      if (t.position > cur) maxByPhase.set(key, t.position);
+    }
+    // For creates grouped by phase, assign sequentially
+    const nextPosByPhase = new Map<string | null, number>(maxByPhase);
+    // For updates that change phase, we need to track new positions
+    const movedUpdates: Array<(typeof updates)[number] & { newPosition: number }> = [];
+    for (const u of updates) {
+      if (u.phaseId !== undefined) {
+        const existing = existingMap.get(u.id)!;
+        const newPhase = u.phaseId; // may be null
+        const oldPhase = existing.phaseId;
+        if (newPhase !== oldPhase) {
+          const next = (nextPosByPhase.get(newPhase) ?? -1) + 1;
+          nextPosByPhase.set(newPhase, next);
+          movedUpdates.push({ ...u, newPosition: next });
+        }
+      }
+    }
+
+    // Execute deletes first
+    for (const id of deletes) {
+      await tx.projectTask.delete({ where: { id } });
+    }
+
+    // Execute updates
+    for (const u of updates) {
+      const existing = existingMap.get(u.id)!;
+      const data: Record<string, unknown> = {};
+      if (u.name !== undefined) data.name = u.name.trim();
+      if (u.description !== undefined) data.description = u.description?.trim() || null;
+      if (u.status !== undefined) data.status = u.status;
+      if (u.clientVisible !== undefined) data.clientVisible = u.clientVisible;
+      if (u.phaseId !== undefined) {
+        data.phaseId = u.phaseId;
+        // if phase changed, set new position
+        const moved = movedUpdates.find((m) => m.id === u.id);
+        if (moved) data.position = moved.newPosition;
+      }
+      if (u.type !== undefined || u.startDate !== undefined || u.endDate !== undefined) {
+        const type = (u.type ?? existing.type) as ProjectTaskType;
+        const startStr = u.startDate ?? existing.startDate.toISOString().slice(0, 10);
+        const endStr = u.endDate ?? existing.endDate.toISOString().slice(0, 10);
+        const dates = resolveTaskDates(type, startStr, endStr);
+        data.type = type;
+        data.startDate = dates.startDate;
+        data.endDate = dates.endDate;
+      }
+      if (Object.keys(data).length > 0) {
+        await tx.projectTask.update({ where: { id: u.id }, data });
+      }
+    }
+
+    // Execute creates grouped by phase for position
+    const createsByPhase = new Map<string | null, typeof creates>();
+    for (const c of creates) {
+      const key = c.phaseId as string | null;
+      const arr = createsByPhase.get(key) ?? [];
+      arr.push(c);
+      createsByPhase.set(key, arr);
+    }
+    for (const [phaseKey, group] of createsByPhase) {
+      let nextPos = (nextPosByPhase.get(phaseKey) ?? -1) + 1;
+      // If there were movedUpdates to same phase, nextPos already includes them
+      // For creates in same phase as moved, we already incremented for moves, now continue
+      for (const c of group) {
+        const type = (c.type ?? "TASK") as ProjectTaskType;
+        const status = (c.status ?? "TODO") as ProjectTaskStatus;
+        const dates = resolveTaskDates(type, c.startDate, c.endDate);
+        await tx.projectTask.create({
+          data: {
+            projectId,
+            phaseId: c.phaseId,
+            name: c.name.trim(),
+            description: c.description?.trim() || null,
+            type,
+            startDate: dates.startDate,
+            endDate: dates.endDate,
+            status,
+            position: nextPos++,
+            clientVisible: c.clientVisible ?? true,
+          },
+        });
+      }
+      // Update map for subsequent phases (not needed further)
+      nextPosByPhase.set(phaseKey, nextPos - 1);
+    }
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+}
+
+async function assertProjectTx(tx: any, projectId: string) {
+  const project = await tx.project.findUnique({ where: { id: projectId }, select: { id: true } });
+  if (!project) throw new Error("Proyecto no encontrado.");
+}
+async function assertPhaseBelongsToProjectTx(tx: any, phaseId: string, projectId: string) {
+  const phase = await tx.projectPhase.findUnique({ where: { id: phaseId }, select: { id: true, projectId: true } });
+  if (!phase) throw new Error("Fase no encontrada.");
+  if (phase.projectId !== projectId) throw new Error("La fase no pertenece a este proyecto.");
+}
+
 export async function reorderProjectTasks(
   projectId: string,
   phaseId: string | null,

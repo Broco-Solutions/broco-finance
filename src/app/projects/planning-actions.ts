@@ -16,6 +16,7 @@ import {
   setTaskPhase,
   setTaskClientVisible,
   reorderProjectTasks,
+  applyProjectTaskChanges,
   taskInputSchema,
   taskUpdateSchema,
   TASK_STATUSES,
@@ -324,5 +325,51 @@ export async function reorderTasksAction(
     return { success: true };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al reordenar." };
+  }
+}
+
+export async function applyProjectTaskChangesAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    requireAuth();
+    const raw = formData.get("payload");
+    if (!raw) return { success: false, message: "Datos incompletos." };
+    const payload = JSON.parse(String(raw)) as {
+      projectId: string;
+      creates: Array<{
+        name: string;
+        description?: string | null;
+        phaseId: string | null;
+        type?: string;
+        startDate: string;
+        endDate: string;
+        status?: string;
+        clientVisible?: boolean;
+      }>;
+      updates: Array<{
+        id: string;
+        name?: string;
+        description?: string | null;
+        phaseId?: string | null;
+        type?: string;
+        startDate?: string;
+        endDate?: string;
+        status?: string;
+        clientVisible?: boolean;
+      }>;
+      deletes: string[];
+    };
+    if (!payload.projectId) return { success: false, message: "Proyecto no encontrado." };
+    await applyProjectTaskChanges({
+      projectId: payload.projectId,
+      creates: payload.creates ?? [],
+      updates: payload.updates ?? [],
+      deletes: payload.deletes ?? [],
+    });
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: e instanceof Error ? e.message : "Error al guardar." };
   }
 }
