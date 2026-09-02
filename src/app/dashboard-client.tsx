@@ -60,6 +60,8 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
   const incomeParams = `status=PAID&from=${rangeFrom.toISOString().slice(0,10)}&to=${rangeTo.toISOString().slice(0,10)}`;
   const expenseParams = `status=PAID&from=${rangeFrom.toISOString().slice(0,10)}&to=${rangeTo.toISOString().slice(0,10)}`;
 
+  const [upcomingFilter, setUpcomingFilter] = useState<"ALL" | "INCOME" | "EXPENSE">("ALL");
+
   return (
     <div className="space-y-5">
       {/* Period selector */}
@@ -250,15 +252,37 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
           </div>
         </Card>
         <Card className="p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Próximos 30 días</h3>
-          <div className="space-y-1.5 text-sm">
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500">Próximos 30 días</h3>
+            <div className="flex rounded-lg border border-gray-200 bg-white p-0.5 shrink-0">
+              {[
+                { k: "ALL", l: "Todos" },
+                { k: "INCOME", l: "Ingresos" },
+                { k: "EXPENSE", l: "Gastos" },
+              ].map((o) => (
+                <button
+                  key={o.k}
+                  onClick={() => setUpcomingFilter(o.k as "ALL" | "INCOME" | "EXPENSE")}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition ${upcomingFilter === o.k ? "bg-brand text-white" : "text-gray-600 hover:bg-gray-100"}`}
+                >
+                  {o.l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5 text-sm max-h-[320px] overflow-y-auto pr-1">
             {(() => {
               const combined = [
                 ...data.upcomingIncomes.map((i) => ({ ...i, kind: "INCOME" as const })),
                 ...data.upcomingExpenses.map((e) => ({ ...e, kind: "EXPENSE" as const })),
               ].sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
+              const filtered =
+                upcomingFilter === "INCOME" ? combined.filter((x) => x.kind === "INCOME") : upcomingFilter === "EXPENSE" ? combined.filter((x) => x.kind === "EXPENSE") : combined;
               if (combined.length === 0) return <p className="text-xs text-gray-400 py-2">Sin próximos cobros ni pagos.</p>;
-              return combined.slice(0, 6).map((item) => {
+              if (filtered.length === 0) {
+                return <p className="text-xs text-gray-400 py-2">{upcomingFilter === "INCOME" ? "Sin ingresos próximos." : "Sin gastos próximos."}</p>;
+              }
+              return filtered.map((item) => {
                 const isIncome = item.kind === "INCOME";
                 const href = isIncome ? `/incomes?status=PENDING&id=${item.id}` : `/expenses?status=PENDING&id=${item.id}`;
                 return (

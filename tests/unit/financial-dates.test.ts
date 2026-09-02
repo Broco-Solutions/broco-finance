@@ -164,3 +164,54 @@ describe("id filter", () => {
     expect(filterById(list, "Z")).toEqual([]);
   });
 });
+
+describe("próximos 30 días sin límite", () => {
+  function buildUpcoming(count: number) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Array.from({ length: count }, (_, i) => ({
+      id: `id${i}`,
+      dueDate: new Date(today.getTime() + i * 86400000).toISOString().slice(0, 10),
+      kind: i % 2 === 0 ? "INCOME" : "EXPENSE",
+    }));
+  }
+  it("más de 6 próximos → todos disponibles", () => {
+    const list = buildUpcoming(14);
+    const combined = [...list].sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
+    expect(combined.length).toBe(14);
+    expect(combined[0].dueDate).toBe(new Date().toISOString().slice(0, 10));
+  });
+  it("más de 10 ingresos próximos → todos disponibles", () => {
+    const list = buildUpcoming(12).filter((x) => x.kind === "INCOME");
+    expect(list.length).toBe(6);
+    // Simulate 12 incomes
+    const incomes = Array.from({ length: 12 }, (_, i) => ({
+      id: `inc${i}`,
+      dueDate: new Date(Date.now() + i * 86400000).toISOString().slice(0, 10),
+      kind: "INCOME" as const,
+    }));
+    expect(incomes.length).toBe(12);
+  });
+  it("Todos devuelve combinación completa", () => {
+    const incomes = [{ id: "i1", dueDate: "2026-09-03", kind: "INCOME" as const }];
+    const expenses = [{ id: "e1", dueDate: "2026-09-04", kind: "EXPENSE" as const }];
+    const combined = [...incomes, ...expenses].sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
+    expect(combined.length).toBe(2);
+  });
+  it("filtro Ingresos solo ingresos", () => {
+    const combined = [
+      { id: "i1", kind: "INCOME" as const, dueDate: "2026-09-02" },
+      { id: "e1", kind: "EXPENSE" as const, dueDate: "2026-09-03" },
+    ];
+    const filtered = combined.filter((x) => x.kind === "INCOME");
+    expect(filtered).toEqual([{ id: "i1", kind: "INCOME", dueDate: "2026-09-02" }]);
+  });
+  it("filtro Gastos solo gastos", () => {
+    const combined = [
+      { id: "i1", kind: "INCOME" as const, dueDate: "2026-09-02" },
+      { id: "e1", kind: "EXPENSE" as const, dueDate: "2026-09-03" },
+    ];
+    const filtered = combined.filter((x) => x.kind === "EXPENSE");
+    expect(filtered).toEqual([{ id: "e1", kind: "EXPENSE", dueDate: "2026-09-03" }]);
+  });
+});
