@@ -1,9 +1,10 @@
 import "server-only";
 import { prisma } from "@/server/prisma";
-import { todayArg } from "@/lib/dates";
+import { todayArg, todayKeyArgentina, toUtcDate } from "@/lib/dates";
 
 export async function getDashboard(_from: Date, _to: Date) {
-  const today = todayArg();
+  const todayKey = todayKeyArgentina();
+  const today = toUtcDate(todayKey);
   // Normalize to UTC midnight so Prisma compares correctly with @db.Date columns
   const from = new Date(Date.UTC(_from.getFullYear(), _from.getMonth(), _from.getDate()));
   const to = new Date(Date.UTC(_to.getFullYear(), _to.getMonth(), _to.getDate()));

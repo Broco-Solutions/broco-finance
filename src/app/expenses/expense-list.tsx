@@ -15,7 +15,7 @@ import { ModalPortal } from "@/components/ui/modal-portal";
 import { saveExpense, removeExpense, payExpense, createExpenseBatch, bulkUpdateExpenses } from "./actions";
 import { saveCategory, removeCategory } from "./categories/actions";
 import { formatUsd, formatArs, formatDate, formatExpenseStatus, toInputDate } from "@/lib/utils";
-import { dateOnlyKey, isDateOnlyInRange } from "@/lib/dates";
+import { dateOnlyKey, isDateOnlyInRange, todayKeyArgentina } from "@/lib/dates";
 
 type E = { id: string; type: string; concept: string; notes: string | null; status: string;
   amountUsd: any; amountArs: any; exchangeRate: any; dueDate: string | Date | null; effectiveDate: string | Date | null;
@@ -180,13 +180,15 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
 
   const filtered = [...expenses]
     .filter((e) => {
+      const idParam = sp.get("id");
+      if (idParam && e.id !== idParam) return false;
       if (fStatus === "PENDING" && e.status !== "PENDING") return false;
       if (fStatus === "PAID" && e.status !== "PAID") return false;
       if (fStatus === "OVERDUE") {
         if (e.status !== "PENDING") return false;
-        const t = new Date();
-        const d = e.dueDate ? new Date(e.dueDate) : null;
-        return d && d < t;
+        const todayKey = todayKeyArgentina();
+        const dueKey = dateOnlyKey(e.dueDate);
+        return !!dueKey && dueKey < todayKey;
       }
       if (fType && e.type !== fType) return false;
       if (fCat && e.expenseCategoryId !== fCat) return false;

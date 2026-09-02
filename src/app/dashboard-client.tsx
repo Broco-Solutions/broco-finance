@@ -105,7 +105,7 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
               <div className="text-lg font-bold text-gray-900 tabular-nums">{formatUsd(period === "all" ? k.globalPendingIncomesUsd : k.pendingIncomesUsd)}</div>
               <div className="text-[10px] text-gray-400 mt-0.5">Total actual: {formatUsd(k.globalPendingIncomesUsd)}</div>
             </div>
-            <Link href="/incomes?status=PENDING" className="block">
+            <Link href="/incomes?status=OVERDUE" className="block">
               <div className="text-[10px] text-red-500 mb-0.5">Vencido</div>
               <div className="text-lg font-bold text-red-700 tabular-nums">{formatUsd(k.overdueIncomesUsd)}</div>
               <div className="text-[10px] text-gray-400 mt-0.5">{k.overdueIncomesCount} ingresos</div>
@@ -120,7 +120,7 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
               <div className="text-lg font-bold text-gray-900 tabular-nums">{formatUsd(period === "all" ? k.globalPendingExpensesUsd : k.pendingExpensesUsd)}</div>
               <div className="text-[10px] text-gray-400 mt-0.5">Total actual: {formatUsd(k.globalPendingExpensesUsd)}</div>
             </div>
-            <Link href="/expenses?status=PENDING" className="block">
+            <Link href="/expenses?status=OVERDUE" className="block">
               <div className="text-[10px] text-red-500 mb-0.5">Vencido</div>
               <div className="text-lg font-bold text-red-700 tabular-nums">{formatUsd(k.overdueExpensesUsd)}</div>
               <div className="text-[10px] text-gray-400 mt-0.5">{k.overdueExpensesCount} gastos</div>
@@ -236,13 +236,13 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
           <div className="space-y-1.5 text-sm">
             {k.overdueIncomesCount === 0 && k.overdueExpensesCount === 0 && <p className="text-xs text-gray-400 py-2">Sin vencidos.</p>}
             {k.overdueIncomesCount > 0 && (
-              <Link href="/incomes?status=PENDING" className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 p-2.5 text-red-700 hover:bg-red-100">
+              <Link href="/incomes?status=OVERDUE" className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 p-2.5 text-red-700 hover:bg-red-100">
                 <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" />{k.overdueIncomesCount} ingresos</span>
                 <span className="font-semibold tabular-nums">{formatUsd(k.overdueIncomesUsd)}</span>
               </Link>
             )}
             {k.overdueExpensesCount > 0 && (
-              <Link href="/expenses?status=PENDING" className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 p-2.5 text-red-700 hover:bg-red-100">
+              <Link href="/expenses?status=OVERDUE" className="flex items-center justify-between rounded-lg border border-red-100 bg-red-50 p-2.5 text-red-700 hover:bg-red-100">
                 <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4" />{k.overdueExpensesCount} gastos</span>
                 <span className="font-semibold tabular-nums">{formatUsd(k.overdueExpensesUsd)}</span>
               </Link>
@@ -252,17 +252,28 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
         <Card className="p-4">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Próximos 30 días</h3>
           <div className="space-y-1.5 text-sm">
-            {data.upcomingIncomes.length === 0 && data.upcomingExpenses.length === 0 && <p className="text-xs text-gray-400 py-2">Sin próximos cobros ni pagos.</p>}
-            {data.upcomingIncomes.slice(0,3).map(i => (
-              <Link key={i.id} href="/incomes" className="flex items-center gap-2 rounded-lg border border-gray-100 p-2 hover:bg-gray-50">
-                <span className="text-gray-700 truncate text-xs flex-1 min-w-0">{i.concept}</span><span className="text-xs text-gray-400 w-16 shrink-0 text-right">{i.dueDate ? formatDateShort(i.dueDate) : "—"}</span><span className="font-medium tabular-nums w-20 shrink-0 text-right text-xs">{formatUsd(i.amountUsd)}</span>
-              </Link>
-            ))}
-            {data.upcomingExpenses.slice(0,3).map(e => (
-              <Link key={e.id} href="/expenses" className="flex items-center gap-2 rounded-lg border border-gray-100 p-2 hover:bg-gray-50">
-                <span className="text-gray-700 truncate text-xs flex-1 min-w-0">{e.concept}</span><span className="text-xs text-gray-400 w-16 shrink-0 text-right">{e.dueDate ? formatDateShort(e.dueDate) : "—"}</span><span className="font-medium tabular-nums w-20 shrink-0 text-right text-xs">{formatUsd(e.amountUsd)}</span>
-              </Link>
-            ))}
+            {(() => {
+              const combined = [
+                ...data.upcomingIncomes.map((i) => ({ ...i, kind: "INCOME" as const })),
+                ...data.upcomingExpenses.map((e) => ({ ...e, kind: "EXPENSE" as const })),
+              ].sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
+              if (combined.length === 0) return <p className="text-xs text-gray-400 py-2">Sin próximos cobros ni pagos.</p>;
+              return combined.slice(0, 6).map((item) => {
+                const isIncome = item.kind === "INCOME";
+                const href = isIncome ? `/incomes?status=PENDING&id=${item.id}` : `/expenses?status=PENDING&id=${item.id}`;
+                return (
+                  <Link key={`${item.kind}-${item.id}`} href={href} className="flex items-center gap-2 rounded-lg border border-gray-100 p-2 hover:bg-gray-50 cursor-pointer">
+                    <Badge tone={isIncome ? "success" : "danger"} className="text-[10px] px-1.5 py-0.5 shrink-0">{isIncome ? "Ingreso" : "Gasto"}</Badge>
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate text-xs text-gray-700">{item.concept}</div>
+                      <div className="text-[11px] text-gray-400">Vence {item.dueDate ? formatDateShort(item.dueDate) : "—"}</div>
+                    </div>
+                    <span className="font-medium tabular-nums w-20 shrink-0 text-right text-xs">{formatUsd(item.amountUsd)}</span>
+                    <ArrowUpRight className="h-3 w-3 text-gray-300 shrink-0" />
+                  </Link>
+                );
+              });
+            })()}
           </div>
         </Card>
       </div>

@@ -17,7 +17,7 @@ import { PayIncomeModal } from "./pay-income-modal";
 import { saveIncome, removeIncome, payIncome, createIncomeBatch, bulkUpdateIncomes } from "./actions";
 import { saveIncomeType, removeIncomeType } from "./types/actions";
 import { formatUsd, formatArs, formatDate, formatIncomeStatus } from "@/lib/utils";
-import { dateOnlyKey, isDateOnlyInRange } from "@/lib/dates";
+import { dateOnlyKey, isDateOnlyInRange, todayKeyArgentina } from "@/lib/dates";
 
 type TY = { id: string; name: string; requiresProject: boolean };
 
@@ -143,13 +143,15 @@ export function IncomeList({ initialIncomes, projects, clients, incomeTypes }: {
 
   const filtered = [...incomes]
     .filter((inc) => {
+      const idParam = sp.get("id");
+      if (idParam && inc.id !== idParam) return false;
       if (filter === "PENDING" && inc.status !== "PENDING") return false;
       if (filter === "PAID" && inc.status !== "PAID") return false;
       if (filter === "OVERDUE") {
         if (inc.status !== "PENDING") return false;
-        const t = new Date();
-        const d = inc.dueDate ? new Date(inc.dueDate) : null;
-        return d && d < t;
+        const todayKey = todayKeyArgentina();
+        const dueKey = dateOnlyKey(inc.dueDate);
+        return !!dueKey && dueKey < todayKey;
       }
       if (typeFilter && inc.typeId !== typeFilter) return false;
       if (fClient && inc.clientId !== fClient) return false;

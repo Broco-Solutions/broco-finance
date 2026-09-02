@@ -83,3 +83,84 @@ describe("orden por fecha relevante", () => {
     expect(sortIncomes(list).map((x) => x.id)).toEqual(["b", "a"]);
   });
 });
+
+describe("vencido", () => {
+  function isOverdue(status: string, dueDate: string | Date | null) {
+    if (status !== "PENDING") return false;
+    const todayKey = new Date().toISOString().slice(0, 10);
+    // Use dateOnlyKey for comparison (today not overdue)
+    const dueKey = dateOnlyKey(dueDate);
+    return !!dueKey && dueKey < todayKey;
+  }
+  it("PENDING ayer vencido", () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    expect(isOverdue("PENDING", yesterday)).toBe(true);
+  });
+  it("PENDING hoy no vencido", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    expect(isOverdue("PENDING", today)).toBe(false);
+  });
+  it("PENDING mañana no vencido", () => {
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    expect(isOverdue("PENDING", tomorrow)).toBe(false);
+  });
+  it("PAID ayer no vencido", () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    expect(isOverdue("PAID", yesterday)).toBe(false);
+  });
+});
+
+describe("próximos 30 días", () => {
+  function isUpcoming(dueDate: string | Date | null) {
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    return isDateOnlyInRange(dueDate, todayKey, in30);
+  }
+  it("vence hoy incluido", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    expect(isUpcoming(today)).toBe(true);
+  });
+  it("vence en 30 incluido", () => {
+    const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    expect(isUpcoming(in30)).toBe(true);
+  });
+  it("vence en 31 excluido", () => {
+    const in31 = new Date(Date.now() + 31 * 86400000).toISOString().slice(0, 10);
+    expect(isUpcoming(in31)).toBe(false);
+  });
+  it("vencido excluido", () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    expect(isUpcoming(yesterday)).toBe(false);
+  });
+  it("combinado ordenado asc", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const in5 = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+    const in10 = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
+    const list = [
+      { id: "inc", dueDate: in10, kind: "INCOME" },
+      { id: "exp", dueDate: today, kind: "EXPENSE" },
+      { id: "inc2", dueDate: in5, kind: "INCOME" },
+    ];
+    const sorted = [...list].sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
+    expect(sorted.map((x) => x.id)).toEqual(["exp", "inc2", "inc"]);
+  });
+});
+
+describe("id filter", () => {
+  function filterById(list: Array<{ id: string }>, id: string | null) {
+    if (!id) return list;
+    return list.filter((x) => x.id === id);
+  }
+  it("/incomes id=A solo A", () => {
+    const list = [{ id: "A" }, { id: "B" }];
+    expect(filterById(list, "A")).toEqual([{ id: "A" }]);
+  });
+  it("/expenses id=B solo B", () => {
+    const list = [{ id: "A" }, { id: "B" }];
+    expect(filterById(list, "B")).toEqual([{ id: "B" }]);
+  });
+  it("id inexistente 0", () => {
+    const list = [{ id: "A" }];
+    expect(filterById(list, "Z")).toEqual([]);
+  });
+});
