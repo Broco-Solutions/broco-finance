@@ -1,0 +1,115 @@
+/* Broco Finance — DHTMLX Gantt overrides (solo colores/tipo/bordes, sin geometría) */
+.dhtmlx-gantt-host {
+  font-family: inherit;
+}
+
+/* Toolbar */
+.dhtmlx-gantt-host .gantt-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  border-radius: 8px;
+  color: #334155;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.dhtmlx-gantt-host .gantt-toolbar-btn:hover { background: #f1f5f9; }
+.dhtmlx-gantt-host .gantt-toolbar-btn:disabled { opacity: 0.4; cursor: default; }
+.dhtmlx-gantt-host .gantt-toolbar-btn--text { padding: 0 10px; font-size: 12px; font-weight: 600; gap: 6px; }
+.dhtmlx-gantt-host .gantt-zoom-label {
+  min-width: 56px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  padding: 0 6px;
+}
+.dhtmlx-gantt-host .gantt-select {
+  height: 30px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 8px;
+  font-size: 12px;
+  color: #0f172a;
+  outline: none;
+}
+.dhtmlx-gantt-host .gantt-select:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
+}
+.dhtmlx-gantt-host .gantt-reset-btn { border: 1px solid #e2e8f0; background: #fff; }
+.dhtmlx-gantt-host .gantt-save-state { font-size: 12px; font-weight: 500; margin-left: auto; }
+.dhtmlx-gantt-host .gantt-save-saving { color: #64748b; }
+.dhtmlx-gantt-host .gantt-save-saved { color: #16a34a; }
+.dhtmlx-gantt-host .gantt-save-error { color: #dc2626; }
+
+/* Grid — colores suaves */
+.dhtmlx-gantt-host .gantt_grid_scale,
+.dhtmlx-gantt-host .gantt_scale_line { background: #f8fafc; }
+.dhtmlx-gantt-host .gantt_grid_head_cell {
+  color: #475569;
+  font-weight: 600;
+  font-size: 12px;
+  border-right: 1px solid #eef2f7;
+}
+.dhtmlx-gantt-host .gantt_row { border-bottom: 1px solid #f1f5f9; font-size: 12px; }
+.dhtmlx-gantt-host .gantt_row_project { background: #f8fafc; font-weight: 600; color: #0f172a; }
+.dhtmlx-gantt-host .gantt_tree_content { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Status dot */
+.dhtmlx-gantt-host .gantt-status-dot {
+  display: inline-block;
+  width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 6px; vertical-align: middle;
+}
+.dhtmlx-gantt-host .gantt-dot-todo { background: #9ca3af; }
+.dhtmlx-gantt-host .gantt-dot-in_progress { background: #3b82f6; }
+.dhtmlx-gantt-host .gantt-dot-to_review { background: #f59e0b; }
+.dhtmlx-gantt-host .gantt-dot-blocked { background: #ef4444; }
+.dhtmlx-gantt-host .gantt-dot-done { background: #22c55e; }
+
+/* Task bars — solo color/borde */
+.dhtmlx-gantt-host .gantt-task-todo { background: #9ca3af; border: none; border-radius: 6px; }
+.dhtmlx-gantt-host .gantt-task-in_progress { background: #3b82f6; border: none; border-radius: 6px; }
+.dhtmlx-gantt-host .gantt-task-to_review { background: #f59e0b; border: none; border-radius: 6px; }
+.dhtmlx-gantt-host .gantt-task-blocked { background: #ef4444; border: none; border-radius: 6px; }
+.dhtmlx-gantt-host .gantt-task-done { background: #22c55e; border: none; border-radius: 6px; }
+.dhtmlx-gantt-host .gantt_task_line .gantt_task_content { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Phase */
+.dhtmlx-gantt-host .gantt-phase-bar { background: #cbd5e1; border: none; border-radius: 6px; color: #334155; }
+
+/* Milestones — color por estado, sin tocar geometría del diamante */
+.dhtmlx-gantt-host .gantt-milestone { border: none; }
+.dhtmlx-gantt-host .gantt-milestone-todo { background: #9ca3af; }
+.dhtmlx-gantt-host .gantt-milestone-in_progress { background: #3b82f6; }
+.dhtmlx-gantt-host .gantt-milestone-to_review { background: #f59e0b; }
+.dhtmlx-gantt-host .gantt-milestone-blocked { background: #ef4444; }
+.dhtmlx-gantt-host .gantt-milestone-done { background: #22c55e; }
+
+/* Go Live */
+.dhtmlx-gantt-host .gantt-go-live { background: #f97316; border: none; border-radius: 6px; }
+
+/* Weekend y Hoy — sutiles */
+.dhtmlx-gantt-host .weekend { background: #f7f7f7 !important; }
+.dhtmlx-gantt-host .today { background: #4f46e5; width: 2px; opacity: 0.55; }
+
+/* Scale texto */
+.dhtmlx-gantt-host .gantt_scale_cell { color: #475569; font-size: 11px; text-align: center; }
+
+/* Tooltip */
+.dhtmlx-gantt-host .gantt_tooltip {
+  border-radius: 10px; border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 24px rgba(15,23,42,0.08); font-size: 12px; color: #0f172a;
+}
+.dhtmlx-gantt-host .gantt-tooltip strong { display: block; font-weight: 600; margin-bottom: 2px; }
+.dhtmlx-gantt-host .gantt-tooltip div { margin-top: 2px; color: #475569; }
+.dhtmlx-gantt-host .gantt-tooltip-desc { color: #94a3b8; font-size: 11px; }
+
+/* Readonly — ocultar handles */
+.dhtmlx-gantt-host .gantt_readonly .gantt_task_line .gantt_task_progress_drag,
+.dhtmlx-gantt-host .gantt_readonly .gantt_task_line .gantt_task_link_control { display: none; }

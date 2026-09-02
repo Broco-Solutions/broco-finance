@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { ModalPortal } from "@/components/ui/modal-portal";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { TaskStatusBadge, TaskTypeBadge } from "@/components/projects/task-status-badge";
-import { ProjectGantt } from "@/components/projects/project-gantt";
+import { ProjectGantt } from "@/components/projects/dhtmlx/project-gantt";
 import { ProjectAccessPanel } from "@/components/projects/project-access-panel";
 import { formatDate } from "@/lib/utils";
 import {
@@ -150,6 +150,11 @@ export function ProjectPlanningView({
         </div>
       </div>
 
+      <section className="space-y-2">
+        <h2 className="font-display text-xl text-ink">Cronograma</h2>
+        <ProjectGantt phases={phases} tasks={tasks} goLiveDate={projectGoLiveDate} projectId={projectId} />
+      </section>
+
       {banner && (
         <p className="rounded-lg border border-brick/30 bg-brick/5 px-3 py-2 text-sm text-brick">{banner}</p>
       )}
@@ -222,11 +227,6 @@ export function ProjectPlanningView({
           </div>
         </Card>
       )}
-
-      <section className="space-y-2">
-        <h2 className="font-display text-xl text-ink">Cronograma</h2>
-        <ProjectGantt phases={phases} tasks={tasks} goLiveDate={projectGoLiveDate} />
-      </section>
 
       <PhaseFormModal
         open={phaseModal.open}

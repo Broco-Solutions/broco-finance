@@ -15,6 +15,7 @@ import {
   setTaskStatus,
   setTaskPhase,
   setTaskClientVisible,
+  reorderProjectTasks,
   taskInputSchema,
   taskUpdateSchema,
   TASK_STATUSES,
@@ -283,5 +284,45 @@ export async function activateAccessAction(
     return { success: true };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al activar." };
+  }
+}
+
+export async function changeTaskDatesAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    requireAuth();
+    const taskId = str(formData.get("taskId"));
+    const startDate = str(formData.get("startDate"));
+    const endDate = str(formData.get("endDate"));
+    if (!taskId || !startDate || !endDate) {
+      return { success: false, message: "Datos incompletos." };
+    }
+    await updateTask(taskId, { startDate, endDate });
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: e instanceof Error ? e.message : "Error al guardar." };
+  }
+}
+
+export async function reorderTasksAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    requireAuth();
+    const projectId = str(formData.get("projectId"));
+    const phaseId = str(formData.get("phaseId"));
+    const raw = formData.get("orderedTaskIds");
+    if (!projectId || !raw) return { success: false, message: "Datos incompletos." };
+    const orderedTaskIds = String(raw)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    await reorderProjectTasks(projectId, phaseId, orderedTaskIds);
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: e instanceof Error ? e.message : "Error al reordenar." };
   }
 }

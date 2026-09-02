@@ -10,7 +10,7 @@ import {
   computeElapsedPercent,
   resolveGoLive,
 } from "@/lib/project-progress";
-import { ProjectGantt } from "@/components/projects/project-gantt";
+import { ProjectGantt } from "@/components/projects/dhtmlx/project-gantt";
 import { TaskStatusLegend } from "@/components/projects/task-status-legend";
 import { PortalPasswordGate } from "./portal-password-gate";
 import { PortalLogoutButton } from "./portal-logout-button";
@@ -118,6 +118,8 @@ export default async function PortalPage({ params }: { params: { slug: string } 
                 phases={JSON.parse(JSON.stringify(plan.phases))}
                 tasks={JSON.parse(JSON.stringify(plan.tasks))}
                 goLiveDate={plan.goLiveDate ? plan.goLiveDate.toISOString() : null}
+                projectId={plan.id}
+                portal
               />
             </div>
           )}

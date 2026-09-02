@@ -20,9 +20,9 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.4.0
-      frappe-gantt:
-        specifier: 1.2.2
-        version: 1.2.2
+      dhtmlx-gantt:
+        specifier: ^10.0.2
+        version: 10.0.2
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@18.3.1)
@@ -1216,6 +1216,9 @@ packages:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
 
+  dhtmlx-gantt@10.0.2:
+    resolution: {integrity: sha512-ClwDZEz0qQJQi8xCfXkIpxsvGh4YtcU8vZ+gcg6CkiXF03XhEHcQuO9mxL1keeQyr/97d6EnVx8ISSOpaIwClw==}
+
   didyoumean@1.2.2:
     resolution: {integrity: sha512-gxtyfqMg7GKyhQmb056K7M3xszy/myH8w+B4RT+QXBQsvAOdc3XymqDDPHx1BgPgsdAA5SIifona89YtRATDzw==}
 
@@ -1503,9 +1506,6 @@ packages:
 
   fraction.js@5.3.4:
     resolution: {integrity: sha512-1X1NTtiJphryn/uLQz3whtY6jK3fTqoE3ohKs0tT+Ujr1W59oopxmoEh7Lu5p6vBaPbgoM0bzveAW4Qi5RyWDQ==}
-
-  frappe-gantt@1.2.2:
-    resolution: {integrity: sha512-1+uPNRa92LBIeKiZCVhJMiGIifJk5ONaoerXI8eBREXWRZGGoTJR5ATpMpsnAQcyBA6Gnq5wIht4eL+e4eHMBA==}
 
   fs.realpath@1.0.0:
     resolution: {integrity: sha512-OO0pH2lK6a0hZnAdau5ItzHPI6pUlvI7jMVnxUQRtw4owF2wk8lOSabtGDCTP4Ggrg2MbGnWO9X8K1t4+fGMDw==}
@@ -3743,6 +3743,8 @@ snapshots:
 
   detect-libc@2.1.2: {}
 
+  dhtmlx-gantt@10.0.2: {}
+
   didyoumean@1.2.2: {}
 
   dlv@1.1.3: {}
@@ -4195,8 +4197,6 @@ snapshots:
   frac@1.1.2: {}
 
   fraction.js@5.3.4: {}
-
-  frappe-gantt@1.2.2: {}
 
   fs.realpath@1.0.0: {}
 

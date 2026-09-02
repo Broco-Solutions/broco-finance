@@ -192,3 +192,45 @@ export async function setTaskClientVisible(id: string, clientVisible: boolean) {
   revalidatePath(`/projects/${existing.projectId}`);
   return task;
 }
+
+export async function reorderProjectTasks(
+  projectId: string,
+  phaseId: string | null,
+  orderedTaskIds: string[],
+): Promise<void> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true },
+  });
+  if (!project) throw new Error("Proyecto no encontrado.");
+
+  const tasks = await prisma.projectTask.findMany({
+    where: { projectId },
+    select: { id: true, phaseId: true },
+  });
+  const taskMap = new Map(tasks.map((t) => [t.id, t]));
+  const phaseTasks = tasks
+    .filter((t) => t.phaseId === phaseId)
+    .map((t) => t.id);
+
+  // all provided ids must exist, belong to project and phase; no duplicates; complete list
+  const idsSet = new Set(orderedTaskIds);
+  if (idsSet.size !== orderedTaskIds.length) {
+    throw new Error("No se permiten identificadores repetidos.");
+  }
+  if (phaseTasks.length !== idsSet.size) {
+    throw new Error("La lista de tareas está incompleta.");
+  }
+  for (const id of orderedTaskIds) {
+    const task = taskMap.get(id);
+    if (!task) throw new Error("Tarea no encontrada.");
+    if (task.phaseId !== phaseId) throw new Error("No se puede mover una tarea a otra fase.");
+  }
+
+  await prisma.$transaction(
+    orderedTaskIds.map((id, index) =>
+      prisma.projectTask.update({ where: { id }, data: { position: index } }),
+    ),
+  );
+  revalidatePath(`/projects/${projectId}`);
+}
