@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatUsd } from "@/lib/money";
 import { formatDate, formatDateShort } from "@/lib/dates";
+import { FinancialEvolution } from "@/components/dashboard/financial-evolution";
 
 type Data = Awaited<ReturnType<typeof import("@/server/services/dashboard").getDashboard>>;
 
@@ -28,9 +29,26 @@ function dateRangeLabel(from: Date, to: Date): string {
   return f === t ? f : `${f} – ${t}`;
 }
 
-export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom, rangeTo, prevFrom, prevTo }: {
-  data: Data; prevData: Data; periodLabel: string; period: string;
-  rangeFrom: Date; rangeTo: Date; prevFrom: Date; prevTo: Date;
+export function DashboardClient({
+  data,
+  prevData,
+  evolution,
+  periodLabel,
+  period,
+  rangeFrom,
+  rangeTo,
+  prevFrom,
+  prevTo,
+}: {
+  data: Data;
+  prevData: Data;
+  evolution: Awaited<ReturnType<typeof import("@/server/services/dashboard").getFinancialEvolution>>;
+  periodLabel: string;
+  period: string;
+  rangeFrom: Date;
+  rangeTo: Date;
+  prevFrom: Date;
+  prevTo: Date;
 }) {
   const router = useRouter();
   const [preset, setPreset] = useState(period === "custom" ? "custom" : (period || "this-month"));
@@ -301,6 +319,8 @@ export function DashboardClient({ data, prevData, periodLabel, period, rangeFrom
           </div>
         </Card>
       </div>
+
+      <FinancialEvolution evolution={evolution} />
     </div>
   );
 }

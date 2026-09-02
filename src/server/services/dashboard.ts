@@ -1,6 +1,15 @@
 import "server-only";
 import { prisma } from "@/server/prisma";
 import { todayArg, todayKeyArgentina, toUtcDate } from "@/lib/dates";
+import {
+  getEvolutionMonths,
+  bucketByMonth,
+  computeTrend,
+  classifyTrend,
+  kpisForSeries,
+  executivePhrase,
+  pctVsPrev,
+} from "@/lib/financial-trend";
 
 export async function getDashboard(_from: Date, _to: Date) {
   const todayKey = todayKeyArgentina();
@@ -115,5 +124,134 @@ export async function getDashboard(_from: Date, _to: Date) {
       expensesUsd: Number(projResults[i * 2 + 1]._sum.amountUsd ?? 0),
       netUsd: Number(projResults[i * 2]._sum.amountUsd ?? 0) - Number(projResults[i * 2 + 1]._sum.amountUsd ?? 0),
     })),
+  };
+}
+
+export async function getFinancialEvolution() {
+  const todayKey = todayKeyArgentina();
+  const ranges = {
+    "6m": getEvolutionMonths(todayKey, "6m"),
+    "12m": getEvolutionMonths(todayKey, "12m"),
+    year: getEvolutionMonths(todayKey, "year"),
+  };
+
+  // Determine overall min/max for fetching (including baseline one month before earliest)
+  const allMonths = [...ranges["12m"], ...ranges["6m"], ...ranges.year];
+  if (allMonths.length === 0) {
+    // No closed months (e.g. January) -> return empty for all
+    const empty = (range: typeof ranges["6m"]) => {
+      const kpis = kpisForSeries(range);
+      const trend = computeTrend(range);
+      const cls = classifyTrend(trend.slope, range);
+      return {
+        months: range,
+        kpis: { totalIncomes: kpis.totalIncomes, totalExpenses: kpis.totalExpenses, net: kpis.net, avgNet: kpis.avgNet },
+        trend: { slope: trend.slope, intercept: trend.intercept, classification: cls.classification, threshold: cls.threshold, activeMonths: (cls as any).activeMonths ?? 0 },
+        phrase: executivePhrase(cls.classification, trend.slope, range.length),
+        rangeLabel: "",
+      };
+    };
+    return {
+      todayKey,
+      ranges: {
+        "6m": empty(ranges["6m"]),
+        "12m": empty(ranges["12m"]),
+        year: empty(ranges.year),
+      },
+    };
+  }
+
+  // Find earliest month among all ranges
+  const sortedAll = [...allMonths].sort((a, b) => a.fromISO.localeCompare(b.fromISO));
+  const earliest = sortedAll[0];
+  const baselineDate = new Date(Date.UTC(earliest.year, earliest.month - 1, 1));
+  baselineDate.setUTCMonth(baselineDate.getUTCMonth() - 1);
+  const baselineYear = baselineDate.getUTCFullYear();
+  const baselineMonth = baselineDate.getUTCMonth() + 1;
+  const baselineFrom = new Date(Date.UTC(baselineYear, baselineMonth - 1, 1)).toISOString().slice(0, 10);
+  const baselineTo = new Date(Date.UTC(baselineYear, baselineMonth, 0)).toISOString().slice(0, 10);
+  const overallFrom = baselineFrom;
+  const overallTo = [...allMonths].sort((a, b) => b.toISO.localeCompare(a.toISO))[0].toISO;
+
+  const fromDate = toUtcDate(overallFrom);
+  const toDate = toUtcDate(overallTo);
+
+  const [incomes, expenses] = await Promise.all([
+    prisma.income.findMany({
+      where: { status: "PAID", effectiveDate: { gte: fromDate, lte: toDate } },
+      select: { effectiveDate: true, amountUsd: true },
+    }),
+    prisma.expense.findMany({
+      where: { status: "PAID", effectiveDate: { gte: fromDate, lte: toDate } },
+      select: { effectiveDate: true, amountUsd: true },
+    }),
+  ]);
+
+  function buildRange(rangeMonths: typeof ranges["6m"]) {
+    if (rangeMonths.length === 0) {
+      const kpis = kpisForSeries([]);
+      const trend = computeTrend([]);
+      const cls = classifyTrend(trend.slope, []);
+      return {
+        months: [] as ReturnType<typeof bucketByMonth>,
+        kpis: { totalIncomes: 0, totalExpenses: 0, net: 0, avgNet: 0, avgMonthlyIncome: 0 },
+        trend: { slope: 0, intercept: 0, classification: cls.classification, threshold: 0, activeMonths: (cls as any).activeMonths ?? 0 },
+        phrase: executivePhrase(cls.classification, 0, 0),
+        rangeLabel: "",
+      };
+    }
+    // Baseline is month before start
+    const first = rangeMonths[0];
+    const baselineDate = new Date(Date.UTC(first.year, first.month - 1, 1));
+    baselineDate.setUTCMonth(baselineDate.getUTCMonth() - 1);
+    const bYear = baselineDate.getUTCFullYear();
+    const bMonth = baselineDate.getUTCMonth() + 1;
+    const bKey = `${bYear}-${String(bMonth).padStart(2, "0")}`;
+    let bInc = 0;
+    let bExp = 0;
+    for (const inc of incomes) {
+      const k = String(inc.effectiveDate).slice(0, 7);
+      if (k === bKey) bInc += Number(inc.amountUsd ?? 0);
+    }
+    for (const exp of expenses) {
+      const k = String(exp.effectiveDate).slice(0, 7);
+      if (k === bKey) bExp += Number(exp.amountUsd ?? 0);
+    }
+    const baseline = { year: bYear, month: bMonth, incomesUsd: bInc, expensesUsd: bExp };
+    const bucketed = bucketByMonth(rangeMonths, incomes, expenses, baseline);
+    const withTrend = computeTrend(bucketed);
+    const kpis = kpisForSeries(withTrend.withTrend);
+    const cls = classifyTrend(withTrend.slope, withTrend.withTrend);
+    const phrase = executivePhrase(cls.classification, withTrend.slope, withTrend.withTrend.length);
+    const fromLabel = bucketed[0]?.label ?? "";
+    const toLabel = bucketed[bucketed.length - 1]?.label ?? "";
+    return {
+      months: withTrend.withTrend,
+      kpis: {
+        totalIncomes: kpis.totalIncomes,
+        totalExpenses: kpis.totalExpenses,
+        net: kpis.net,
+        avgNet: kpis.avgNet,
+        avgMonthlyIncome: kpis.avgMonthlyIncome,
+      },
+      trend: {
+        slope: withTrend.slope,
+        intercept: withTrend.intercept,
+        classification: cls.classification,
+        threshold: cls.threshold,
+        activeMonths: (cls as any).activeMonths ?? 0,
+      },
+      phrase,
+      rangeLabel: fromLabel && toLabel ? `${fromLabel} — ${toLabel}` : "",
+    };
+  }
+
+  return {
+    todayKey,
+    ranges: {
+      "6m": buildRange(ranges["6m"]),
+      "12m": buildRange(ranges["12m"]),
+      year: buildRange(ranges.year),
+    },
   };
 }
