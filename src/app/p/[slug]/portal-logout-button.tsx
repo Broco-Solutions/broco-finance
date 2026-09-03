@@ -19,7 +19,12 @@ export function PortalLogoutButton({ slug }: { slug: string }) {
   };
 
   return (
-    <Button variant="ghost" onClick={handleLogout} disabled={pending} className="text-sm">
+    <Button
+      variant="ghost"
+      onClick={handleLogout}
+      disabled={pending}
+      className="shrink-0 border border-white/15 text-sm text-white/80 hover:bg-white/10 hover:text-white"
+    >
       {pending ? "Saliendo..." : "Salir"}
     </Button>
   );

@@ -1,6 +1,13 @@
 import { Suspense } from "react";
+import { BriefcaseBusiness, ChartNoAxesCombined, CircleDollarSign } from "lucide-react";
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { LoginForm } from "@/components/screens/login-form";
+
+const FEATURES = [
+  { icon: BriefcaseBusiness, t: "Clientes y proyectos", d: "Seguimiento ordenado." },
+  { icon: CircleDollarSign, t: "Ingresos y gastos", d: "Control sin fricción." },
+  { icon: ChartNoAxesCombined, t: "Indicadores claros", d: "Decisiones a tiempo." },
+];
 
 export default function LoginPage() {
   return (
@@ -19,14 +26,14 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <div className="relative mx-auto grid min-h-screen w-full max-w-[1200px] grid-cols-1 items-center gap-8 px-5 py-8 sm:px-6 sm:py-10 lg:grid-cols-[1.05fr,0.95fr] lg:gap-10 lg:px-8 lg:py-12">
+      <div className="relative mx-auto grid min-h-screen w-full max-w-[1200px] grid-cols-1 items-center gap-8 px-5 py-8 sm:px-6 sm:py-10 lg:grid-cols-[1.05fr,0.95fr] lg:gap-12 lg:px-8 lg:py-12">
         {/* Left: institutional */}
-        <div className="order-2 space-y-7 lg:order-1 lg:space-y-8">
+        <div className="order-2 space-y-8 lg:order-1 lg:space-y-9">
           <div className="space-y-5">
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-xs font-medium tracking-wide text-slate-600 backdrop-blur">
               <span className="h-2 w-2 rounded-full bg-cobalt" /> Broco Solutions · Tecnología aplicada
             </div>
-            <h1 className="max-w-[14ch] font-display text-[2.5rem] font-[650] leading-[0.95] tracking-[-0.03em] text-ink sm:text-5xl lg:text-[3.5rem]">
+            <h1 className="max-w-[14ch] font-display text-[2.5rem] font-semibold leading-[1.02] tracking-[-0.03em] text-ink sm:text-5xl sm:leading-[1.0] lg:text-[3.75rem]">
               La operación del negocio, en un solo lugar.
             </h1>
             <p className="max-w-[48ch] text-[15px] leading-7 text-slate-600 sm:text-base sm:leading-8">
@@ -35,19 +42,18 @@ export default function LoginPage() {
           </div>
 
           <div className="grid gap-3 pt-1 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-            {[
-              { t: "Clientes y proyectos", d: "Seguimiento ordenado." },
-              { t: "Ingresos y gastos", d: "Control sin fricción." },
-              { t: "Indicadores claros", d: "Decisiones a tiempo." },
-            ].map((f) => (
-              <div key={f.t} className="rounded-2xl border border-slate-200/70 bg-white/60 p-3.5 backdrop-blur">
-                <div className="text-sm font-semibold leading-none text-ink">{f.t}</div>
-                <div className="mt-1 text-xs leading-4 text-slate-500">{f.d}</div>
+            {FEATURES.map((f) => (
+              <div key={f.t} className="group rounded-2xl border border-slate-200/70 bg-white/60 p-4 backdrop-blur transition-colors hover:border-cobalt/30 hover:bg-white/90">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-slate-900 to-cobalt text-white shadow-sm">
+                  <f.icon className="h-5 w-5" strokeWidth={1.8} />
+                </div>
+                <div className="mt-3 text-sm font-semibold leading-none text-ink">{f.t}</div>
+                <div className="mt-1.5 text-xs leading-4 text-slate-500">{f.d}</div>
               </div>
             ))}
           </div>
 
-          <div className="hidden items-center gap-3 pt-2 text-xs text-slate-400 lg:flex">
+          <div className="hidden items-center gap-3 pt-1 text-xs text-slate-400 lg:flex">
             <span className="h-px w-8 bg-slate-200" /> Plataforma interna de Broco Solutions
           </div>
         </div>

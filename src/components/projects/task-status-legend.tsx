@@ -8,11 +8,11 @@ const LEGEND: { label: string; color: string }[] = [
 
 export function TaskStatusLegend() {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink/60">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-600">
       {LEGEND.map((item) => (
         <span key={item.label} className="inline-flex items-center gap-1.5">
           <span
-            className="inline-block h-2.5 w-2.5 rounded-full"
+            className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-inset ring-black/5"
             style={{ backgroundColor: item.color }}
           />
           {item.label}
