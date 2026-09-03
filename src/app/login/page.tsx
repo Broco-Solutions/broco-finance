@@ -8,11 +8,13 @@ export default function LoginPage() {
       {/* Background */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute inset-0 bg-gradient-to-br from-white via-slate-50 to-blue-50" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.06)_1px,transparent_1px)] bg-[size:32px_32px]" />
-        <div className="absolute -right-24 -top-24 h-[520px] w-[520px] rounded-full bg-blue-100/50 blur-[90px]" />
-        <div className="absolute -left-32 top-[42%] h-[420px] w-[420px] rounded-full bg-cobalt/10 blur-[80px]" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-cobalt/[0.07] via-transparent to-blue-200/30" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(148,163,184,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.05)_1px,transparent_1px)] bg-[size:32px_32px]" />
+        <div className="absolute -right-24 -top-24 h-[560px] w-[560px] rounded-full bg-blue-200/40 blur-[90px]" />
+        <div className="absolute -left-32 top-[38%] h-[480px] w-[480px] rounded-full bg-cobalt/12 blur-[90px]" />
+        <div className="absolute left-1/2 top-[52%] h-[1px] w-[72%] -translate-x-1/2 rotate-[-8deg] bg-gradient-to-r from-transparent via-cobalt/12 to-transparent" />
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cobalt/20 to-transparent" />
-        <div className="absolute bottom-0 right-0 hidden select-none text-[22rem] font-black leading-none tracking-tighter text-slate-900/[0.035] lg:block" aria-hidden>
+        <div className="absolute bottom-0 right-0 hidden select-none text-[22rem] font-black leading-none tracking-tighter text-slate-900/[0.04] lg:block" aria-hidden>
           BS
         </div>
       </div>
@@ -53,16 +55,15 @@ export default function LoginPage() {
         {/* Right: access */}
         <div className="order-1 flex w-full justify-center lg:order-2 lg:justify-end">
           <div className="w-full max-w-[420px]">
-            <div className="mb-4 flex justify-center lg:hidden">
-              <BrandLogo className="max-w-[200px]" priority />
+            <div className="flex justify-center">
+              <BrandLogo className="mx-auto max-w-[200px] sm:max-w-[220px] lg:max-w-[200px]" priority />
             </div>
-            <div className="hidden justify-end lg:mb-3 lg:flex">
-              <BrandLogo className="max-w-[180px] shadow-none" priority />
+            <div className="mt-5">
+              <Suspense fallback={null}>
+                <LoginForm />
+              </Suspense>
             </div>
-            <Suspense fallback={null}>
-              <LoginForm />
-            </Suspense>
-            <p className="mt-4 text-center text-xs leading-4 text-slate-400">Acceso exclusivo para el equipo de Broco Solutions.</p>
+            <p className="mt-6 text-center text-xs leading-4 text-slate-400">Acceso exclusivo para el equipo de Broco Solutions.</p>
           </div>
         </div>
       </div>

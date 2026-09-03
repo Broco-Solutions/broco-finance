@@ -31,13 +31,13 @@ export function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-[1.5rem] border border-slate-200/70 bg-white p-6 shadow-[0_16px_40px_rgba(15,23,42,0.08),0_4px_12px_rgba(15,23,42,0.06)] sm:p-8">
-      <div className="space-y-3">
+    <form onSubmit={handleSubmit} className="rounded-[1.6rem] border border-slate-200/70 bg-white p-6 sm:p-8 shadow-[0_18px_48px_rgba(15,23,42,0.10),0_6px_16px_rgba(15,23,42,0.06)]">
+      <div className="space-y-4">
         <div className="inline-flex rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">Acceso interno</div>
-        <h1 className="font-display text-[1.7rem] font-semibold leading-none tracking-[-0.02em] text-ink sm:text-3xl">Entrá al tablero operativo</h1>
-        <p className="text-sm leading-5 text-slate-500">Ingresá la clave compartida para continuar.</p>
+        <h1 className="font-display text-[1.75rem] font-semibold leading-none tracking-[-0.02em] text-ink sm:text-[1.9rem]">Entrá al tablero operativo</h1>
+        <p className="text-sm leading-6 text-slate-500">Ingresá la clave compartida para continuar.</p>
       </div>
-      <div className="space-y-2 pt-2">
+      <div className="space-y-2.5 pt-4">
         <label className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Contraseña</label>
         <Input
           type="password"
@@ -48,11 +48,11 @@ export function LoginForm() {
           autoComplete="current-password"
         />
       </div>
-      {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-brick ring-1 ring-red-100">{error}</p> : null}
-      <Button type="submit" className="h-11 w-full text-[15px] font-semibold shadow-[0_8px_20px_rgba(37,99,235,0.25)]" disabled={isPending}>
+      {error ? <p className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-brick ring-1 ring-red-100">{error}</p> : null}
+      <Button type="submit" className="mt-1 h-11 w-full text-[15px] font-semibold shadow-[0_8px_20px_rgba(37,99,235,0.25)]" disabled={isPending}>
         {isPending ? "Validando…" : "Ingresar"}
       </Button>
-      <p className="pt-1 text-center text-xs text-slate-400">Sesión protegida · acceso interno</p>
+      <p className="pt-2 text-center text-xs leading-4 text-slate-400">Sesión protegida · acceso interno</p>
     </form>
   );
 }
