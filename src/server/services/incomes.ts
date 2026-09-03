@@ -251,9 +251,14 @@ export async function createIncomeBatch(entries: BatchEntry[]) {
 }
 
 export async function bulkUpdateIncomes(ids: string[], updates: {
-  typeId?: string; status?: string; amountUsd?: number; amountArs?: number; exchangeRate?: number;
+  typeId?: string; status?: string; amountUsd?: number; amountArs?: number; exchangeRate?: number; concept?: string;
 }) {
   const data: Record<string, unknown> = {};
+  if (updates.concept != null) {
+    const trimmed = updates.concept.trim();
+    if (!trimmed) throw new Error("El concepto no puede estar vacío.");
+    data.concept = trimmed;
+  }
   if (updates.typeId) data.typeId = updates.typeId;
   if (updates.status) data.status = updates.status;
   if (updates.amountArs != null && updates.exchangeRate != null) {

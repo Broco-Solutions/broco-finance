@@ -180,11 +180,13 @@ export function IncomeList({ initialIncomes, projects, clients, incomeTypes }: {
   const toggleAll = () => allSelected ? clearSelection() : selectAllFiltered();
   const handleBulkApply = async () => {
     if (!bulkField || !bulkValue) return;
+    if (bulkField === "concept" && !bulkValue.trim()) return;
     if (bulkField === "ars" && !bulkExchangeRate) return;
     setBulkError(null);
     const ids = Array.from(selected);
     const updates: Record<string, unknown> = {};
-    if (bulkField === "type") updates.typeId = bulkValue;
+    if (bulkField === "concept") updates.concept = bulkValue.trim();
+    else if (bulkField === "type") updates.typeId = bulkValue;
     else if (bulkField === "status") updates.status = bulkValue;
     else if (bulkField === "amount") updates.amountUsd = Number(bulkValue);
     else if (bulkField === "ars") { updates.amountArs = Number(bulkValue); updates.exchangeRate = Number(bulkExchangeRate); }
@@ -201,7 +203,7 @@ export function IncomeList({ initialIncomes, projects, clients, incomeTypes }: {
   const statusLabel = (s: string, d: any) => formatIncomeStatus(s, d);
   const statusTone = (s: string, d: any): "success" | "danger" | "warning" | "neutral" => { const l = statusLabel(s, d); if (l === "Cobrado") return "success"; if (l === "Vencido") return "danger"; if (l === "Pendiente") return "warning"; return "neutral"; };
   const typeName = (id: string) => incomeTypes.find(t => t.id === id)?.name ?? "—";
-  const bulkFieldLabels: Record<string, string> = { type: "Tipo", status: "Estado", amount: "Monto USD", ars: "Monto ARS + TC" };
+  const bulkFieldLabels: Record<string, string> = { concept: "Concepto", type: "Tipo", status: "Estado", amount: "Monto USD", ars: "Monto ARS + TC" };
   const bulkValueLabels: Record<string, Record<string, string>> = { type: Object.fromEntries(incomeTypes.map(t => [t.id, t.name])), status: { PAID: "Cobrado", PENDING: "Pendiente" } };
   const bulkDesc = `${bulkFieldLabels[bulkField] ?? "?"} → ${bulkValueLabels[bulkField]?.[bulkValue] ?? bulkValue}`;
 
@@ -247,7 +249,7 @@ export function IncomeList({ initialIncomes, projects, clients, incomeTypes }: {
       <div className="hidden md:block">
         <DataTable tableClassName="table-fixed"
           headers={[<input key="cb" type="checkbox" checked={allSelected} onChange={toggleAll} className="h-3.5 w-3.5" />,"Concepto","Cliente","Proyecto","Tipo","Estado","Fecha","USD","ARS","Acciones"]}
-          colGroup={<colgroup><col style={{width:"3%"}} /><col style={{width:"14%"}} /><col style={{width:"14%"}} /><col style={{width:"13%"}} /><col style={{width:"8%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"12%"}} /><col style={{width:"9%"}} /></colgroup>}
+          colGroup={<colgroup><col style={{width:"3%"}} /><col style={{width:"16%"}} /><col style={{width:"11%"}} /><col style={{width:"11%"}} /><col style={{width:"8%"}} /><col style={{width:"8%"}} /><col style={{width:"9%"}} /><col style={{width:"10%"}} /><col style={{width:"12%"}} /><col style={{width:"12%"}} /></colgroup>}
           footer={<tr className="bg-gray-50 font-semibold"><td className="px-4 py-2.5 text-xs text-gray-500">Total filtrado · {filtered.length} mov.</td><td /><td /><td /><td /><td /><td className="px-4 py-2.5 text-sm text-right tabular-nums">{formatUsd(filteredTotal)}</td><td /><td /></tr>}
         >
           {filtered.map(inc => (
@@ -318,6 +320,7 @@ export function IncomeList({ initialIncomes, projects, clients, incomeTypes }: {
         secondaryValue={bulkExchangeRate} setSecondaryValue={setBulkExchangeRate}
         secondaryPlaceholder="TC"
         fields={[
+          { value: "concept", label: "Concepto" },
           { value: "type", label: "Tipo" },
           { value: "status", label: "Estado" },
           { value: "amount", label: "Monto USD" },

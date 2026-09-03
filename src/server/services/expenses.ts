@@ -136,9 +136,14 @@ export async function createExpenseBatch(entries: BatchEntry[]) {
 }
 
 export async function bulkUpdateExpenses(ids: string[], updates: {
-  expenseCategoryId?: string; type?: string; status?: string; amountUsd?: number; amountArs?: number; exchangeRate?: number;
+  expenseCategoryId?: string; type?: string; status?: string; amountUsd?: number; amountArs?: number; exchangeRate?: number; concept?: string;
 }) {
   const data: Record<string, unknown> = {};
+  if (updates.concept != null) {
+    const trimmed = updates.concept.trim();
+    if (!trimmed) throw new Error("El concepto no puede estar vacío.");
+    data.concept = trimmed;
+  }
   if (updates.expenseCategoryId) data.expenseCategoryId = updates.expenseCategoryId;
   if (updates.type) data.type = updates.type;
   if (updates.status) data.status = updates.status;

@@ -9,10 +9,10 @@ export default function LoginPage() {
         <div className="space-y-6 self-center">
           <div className="chip">Broco Solutions</div>
           <h1 className="font-display text-6xl leading-none text-ink md:text-7xl">
-            Finanzas operativas sin volver al Excel.
+            La operación del negocio en un solo lugar.
           </h1>
           <p className="max-w-2xl text-lg leading-9 text-ink/62">
-            Dashboard ejecutivo, remanente histórico, capas de distribución, suscripciones por proyecto y calendario de cobro en una sola aplicación.
+            Gestioná clientes, proyectos, ingresos, gastos e indicadores con una experiencia clara y profesional — sin planillas.
           </p>
         </div>
         <div className="flex items-center justify-center">

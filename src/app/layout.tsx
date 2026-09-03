@@ -6,8 +6,8 @@ import { AppShell } from "@/components/layout/app-shell";
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Broco Finance",
-  description: "Control financiero operativo para Broco Solutions",
+  title: "Broco App",
+  description: "Plataforma de gestión operativa para Broco Solutions: clientes, proyectos, ingresos, gastos e indicadores.",
   icons: { icon: "/broco-finanzas-favicon.ico", shortcut: "/broco-finanzas-favicon.ico", apple: "/broco-finanzas-favicon.ico" },
 };
 

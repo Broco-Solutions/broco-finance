@@ -217,11 +217,13 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
   const toggleAll = () => allSelected ? clearSelection() : selectAllFiltered();
   const handleBulkApply = async () => {
     if (!bulkField || !bulkValue) return;
+    if (bulkField === "concept" && !bulkValue.trim()) return;
     if (bulkField === "ars" && !bulkExchangeRate) return;
     setBulkError(null);
     const ids = Array.from(selected);
     const updates: Record<string, unknown> = {};
-    if (bulkField === "type") updates.type = bulkValue;
+    if (bulkField === "concept") updates.concept = bulkValue.trim();
+    else if (bulkField === "type") updates.type = bulkValue;
     else if (bulkField === "status") updates.status = bulkValue;
     else if (bulkField === "amount") updates.amountUsd = Number(bulkValue);
     else if (bulkField === "category") updates.expenseCategoryId = bulkValue;
@@ -414,6 +416,7 @@ export function ExpenseList({ initial, categories: cats, projects: projs, client
         secondaryValue={bulkExchangeRate} setSecondaryValue={setBulkExchangeRate}
         secondaryPlaceholder="TC"
         fields={[
+          { value: "concept", label: "Concepto" },
           { value: "category", label: "Categoria" },
           { value: "type", label: "Tipo" },
           { value: "status", label: "Estado" },

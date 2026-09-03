@@ -14,6 +14,7 @@ export type MonthBucket = {
   prevIncomesUsd?: number;
   prevExpensesUsd?: number;
   prevNetUsd?: number;
+  incomesByType?: Record<string, number>;
 };
 
 export type EvolutionRangeKey = "6m" | "12m" | "year";
@@ -117,14 +118,14 @@ export function getEvolutionMonths(todayKey: string, range: EvolutionRangeKey): 
 
 export function bucketByMonth(
   months: MonthBucket[],
-  incomes: Array<{ effectiveDate: Date | string | null; amountUsd: any }>,
+  incomes: Array<{ effectiveDate: Date | string | null; amountUsd: any; typeId?: string }>,
   expenses: Array<{ effectiveDate: Date | string | null; amountUsd: any }>,
-  baseline?: { year: number; month: number; incomesUsd: number; expensesUsd: number },
+  baseline?: { year: number; month: number; incomesUsd: number; expensesUsd: number; incomesByType?: Record<string, number> },
 ): MonthBucket[] {
   const map = new Map<string, MonthBucket>();
   for (const m of months) {
     const key = `${m.year}-${String(m.month).padStart(2, "0")}`;
-    map.set(key, { ...m });
+    map.set(key, { ...m, incomesByType: {} });
   }
 
   for (const inc of incomes) {
@@ -132,7 +133,13 @@ export function bucketByMonth(
     const raw = inc.effectiveDate as unknown;
     const iso = raw instanceof Date ? raw.toISOString().slice(0, 7) : String(raw).slice(0, 7);
     const bucket = map.get(iso);
-    if (bucket) bucket.incomesUsd += Number(inc.amountUsd ?? 0);
+    if (bucket) {
+      bucket.incomesUsd += Number(inc.amountUsd ?? 0);
+      if ((inc as any).typeId) {
+        const tid = String((inc as any).typeId);
+        bucket.incomesByType![tid] = (bucket.incomesByType![tid] ?? 0) + Number(inc.amountUsd ?? 0);
+      }
+    }
   }
   for (const exp of expenses) {
     if (!exp.effectiveDate) continue;

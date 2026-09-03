@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatUsd } from "@/lib/money";
@@ -207,6 +207,67 @@ export function FinancialEvolution({ evolution }: { evolution: Evolution }) {
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
+
+            {/* Ingresos por tipo - stacked */}
+            {(() => {
+              const hasTypes = evolution.incomeTypes && evolution.incomeTypes.length > 0;
+              if (!hasTypes) return null;
+              const hasData = r.months.some((m: any) => m.incomesByType && Object.keys(m.incomesByType).length > 0);
+              if (!hasData) return null;
+              const palette: Record<string, string> = { Desarrollo: "#6366f1", Mantenimiento: "#0ea5e9" };
+              return (
+                <div className="mt-4">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Ingresos por tipo</h4>
+                  <div className="h-40 sm:h-[160px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={r.months} margin={{ top: 10, right: 5, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis dataKey="shortLabel" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                        <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)} />
+                        <Tooltip
+                          content={({ active, payload, label }: any) => {
+                            if (!active || !payload || payload.length === 0) return null;
+                            const d = payload[0]?.payload;
+                            if (!d) return null;
+                            return (
+                              <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-lg text-xs">
+                                <div className="font-semibold text-gray-700 mb-1">{label}</div>
+                                {evolution.incomeTypes.map((t: any) => {
+                                  const val = d.incomesByType?.[t.id] ?? 0;
+                                  if (val === 0) return null;
+                                  return (
+                                    <div key={t.id} className="flex justify-between gap-4">
+                                      <span style={{ color: palette[t.name] ?? "#6366f1" }}>{t.name}</span>
+                                      <span className="font-medium">{formatUsd(val)}</span>
+                                    </div>
+                                  );
+                                })}
+                                <div className="border-t border-gray-100 mt-1 pt-1 flex justify-between font-semibold">
+                                  <span>Total</span>
+                                  <span>{formatUsd(d.incomesUsd)}</span>
+                                </div>
+                              </div>
+                            );
+                          }}
+                        />
+                        <Legend iconType="rect" iconSize={10} />
+                        {evolution.incomeTypes.map((t: any) => (
+                          <Bar
+                            key={t.id}
+                            dataKey={(d: any) => d.incomesByType?.[t.id] ?? 0}
+                            name={t.name}
+                            stackId="ingresos"
+                            fill={palette[t.name] ?? "#6366f1"}
+                            radius={t.name === "Mantenimiento" ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+                            maxBarSize={24}
+                          />
+                        ))}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              );
+            })()}
 
             <p className="text-xs text-gray-500 mt-3 text-center px-2">{r.phrase}</p>
               </>

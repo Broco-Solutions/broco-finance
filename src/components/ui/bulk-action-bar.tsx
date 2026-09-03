@@ -32,7 +32,8 @@ export function BulkActionBar({
 
   const currentOptions = options[field] || [];
   const needsSecondary = (field === "ars" || field === "amountArs") && setSecondaryValue;
-  const disabledButton = disabled || (needsSecondary && !secondaryValue);
+  const isConceptEmpty = field === "concept" && !value.trim();
+  const disabledButton = disabled || isConceptEmpty || (needsSecondary && !secondaryValue);
 
   return (
     <div className="fixed bottom-0 inset-x-0 z-50 border-t border-gray-200 bg-white/95 backdrop-blur p-3 shadow-lg">
@@ -57,6 +58,8 @@ export function BulkActionBar({
                 <option value="">Seleccionar...</option>
                 {currentOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </Select>
+            ) : field === "concept" ? (
+              <Input type="text" value={value} onChange={(e) => setValue(e.target.value)} className="w-48 text-xs" placeholder="Concepto" />
             ) : (
               <Input type="number" step="any" value={value} onChange={(e) => setValue(e.target.value)} className="w-24 text-xs" placeholder="Monto" />
             )}
