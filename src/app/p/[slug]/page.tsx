@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import {
@@ -94,8 +95,15 @@ export default async function PortalPage({ params }: { params: { slug: string } 
         <header className="border-b border-white/10 bg-gradient-to-br from-slate-950 via-ink to-cobalt/90">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 md:px-6 md:py-5">
             <div className="flex items-center gap-3">
-              <div className="hidden h-9 w-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15 backdrop-blur md:flex">
-                <span className="text-sm font-black tracking-tighter text-white">BS</span>
+              <div className="hidden h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-white/10 p-1.5 ring-1 ring-white/15 backdrop-blur md:flex">
+                <Image
+                  src="/Icono%20BS%20-%20Negativo.png"
+                  alt="Broco Solutions"
+                  width={36}
+                  height={36}
+                  className="h-full w-full object-contain"
+                  priority
+                />
               </div>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/60">Broco Solutions</p>
