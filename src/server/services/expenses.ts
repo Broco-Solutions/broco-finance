@@ -53,6 +53,31 @@ export async function listExpenses(filters?: { status?: string; type?: string; c
   });
 }
 
+export async function listPendingExpensesForMcp(input: {
+  from: Date;
+  to: Date;
+  skip: number;
+  take: number;
+}) {
+  return prisma.expense.findMany({
+    where: {
+      status: "PENDING",
+      dueDate: { gte: input.from, lte: input.to },
+    },
+    select: {
+      id: true,
+      concept: true,
+      dueDate: true,
+      amountUsd: true,
+      category: { select: { name: true } },
+      project: { select: { name: true } },
+    },
+    orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+    skip: input.skip,
+    take: input.take,
+  });
+}
+
 export async function getExpense(id: string) {
   const e = await prisma.expense.findUnique({ where: { id }, include: { category: true, project: true } });
   if (!e) throw new Error("Gasto no encontrado.");

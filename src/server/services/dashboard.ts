@@ -145,6 +145,61 @@ export async function getDashboard(_from: Date, _to: Date) {
   };
 }
 
+export async function getMcpFinancialSummary(from: Date, to: Date) {
+  const today = toUtcDate(todayKeyArgentina());
+  const range = { gte: from, lte: to };
+  const overdueRange = { gte: from, lte: to, lt: today };
+
+  const [
+    paidIncomes,
+    paidExpenses,
+    pendingIncomes,
+    pendingExpenses,
+    overdueIncomes,
+    overdueExpenses,
+  ] = await Promise.all([
+    prisma.income.aggregate({
+      where: { status: "PAID", effectiveDate: range },
+      _sum: { amountUsd: true },
+      _count: true,
+    }),
+    prisma.expense.aggregate({
+      where: { status: "PAID", effectiveDate: range },
+      _sum: { amountUsd: true },
+      _count: true,
+    }),
+    prisma.income.aggregate({
+      where: { status: "PENDING", dueDate: range },
+      _sum: { amountUsd: true },
+      _count: true,
+    }),
+    prisma.expense.aggregate({
+      where: { status: "PENDING", dueDate: range },
+      _sum: { amountUsd: true },
+      _count: true,
+    }),
+    prisma.income.aggregate({
+      where: { status: "PENDING", dueDate: overdueRange },
+      _sum: { amountUsd: true },
+      _count: true,
+    }),
+    prisma.expense.aggregate({
+      where: { status: "PENDING", dueDate: overdueRange },
+      _sum: { amountUsd: true },
+      _count: true,
+    }),
+  ]);
+
+  return {
+    paidIncomes,
+    paidExpenses,
+    pendingIncomes,
+    pendingExpenses,
+    overdueIncomes,
+    overdueExpenses,
+  };
+}
+
 export async function getFinancialEvolution() {
   const todayKey = todayKeyArgentina();
   const ranges = {

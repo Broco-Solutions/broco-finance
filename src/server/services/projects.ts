@@ -182,6 +182,43 @@ export async function listProjects(filters?: {
   });
 }
 
+export async function listProjectsForMcp(input: {
+  search?: string;
+  clientId?: string;
+  isActive?: boolean;
+  skip: number;
+  take: number;
+}) {
+  return prisma.project.findMany({
+    where: {
+      ...(input.search
+        ? { name: { contains: input.search, mode: "insensitive" as const } }
+        : {}),
+      ...(input.clientId ? { clientId: input.clientId } : {}),
+      ...(input.isActive === undefined ? {} : { isActive: input.isActive }),
+    },
+    select: {
+      id: true,
+      name: true,
+      isActive: true,
+      startDate: true,
+      endDate: true,
+      oneTimeAmountUsd: true,
+      monthlyRecurringAmountUsd: true,
+      client: { select: { id: true, name: true } },
+      _count: { select: { incomes: true, expenses: true } },
+    },
+    orderBy: [
+      { isActive: "desc" },
+      { client: { name: "asc" } },
+      { name: "asc" },
+      { id: "asc" },
+    ],
+    skip: input.skip,
+    take: input.take,
+  });
+}
+
 export async function getProject(id: string) {
   const project = await prisma.project.findUnique({
     where: { id },

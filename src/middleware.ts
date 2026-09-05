@@ -5,6 +5,13 @@ const AUTH_COOKIE = "broco_session";
 
 const PUBLIC_PATHS = ["/login", "/api/auth", "/_next", "/favicon.ico"];
 
+function isMcpPath(pathname: string) {
+  return (
+    pathname === "/api/mcp" ||
+    pathname === "/.well-known/oauth-protected-resource"
+  );
+}
+
 function isPublicPortalPath(pathname: string) {
   return pathname === "/p" || pathname.startsWith("/p/");
 }
@@ -15,7 +22,8 @@ export function middleware(request: NextRequest) {
 
   if (
     PUBLIC_PATHS.some((path) => pathname.startsWith(path)) ||
-    isPublicPortalPath(pathname)
+    isPublicPortalPath(pathname) ||
+    isMcpPath(pathname)
   ) {
     return NextResponse.next();
   }

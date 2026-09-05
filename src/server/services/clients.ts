@@ -38,6 +38,26 @@ export async function listClients() {
   });
 }
 
+export async function listClientsForMcp(input: {
+  search?: string;
+  skip: number;
+  take: number;
+}) {
+  return prisma.client.findMany({
+    where: input.search
+      ? { name: { contains: input.search, mode: "insensitive" } }
+      : undefined,
+    select: {
+      id: true,
+      name: true,
+      _count: { select: { projects: true } },
+    },
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+    skip: input.skip,
+    take: input.take,
+  });
+}
+
 export async function getClient(id: string) {
   const client = await prisma.client.findUnique({
     where: { id },

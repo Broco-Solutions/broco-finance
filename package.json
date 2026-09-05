@@ -22,12 +22,15 @@
     "test:db:status": "docker compose -f docker-compose.test.yml ps"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
     "@prisma/client": "^6.19.2",
     "bubblewrap": "^0.2.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dhtmlx-gantt": "^10.0.2",
+    "jose": "6.2.10",
     "lucide-react": "^0.577.0",
+    "mcp-handler": "2.1.1",
     "next": "^14.2.35",
     "prisma": "^6.19.2",
     "react": "^18.3.1",

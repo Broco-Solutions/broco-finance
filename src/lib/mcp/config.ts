@@ -1,0 +1,133 @@
+import { z } from "zod";
+
+export const MCP_REQUIRED_SCOPE = "mcp:read";
+export const MCP_DEFAULT_PAGE_SIZE = 20;
+export const MCP_MAX_RESULTS = 50;
+export const MCP_MAX_PAGE = 1_000;
+export const MCP_MAX_RANGE_DAYS = 366;
+export const MCP_ROUTE_PATH = "/api/mcp";
+export const MCP_METADATA_PATH = "/.well-known/oauth-protected-resource";
+
+export type AuthConfig = {
+  issuer: string;
+  audience: string;
+  allowedSubjects: ReadonlySet<string>;
+  allowedEmails: ReadonlySet<string>;
+  emailClaim: string;
+  emailVerifiedClaim: string;
+};
+
+export type EnabledMcpConfig = {
+  status: "ok";
+  auth: AuthConfig;
+  resourceUrl: string;
+  requiredScope: typeof MCP_REQUIRED_SCOPE;
+};
+
+export type McpConfig =
+  | { status: "disabled" }
+  | { status: "killed" }
+  | { status: "misconfigured"; reason: string }
+  | EnabledMcpConfig;
+
+const claimNameSchema = z.string().trim().min(1).max(200);
+
+function parseHttpsUrl(raw: string | undefined, kind: "issuer" | "resource") {
+  const parsed = z.string().trim().url().safeParse(raw);
+  if (!parsed.success) return null;
+
+  try {
+    const url = new URL(parsed.data);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    ) {
+      return null;
+    }
+
+    if (kind === "issuer") {
+      url.pathname = `${url.pathname.replace(/\/+$/, "")}/`;
+    } else if (url.pathname === "/") {
+      return null;
+    } else {
+      url.pathname = url.pathname.replace(/\/+$/, "");
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function parseList(raw: string | undefined, normalize?: (value: string) => string) {
+  const values = (raw ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => normalize?.(value) ?? value);
+  return new Set(values);
+}
+
+/**
+ * Reads MCP configuration for every request so the kill switch takes effect
+ * immediately. Every missing or inconsistent value fails closed.
+ */
+export function readMcpConfig(): McpConfig {
+  if (process.env.BROCO_MCP_KILL === "true") return { status: "killed" };
+  if (process.env.BROCO_MCP_ENABLED !== "true") return { status: "disabled" };
+
+  const issuer = parseHttpsUrl(
+    process.env.BROCO_MCP_AUTH0_ISSUER,
+    "issuer",
+  );
+  const resourceUrl = parseHttpsUrl(
+    process.env.BROCO_MCP_RESOURCE_URL,
+    "resource",
+  );
+  const audience = process.env.BROCO_MCP_AUTH0_AUDIENCE?.trim();
+  const allowedSubjects = parseList(process.env.BROCO_MCP_ALLOWED_SUBJECTS);
+  const allowedEmails = parseList(
+    process.env.BROCO_MCP_ALLOWED_EMAILS,
+    (value) => value.toLowerCase(),
+  );
+  const emailClaim = claimNameSchema.safeParse(
+    process.env.BROCO_MCP_AUTH0_EMAIL_CLAIM?.trim() || "email",
+  );
+  const emailVerifiedClaim = claimNameSchema.safeParse(
+    process.env.BROCO_MCP_AUTH0_EMAIL_VERIFIED_CLAIM?.trim() ||
+      "email_verified",
+  );
+
+  if (!issuer) {
+    return { status: "misconfigured", reason: "invalid_issuer" };
+  }
+  if (!resourceUrl || new URL(resourceUrl).pathname !== MCP_ROUTE_PATH) {
+    return { status: "misconfigured", reason: "invalid_resource" };
+  }
+  if (!audience || audience !== resourceUrl) {
+    return { status: "misconfigured", reason: "audience_resource_mismatch" };
+  }
+  if (allowedSubjects.size === 0 && allowedEmails.size === 0) {
+    return { status: "misconfigured", reason: "empty_allowlist" };
+  }
+  if (!emailClaim.success || !emailVerifiedClaim.success) {
+    return { status: "misconfigured", reason: "invalid_email_claim" };
+  }
+
+  return {
+    status: "ok",
+    auth: {
+      issuer,
+      audience,
+      allowedSubjects,
+      allowedEmails,
+      emailClaim: emailClaim.data,
+      emailVerifiedClaim: emailVerifiedClaim.data,
+    },
+    resourceUrl,
+    requiredScope: MCP_REQUIRED_SCOPE,
+  };
+}

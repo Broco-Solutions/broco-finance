@@ -113,6 +113,31 @@ export async function listIncomes(filters?: {
   });
 }
 
+export async function listPendingIncomesForMcp(input: {
+  from: Date;
+  to: Date;
+  skip: number;
+  take: number;
+}) {
+  return prisma.income.findMany({
+    where: {
+      status: "PENDING",
+      dueDate: { gte: input.from, lte: input.to },
+    },
+    select: {
+      id: true,
+      concept: true,
+      dueDate: true,
+      amountUsd: true,
+      client: { select: { name: true } },
+      project: { select: { name: true } },
+    },
+    orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+    skip: input.skip,
+    take: input.take,
+  });
+}
+
 export async function getIncome(id: string) {
   const income = await prisma.income.findUnique({
     where: { id },

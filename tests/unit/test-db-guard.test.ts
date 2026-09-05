@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { assertTestDatabase } from "@/lib/test-db-guard";
+import {
+  assertReadOnlyTestDatabase,
+  assertTestDatabase,
+} from "@/lib/test-db-guard";
 
 const VALID_ENV = {
   NODE_ENV: "test",
@@ -99,5 +102,27 @@ describe("assertTestDatabase", () => {
 
     console.warn = originalWarn;
     expect(warnSpy.called).toBe(true);
+  });
+});
+
+describe("assertReadOnlyTestDatabase", () => {
+  it("acepta solo la misma base local de test para el cliente Prisma compartido", () => {
+    const localTest =
+      "postgresql://broco_test:broco_test@localhost:5434/broco_finance_test";
+    setEnv({ DATABASE_URL: localTest, DATABASE_URL_TEST: localTest });
+    expect(assertReadOnlyTestDatabase()).toEqual({
+      databaseName: "broco_finance_test",
+    });
+  });
+
+  it("rechaza una URL remota aunque el nombre contenga test", () => {
+    const remote =
+      "postgresql://user:secret@db.example.com:5432/broco_finance_test";
+    setEnv({ DATABASE_URL: remote, DATABASE_URL_TEST: remote });
+    expect(() => assertReadOnlyTestDatabase()).toThrow("localhost");
+  });
+
+  it("rechaza si el cliente compartido no apunta exactamente a DATABASE_URL_TEST", () => {
+    expect(() => assertReadOnlyTestDatabase()).toThrow("coincidir exactamente");
   });
 });

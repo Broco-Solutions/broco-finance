@@ -21,6 +21,54 @@ function extractDbName(rawUrl: string): string | null {
   }
 }
 
+/**
+ * Fails closed before read-only integration tests use the application's shared
+ * Prisma client. It deliberately accepts only the isolated local test database.
+ */
+export function assertReadOnlyTestDatabase() {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error('NODE_ENV debe ser "test" para integración MCP.');
+  }
+
+  const databaseUrl = process.env.DATABASE_URL;
+  const testDatabaseUrl = process.env.DATABASE_URL_TEST;
+  if (!databaseUrl || !testDatabaseUrl) {
+    throw new Error(
+      "DATABASE_URL y DATABASE_URL_TEST deben estar definidas para integración MCP.",
+    );
+  }
+  if (databaseUrl !== testDatabaseUrl) {
+    throw new Error(
+      "DATABASE_URL debe coincidir exactamente con DATABASE_URL_TEST para integración MCP.",
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(testDatabaseUrl);
+  } catch {
+    throw new Error("DATABASE_URL_TEST no es una URL válida para integración MCP.");
+  }
+
+  if (!["postgres:", "postgresql:"].includes(parsed.protocol)) {
+    throw new Error("DATABASE_URL_TEST debe usar PostgreSQL para integración MCP.");
+  }
+  if (!["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname)) {
+    throw new Error(
+      "DATABASE_URL_TEST debe apuntar a localhost para integración MCP.",
+    );
+  }
+
+  const databaseName = extractDbName(testDatabaseUrl);
+  if (!databaseName?.toLowerCase().includes("test")) {
+    throw new Error(
+      'El nombre de DATABASE_URL_TEST debe contener "test" para integración MCP.',
+    );
+  }
+
+  return { databaseName };
+}
+
 export function assertTestDatabase() {
   const nodeEnv = process.env.NODE_ENV;
   if (nodeEnv !== "test") {
