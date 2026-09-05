@@ -11,6 +11,10 @@ import {
   verifyPassword,
   verifySession,
 } from "@/lib/project-access-crypto";
+import {
+  assertValidSharedFolderUrl,
+  normalizeSharedFolderLabel,
+} from "@/lib/shared-folder-url";
 
 // ---------------------------------------------------------------------------
 // Shared access (V1.1: slug + password + session)
@@ -175,6 +179,38 @@ export async function activateShareAccess(projectId: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Shared folder (per-project external link, independent of portal access)
+// ---------------------------------------------------------------------------
+
+export async function setClientSharedFolder(
+  projectId: string,
+  rawUrl: string | null | undefined,
+  rawLabel?: string | null,
+): Promise<{ url: string; label: string }> {
+  await assertProject(projectId);
+  if (!rawUrl || !rawUrl.trim()) {
+    throw new Error("El enlace es obligatorio para guardar la carpeta compartida.");
+  }
+  const url = assertValidSharedFolderUrl(rawUrl);
+  const label = normalizeSharedFolderLabel(rawLabel);
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { clientSharedFolderUrl: url, clientSharedFolderLabel: label },
+  });
+  revalidatePath(`/projects/${projectId}`);
+  return { url, label };
+}
+
+export async function clearClientSharedFolder(projectId: string): Promise<void> {
+  await assertProject(projectId);
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { clientSharedFolderUrl: null, clientSharedFolderLabel: null },
+  });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+// ---------------------------------------------------------------------------
 // Client access: gate → authorization → authorized DTO
 // ---------------------------------------------------------------------------
 
@@ -228,6 +264,8 @@ const PORTAL_WHITELIST_SELECT = {
   endDate: true,
   goLiveDate: true,
   updatedAt: true,
+  clientSharedFolderUrl: true,
+  clientSharedFolderLabel: true,
   client: { select: { name: true } },
   phases: {
     select: { id: true, name: true, position: true },

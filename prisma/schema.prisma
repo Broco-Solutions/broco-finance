@@ -46,6 +46,8 @@ model Project {
   endDate                        DateTime? @map("end_date") @db.Date
   goLiveDate                     DateTime? @map("go_live_date") @db.Date
   notes                          String?
+  clientSharedFolderUrl          String?   @map("client_shared_folder_url")
+  clientSharedFolderLabel        String?   @map("client_shared_folder_label")
   oneTimeOriginalAmount          Decimal?  @map("one_time_original_amount") @db.Decimal(18, 6)
   oneTimeCurrency                Currency? @map("one_time_currency")
   oneTimeExchangeRate            Decimal?  @map("one_time_exchange_rate") @db.Decimal(18, 6)

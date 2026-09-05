@@ -1,7 +1,7 @@
 import Image from "next/image";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { CalendarClock, CalendarRange, CheckCircle2, Clock3, Flag, UserRound } from "lucide-react";
+import { CalendarClock, CalendarRange, CheckCircle2, Clock3, ExternalLink, Flag, FolderOpen, UserRound } from "lucide-react";
 import {
   resolveShareGateBySlug,
   authorizeClientAccess,
@@ -162,6 +162,35 @@ export default async function PortalPage({ params }: { params: { slug: string } 
               accent={goLive.isToday ? "text-emerald-600" : "text-amber-600"}
             />
           </section>
+
+          {plan.clientSharedFolderUrl && (
+            <section className="mt-7 overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
+              <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-5 md:px-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-slate-900 to-cobalt text-white shadow-sm">
+                    <FolderOpen className="h-5 w-5" strokeWidth={1.8} />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="font-display text-lg font-semibold leading-none text-ink">
+                      Documentación del proyecto
+                    </h2>
+                    <p className="mt-1 truncate text-xs text-slate-500">
+                      {plan.clientSharedFolderLabel ?? "Abrir carpeta compartida"}
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={plan.clientSharedFolderUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg bg-cobalt px-4 py-2 text-sm font-medium text-white transition hover:bg-cobalt/90"
+                >
+                  {plan.clientSharedFolderLabel ?? "Abrir carpeta compartida"}
+                  <ExternalLink className="h-4 w-4" strokeWidth={1.8} />
+                </a>
+              </div>
+            </section>
+          )}
 
           <section className="mt-7 overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-[0_12px_32px_rgba(15,23,42,0.06)]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-slate-50/60 px-5 py-4 md:px-6">

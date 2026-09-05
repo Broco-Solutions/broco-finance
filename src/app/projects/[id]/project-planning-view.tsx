@@ -9,6 +9,7 @@ import { ModalPortal } from "@/components/ui/modal-portal";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { ProjectGantt } from "@/components/projects/dhtmlx/project-gantt";
 import { ProjectAccessPanel } from "@/components/projects/project-access-panel";
+import { ProjectSharedFolderPanel } from "@/components/projects/project-shared-folder-panel";
 import { TaskManagerModal } from "@/components/projects/task-manager-modal";
 import {
   computeProjectProgress,
@@ -47,6 +48,8 @@ export function ProjectPlanningView({
   projectEndDate,
   projectGoLiveDate,
   shareAccess,
+  clientSharedFolderUrl,
+  clientSharedFolderLabel,
 }: {
   projectId: string;
   phases: PhaseDTO[];
@@ -55,6 +58,8 @@ export function ProjectPlanningView({
   projectEndDate: string | null;
   projectGoLiveDate: string | null;
   shareAccess: { slug: string; revokedAt: string | null } | null;
+  clientSharedFolderUrl: string | null;
+  clientSharedFolderLabel: string | null;
 }) {
   const router = useRouter();
   const [phases, setPhases] = useState<PhaseDTO[]>(initialPhases);
@@ -117,6 +122,14 @@ export function ProjectPlanningView({
         <div className="mt-3">
           <ProjectAccessPanel projectId={projectId} initialAccess={shareAccess} />
         </div>
+        <ProjectSharedFolderPanel
+          projectId={projectId}
+          initialFolder={
+            clientSharedFolderUrl
+              ? { url: clientSharedFolderUrl, label: clientSharedFolderLabel }
+              : null
+          }
+        />
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

@@ -94,6 +94,8 @@ export default async function ProjectDetailPage({
           projectEndDate={iso(project.endDate)}
           projectGoLiveDate={iso(project.goLiveDate)}
           shareAccess={shareAccess ? JSON.parse(JSON.stringify(shareAccess)) : null}
+          clientSharedFolderUrl={project.clientSharedFolderUrl ?? null}
+          clientSharedFolderLabel={project.clientSharedFolderLabel ?? null}
         />
       ) : (
         <>

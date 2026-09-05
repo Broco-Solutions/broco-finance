@@ -27,6 +27,8 @@ import {
   changeShareAccessPassword,
   revokeShareAccess,
   activateShareAccess,
+  setClientSharedFolder,
+  clearClientSharedFolder,
 } from "@/server/services/project-sharing";
 
 export type ActionResult = { success: true } | { success: false; message: string };
@@ -285,6 +287,45 @@ export async function activateAccessAction(
     return { success: true };
   } catch (e) {
     return { success: false, message: e instanceof Error ? e.message : "Error al activar." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared folder (carpeta compartida del proyecto)
+// ---------------------------------------------------------------------------
+
+export async function saveSharedFolderAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    requireAuth();
+    const projectId = str(formData.get("projectId"));
+    if (!projectId) return { success: false, message: "Proyecto no encontrado." };
+    const url = str(formData.get("url"));
+    if (!url) {
+      return { success: false, message: "El enlace es obligatorio para guardar la carpeta compartida." };
+    }
+    const label = str(formData.get("label")) ?? undefined;
+    await setClientSharedFolder(projectId, url, label);
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: e instanceof Error ? e.message : "Error al guardar." };
+  }
+}
+
+export async function removeSharedFolderAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    requireAuth();
+    const projectId = str(formData.get("projectId"));
+    if (!projectId) return { success: false, message: "Proyecto no encontrado." };
+    await clearClientSharedFolder(projectId);
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: e instanceof Error ? e.message : "Error al quitar el enlace." };
   }
 }
 
