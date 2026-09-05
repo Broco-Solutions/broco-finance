@@ -96,7 +96,7 @@ Las fechas deben existir en el calendario y usar `YYYY-MM-DD`. No se exponen not
 
 ## 5. Flags y configuración
 
-`BROCO_MCP_ENABLED` debe valer exactamente `true`; cualquier otro valor oculta el endpoint y su metadata con 404. `BROCO_MCP_KILL=true` prevalece sobre todo y los oculta de inmediato. Una configuración incompleta falla cerrada con 503 genérico.
+`BROCO_MCP_ENABLED` debe valer exactamente `true`; cualquier otro valor oculta el endpoint y su metadata con 404. `BROCO_MCP_KILL=true` prevalece sobre todo y los oculta en el deployment que ya recibió ese valor. En Vercel, cambiar una variable de entorno requiere un nuevo deployment: no es un kill switch instantáneo sobre el deployment activo. Una configuración incompleta falla cerrada con 503 genérico.
 
 Configuración prevista, con marcadores y sin valores reales:
 
@@ -113,6 +113,14 @@ BROCO_MCP_AUTH0_EMAIL_VERIFIED_CLAIM=https://APP_DOMAIN/claims/email_verified
 ```
 
 El audience debe ser idéntico al resource URL. Conviene cargar la configuración con el kill switch activo y retirarlo como último paso operativo.
+
+### Runbook de emergencia
+
+1. Como contención inmediata, si Vercel Firewall está disponible, bloquear manualmente el path exacto `/api/mcp`. Esta regla se aplica sin redeploy y no se cambia desde este repositorio.
+2. Establecer `BROCO_MCP_KILL=true` en Vercel y hacer redeploy. Verificar que tanto `/api/mcp` como `/.well-known/oauth-protected-resource` respondan 404.
+3. Mantener el bloqueo de Firewall hasta investigar, revisar logs sin exponer tokens ni datos y decidir la recuperación.
+
+Un kill switch realmente instantáneo requeriría en el futuro una fuente de configuración dinámica, con su propio diseño de disponibilidad, autorización y auditoría. Esta Fase 1 no agrega proveedores, base de datos ni otra fuente dinámica para ello.
 
 ## 6. Guía manual para un tenant Auth0 gratuito
 
@@ -138,7 +146,7 @@ Si el tenant gratuito no ofrece CIMD, detener la habilitación y revisar el plan
 2. Mantener `BROCO_MCP_KILL=true` mientras se cargan las variables.
 3. Verificar metadata, desafío 401, token válido y todos los rechazos previstos.
 4. Configurar y observar Firewall/rate limiting en Vercel.
-5. Cambiar `BROCO_MCP_ENABLED=true` y retirar el kill switch como último paso.
-6. Ante cualquier anomalía, restaurar `BROCO_MCP_KILL=true`.
+5. Cambiar `BROCO_MCP_ENABLED=true` y retirar el kill switch como último paso, seguido de redeploy.
+6. Ante cualquier anomalía, bloquear primero `/api/mcp` manualmente con Vercel Firewall si está disponible; luego restaurar `BROCO_MCP_KILL=true` y redeploy.
 
 No se hizo push, deploy, configuración externa ni acceso a producción en esta fase.

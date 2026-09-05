@@ -27,6 +27,10 @@ export const MCP_TOOL_NAMES = [
   "flujo_fondos",
 ] as const;
 
+export const MCP_TOOL_SECURITY_SCHEMES = [
+  { type: "oauth2", scopes: [MCP_REQUIRED_SCOPE] },
+] as const;
+
 const DAY_MS = 86_400_000;
 
 function isRealIsoDate(value: string) {
@@ -286,7 +290,9 @@ const toolMetadata = {
     openWorldHint: false,
   },
   _meta: {
-    securitySchemes: [{ type: "oauth2", scopes: [MCP_REQUIRED_SCOPE] }],
+    // Legacy/client-specific mirror. The HTTP transport also exposes this at
+    // the tool level because the installed MCP SDK only serializes `_meta`.
+    securitySchemes: MCP_TOOL_SECURITY_SCHEMES,
   },
 };
 

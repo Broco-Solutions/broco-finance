@@ -3,8 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { EnabledMcpConfig, McpConfig } from "@/lib/mcp/config";
 import {
   createMcpHttpHandler,
+  createMcpProtocolHandler,
   createProtectedResourceMetadataHandlers,
 } from "@/server/mcp/http";
+import {
+  MCP_TOOL_NAMES,
+  MCP_TOOL_SECURITY_SCHEMES,
+} from "@/server/mcp/tools";
 
 const enabled: EnabledMcpConfig = {
   status: "ok",
@@ -26,6 +31,19 @@ const authInfo = (scopes: string[]): AuthInfo => ({
   scopes,
   expiresAt: Math.floor(Date.now() / 1000) + 60,
 });
+
+async function readJsonRpcPayload(response: Response) {
+  const body = await response.text();
+  if (response.headers.get("content-type")?.includes("text/event-stream")) {
+    const data = body
+      .split("\n")
+      .find((line) => line.startsWith("data: "))
+      ?.slice("data: ".length);
+    if (!data) throw new Error("La respuesta SSE no contiene un evento MCP");
+    return JSON.parse(data) as unknown;
+  }
+  return JSON.parse(body) as unknown;
+}
 
 function handler(config: McpConfig, auth?: AuthInfo) {
   const protocol = vi.fn(async () => new Response("protocol-ok"));
@@ -65,9 +83,12 @@ describe("HTTP MCP protegido", () => {
     const test = handler(enabled);
     const response = await test.run(new Request(enabled.resourceUrl));
     expect(response.status).toBe(401);
-    expect(response.headers.get("www-authenticate")).toContain(
+    const challenge = response.headers.get("www-authenticate");
+    expect(challenge).toContain(
       'resource_metadata="https://broco.example/.well-known/oauth-protected-resource"',
     );
+    expect(challenge).toContain('scope="mcp:read"');
+    await expect(response.text()).resolves.not.toContain("protocol-ok");
     expect(test.protocol).not.toHaveBeenCalled();
   });
 
@@ -94,6 +115,39 @@ describe("HTTP MCP protegido", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.text()).toBe("protocol-ok");
     expect(test.protocol).toHaveBeenCalledOnce();
+  });
+
+  it("expone los securitySchemes en el payload real de tools/list", async () => {
+    const run = createMcpHttpHandler({
+      readConfig: () => enabled,
+      protocolHandler: createMcpProtocolHandler(),
+      tokenVerifier: () => async () => authInfo(["mcp:read"]),
+    });
+    const response = await run(
+      new Request(enabled.resourceUrl, {
+        method: "POST",
+        headers: {
+          Accept: "application/json, text/event-stream",
+          Authorization: "Bearer token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/list",
+          params: {},
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await readJsonRpcPayload(response)) as {
+      result: { tools: Array<{ name: string; securitySchemes?: unknown }> };
+    };
+    expect(payload.result.tools.map((tool) => tool.name)).toEqual(MCP_TOOL_NAMES);
+    for (const tool of payload.result.tools) {
+      expect(tool.securitySchemes).toEqual(MCP_TOOL_SECURITY_SCHEMES);
+    }
   });
 });
 

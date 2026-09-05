@@ -72,8 +72,10 @@ function parseList(raw: string | undefined, normalize?: (value: string) => strin
 }
 
 /**
- * Reads MCP configuration for every request so the kill switch takes effect
- * immediately. Every missing or inconsistent value fails closed.
+ * Reads MCP configuration for every request. Within a running deployment the
+ * kill switch is evaluated on every request, but Vercel applies changed
+ * environment variables only after a new deployment. Every missing or
+ * inconsistent value fails closed.
  */
 export function readMcpConfig(): McpConfig {
   if (process.env.BROCO_MCP_KILL === "true") return { status: "killed" };

@@ -10,7 +10,11 @@ import {
   type McpConfig,
 } from "@/lib/mcp/config";
 import { makeTokenVerifier, type TokenVerifier } from "@/lib/mcp/auth";
-import { registerTools } from "@/server/mcp/tools";
+import {
+  MCP_TOOL_NAMES,
+  MCP_TOOL_SECURITY_SCHEMES,
+  registerTools,
+} from "@/server/mcp/tools";
 
 type ProtocolHandler = (request: Request) => Response | Promise<Response>;
 
@@ -20,15 +24,119 @@ type McpHttpDependencies = {
   tokenVerifier: (config: AuthConfig) => TokenVerifier;
 };
 
-const protocolHandler = createMcpHandler(
-  (server) => registerTools(server),
-  {
-    serverInfo: { name: "broco-finance-readonly", version: "1.0.0" },
-    instructions:
-      "Consultas financieras privadas y exclusivamente de lectura. Respeta los rangos y límites declarados por cada herramienta.",
-    maxSubscriptions: 0,
-  },
-);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+async function isToolsListRequest(request: Request) {
+  if (
+    request.method !== "POST" ||
+    !request.headers.get("content-type")?.includes("application/json")
+  ) {
+    return false;
+  }
+
+  try {
+    const body = await request.clone().json();
+    return isRecord(body) && body.method === "tools/list";
+  } catch {
+    return false;
+  }
+}
+
+function addToolSecuritySchemes(payload: unknown) {
+  if (!isRecord(payload) || !isRecord(payload.result)) return;
+  const tools = payload.result.tools;
+  if (!Array.isArray(tools)) return;
+
+  return {
+    ...payload,
+    result: {
+      ...payload.result,
+      tools: tools.map((tool) => {
+        if (!isRecord(tool) || !MCP_TOOL_NAMES.includes(tool.name as never)) {
+          return tool;
+        }
+        return {
+          ...tool,
+          securitySchemes: MCP_TOOL_SECURITY_SCHEMES,
+        };
+      }),
+    },
+  };
+}
+
+function transformToolsListBody(body: string, contentType: string | null) {
+  if (contentType?.includes("text/event-stream")) {
+    let changed = false;
+    const transformed = body.replace(/^data: (.+)$/gm, (line, data: string) => {
+      try {
+        const payload = addToolSecuritySchemes(JSON.parse(data));
+        if (!payload) return line;
+        changed = true;
+        return `data: ${JSON.stringify(payload)}`;
+      } catch {
+        return line;
+      }
+    });
+    return changed ? transformed : undefined;
+  }
+
+  try {
+    const payload = addToolSecuritySchemes(JSON.parse(body));
+    return payload ? JSON.stringify(payload) : undefined;
+  } catch {
+    return;
+  }
+}
+
+/**
+ * The installed MCP SDK serializes tool `_meta` but not top-level
+ * `securitySchemes`. ChatGPT reads the standard top-level field from the
+ * `tools/list` response, so add it only to the four registered tools.
+ */
+async function exposeToolSecuritySchemes(
+  request: Request,
+  handler: ProtocolHandler,
+) {
+  const isToolsList = await isToolsListRequest(request);
+  const response = await handler(request);
+  if (!isToolsList || !response.ok) return response;
+
+  try {
+    const body = await response.clone().text();
+    const transformed = transformToolsListBody(
+      body,
+      response.headers.get("content-type"),
+    );
+    if (!transformed) return response;
+
+    return new Response(transformed, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: new Headers(
+        [...response.headers].filter(([name]) => name !== "content-length"),
+      ),
+    });
+  } catch {
+    return response;
+  }
+}
+
+export function createMcpProtocolHandler(): ProtocolHandler {
+  const handler = createMcpHandler(
+    (server) => registerTools(server),
+    {
+      serverInfo: { name: "broco-finance-readonly", version: "1.0.0" },
+      instructions:
+        "Consultas financieras privadas y exclusivamente de lectura. Respeta los rangos y límites declarados por cada herramienta.",
+      maxSubscriptions: 0,
+    },
+  );
+  return (request) => exposeToolSecuritySchemes(request, handler);
+}
+
+const protocolHandler = createMcpProtocolHandler();
 
 let cachedVerifier: { key: string; verifier: TokenVerifier } | undefined;
 
